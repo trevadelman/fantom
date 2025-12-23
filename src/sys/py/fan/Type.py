@@ -72,6 +72,7 @@ class Type(Obj):
         self._field_list = []  # All fields
         self._method_list = []  # All methods
         self._type_facets = {}  # Type-level facets dict: {'sys::Serializable': {'simple': True}}
+        self._facets_list = None  # Cached list for facets() - for identity comparison
         # Type metadata from transpiler (set via tf_)
         self._type_flags = 0  # Type flags (Mixin, Facet, Internal, etc.)
         self._mixin_types = []  # List of mixin Type qnames
@@ -1303,6 +1304,36 @@ class Type(Obj):
 
         return methods
 
+    def _create_const_field(self, field_name):
+        """Create a Field object for a known const field in a sys type.
+
+        Args:
+            field_name: Name of the const field (e.g., 'nan', 'pi', 'maxVal')
+
+        Returns:
+            Field object or None
+        """
+        from .Field import Field
+
+        # Determine field type based on parent type
+        if self._qname == "sys::Float":
+            field_type = Type.find("sys::Float")
+        elif self._qname == "sys::Int":
+            field_type = Type.find("sys::Int")
+        elif self._qname == "sys::Duration":
+            field_type = Type.find("sys::Duration")
+        elif self._qname == "sys::Str":
+            field_type = Type.find("sys::Str")
+        elif self._qname == "sys::Bool":
+            field_type = Type.find("sys::Bool")
+        else:
+            field_type = self
+
+        # Static const field: Public (0x0001) | Static (0x0800) | Const (0x0002)
+        flags = 0x0001 | 0x0800 | 0x0002
+
+        return Field(self, field_name, flags, field_type, {}, None)
+
     #########################################################################
     # Slot Reflection - Metadata Registration (like JS af$/am$ pattern)
     #########################################################################
@@ -1428,6 +1459,14 @@ class Type(Obj):
             discovered_slots = self._discover_sys_metadata()
             for slot in discovered_slots:
                 self._merge_slot(slot, slots, slots_by_name, name_to_index)
+
+            # Add known const fields for sys types (like Float.nan, Int.maxVal)
+            const_fields = Type._SYS_CONST_FIELDS.get(self._qname, set())
+            if const_fields:
+                for field_name in const_fields:
+                    field = self._create_const_field(field_name)
+                    if field:
+                        self._merge_slot(field, slots, slots_by_name, name_to_index)
 
         # Break out into fields and methods
         fields = []
@@ -1599,8 +1638,11 @@ class Type(Obj):
         """Return list of all facets.
 
         Returns:
-            Immutable List of Facet instances
+            Immutable List of Facet instances (cached for identity comparison)
         """
+        if self._facets_list is not None:
+            return self._facets_list
+
         from .List import List as FanList
         result = []
         for facet_qname, facet_data in self._type_facets.items():
@@ -1608,7 +1650,8 @@ class Type(Obj):
             facet_type = Type.find(facet_qname, True)
             result.append(FacetInstance(facet_type, facet_data))
         # Return immutable Fantom List with Facet element type
-        return FanList.fromLiteral(result, "sys::Facet").toImmutable()
+        self._facets_list = FanList.fromLiteral(result, "sys::Facet").toImmutable()
+        return self._facets_list
 
     def __eq__(self, other):
         if other is None:
@@ -2472,59 +2515,230 @@ class GenericParamType(Type):
 class FacetInstance(Obj):
     """Runtime representation of a facet instance.
 
-    Allows accessing facet field values via trap (->).
-    E.g., type.facet(Serializable#)->simple returns true/false
+    This creates a proxy that gets default field values from the actual facet class
+    and applies any explicit values from facet_data.
 
-    Also stores field values as _fieldName attributes to match
-    how transpiled facet classes access them (e.g., facet._val).
+    Allows accessing facet field values via:
+    - Direct attribute access: facet._val, facet._b
+    - Trap access: facet->val, facet->b
     """
 
-    def __init__(self, facet_type, facet_data):
-        """Create a facet instance.
+    def __new__(cls, facet_type, facet_data):
+        """Create or return cached facet instance.
 
-        Args:
-            facet_type: The Type of this facet
-            facet_data: Dict of field name -> value
+        For marker facets (empty facet_data), use the singleton defVal().
+        For facets with values, create a FacetInstance with proper defaults.
         """
+        facet_data = facet_data or {}
+
+        # For marker facets (no values), try to return defVal() singleton
+        if not facet_data:
+            qname = facet_type.qname() if hasattr(facet_type, 'qname') else str(facet_type)
+            try:
+                parts = qname.split("::")
+                if len(parts) == 2:
+                    pod, name = parts
+                    module = __import__(f'fan.{pod}.{name}', fromlist=[name])
+                    facet_cls = getattr(module, name, None)
+                    if facet_cls is not None and hasattr(facet_cls, 'defVal'):
+                        return facet_cls.defVal()
+            except:
+                pass
+
+        # For facets with values, create a FacetInstance
+        return object.__new__(cls)
+
+    def __init__(self, facet_type, facet_data):
+        """Initialize facet instance with proper field values.
+
+        Creates a proxy that gets default values from the actual facet class
+        and applies explicit values from facet_data.
+        """
+        # Skip if this is a cached marker facet (already initialized by defVal)
+        if hasattr(self, '_facet_type') and self._facet_type is not None:
+            return
+
         self._facet_type = facet_type
         self._facet_data = facet_data or {}
 
-        # Try to load the actual facet class to get default values
-        # for fields not explicitly set in facet_data
+        # Try to get default values by creating an actual facet instance
+        qname = facet_type.qname() if hasattr(facet_type, 'qname') else str(facet_type)
         try:
-            qname = facet_type.qname() if hasattr(facet_type, 'qname') else str(facet_type)
             parts = qname.split("::")
             if len(parts) == 2:
                 pod, name = parts
                 module = __import__(f'fan.{pod}.{name}', fromlist=[name])
-                cls = getattr(module, name, None)
-                if cls is not None:
+                facet_cls = getattr(module, name, None)
+                if facet_cls is not None:
                     # Create a default instance to get field defaults
-                    # Use object.__new__ to avoid constructor side effects
-                    default_inst = object.__new__(cls)
-                    # Initialize with super().__init__() if possible
                     try:
-                        Obj.__init__(default_inst)
-                    except:
-                        pass
-                    # Copy default field values for any _fieldName attributes
-                    for attr_name in dir(cls):
-                        if attr_name.startswith('_') and not attr_name.startswith('__'):
-                            field_name = attr_name[1:]  # Remove leading underscore
-                            if field_name not in self._facet_data:
+                        default_inst = facet_cls.make() if hasattr(facet_cls, 'make') else facet_cls()
+                        # Copy all _fieldName attributes from default instance
+                        for attr_name in dir(default_inst):
+                            if attr_name.startswith('_') and not attr_name.startswith('__'):
                                 try:
-                                    # Get the default value from class or instance init
-                                    default_val = getattr(cls, attr_name, None)
-                                    if default_val is not None and not callable(default_val):
-                                        setattr(self, attr_name, default_val)
+                                    val = getattr(default_inst, attr_name)
+                                    if not callable(val):
+                                        setattr(self, attr_name, val)
                                 except:
                                     pass
+                    except:
+                        pass
         except:
             pass
 
-        # Set _fieldName attributes for each explicitly provided field
+        # Now apply explicit values from facet_data, decoding serialization strings
         for field_name, value in self._facet_data.items():
-            setattr(self, f"_{field_name}", value)
+            decoded_value = self._decode_value(value)
+            # Escape Python reserved words (like 'type' -> 'type_')
+            escaped_name = self._escape_name(field_name)
+            setattr(self, f"_{escaped_name}", decoded_value)
+
+    # Python reserved words that need escaping with trailing underscore
+    _RESERVED_WORDS = {
+        "and", "as", "assert", "async", "await", "break", "class", "continue",
+        "def", "del", "elif", "else", "except", "finally", "for", "from",
+        "global", "if", "import", "in", "is", "lambda", "nonlocal", "not",
+        "or", "pass", "raise", "return", "try", "type", "while", "with", "yield"
+    }
+
+    def _escape_name(self, name):
+        """Escape Python reserved words by adding trailing underscore."""
+        if name in FacetInstance._RESERVED_WORDS:
+            return name + "_"
+        return name
+
+    def _decode_value(self, value):
+        """Decode a facet value from its serialization format.
+
+        Values can be:
+        - Python primitives (int, bool, str) - return as-is
+        - Fantom serialization strings like "sys::Version(\"9.0\")" - decode
+        - Type literals like "sys::Str" - resolve to Type
+        - Slot literals like "sys::Float#nan" - resolve to Slot
+        - List literals like "[1,2,3]" - decode to List
+        """
+        # None/null
+        if value is None:
+            return None
+
+        # Already a Python primitive or Fantom object
+        if isinstance(value, (int, float, bool)):
+            return value
+
+        # String values may need decoding
+        if isinstance(value, str):
+            # Empty string means use default
+            if not value:
+                return None
+
+            # Type literal: "sys::Str" or "sys::Str#"
+            if "::" in value and not value.startswith('"') and not value.startswith('['):
+                # Check for slot literal (contains #)
+                if '#' in value:
+                    return self._decode_slot_literal(value)
+                # Check for constructor call: "sys::Version(\"9.0\")"
+                if '(' in value:
+                    return self._decode_ctor_call(value)
+                # Plain type literal
+                return Type.find(value, False)
+
+            # List literal: "[1,2,3]"
+            if value.startswith('[') and value.endswith(']'):
+                return self._decode_list_literal(value)
+
+            # Quoted string - extract the actual string value
+            if value.startswith('"') and value.endswith('"'):
+                return value[1:-1].replace('\\"', '"')
+
+            # Plain string
+            return value
+
+        # Not a string - return as-is
+        return value
+
+    def _decode_ctor_call(self, s):
+        """Decode a constructor call like sys::Version(\"9.0\")"""
+        try:
+            # Parse: typeName(arg1, arg2, ...)
+            paren_idx = s.index('(')
+            type_qname = s[:paren_idx]
+            args_str = s[paren_idx+1:-1]  # Remove parens
+
+            # Get the type
+            t = Type.find(type_qname, False)
+            if t is None:
+                return s  # Return original string if type not found
+
+            # Parse arguments - for now just handle single string arg
+            # Remove quotes from arg
+            if args_str.startswith('\\"') and args_str.endswith('\\"'):
+                args_str = args_str[2:-2]
+            elif args_str.startswith('"') and args_str.endswith('"'):
+                args_str = args_str[1:-1]
+
+            # Try fromStr for simple cases
+            if type_qname == "sys::Version":
+                from .Version import Version
+                return Version.fromStr(args_str)
+            elif type_qname == "sys::Duration":
+                from .Duration import Duration
+                return Duration.fromStr(args_str)
+            elif type_qname == "sys::Uri":
+                from .Uri import Uri
+                return Uri.fromStr(args_str)
+
+            # Fallback - try make() with parsed args
+            return t.make([args_str])
+        except Exception as e:
+            return s  # Return original string on error
+
+    def _decode_slot_literal(self, s):
+        """Decode a slot literal like sys::Float#nan"""
+        try:
+            hash_idx = s.index('#')
+            type_qname = s[:hash_idx]
+            slot_name = s[hash_idx+1:]
+
+            t = Type.find(type_qname, False)
+            if t is None:
+                return s
+
+            return t.slot(slot_name, False)
+        except Exception as e:
+            return s
+
+    def _decode_list_literal(self, s):
+        """Decode a list literal like [1,2,3]"""
+        try:
+            from .List import List as FanList
+
+            # Remove brackets
+            inner = s[1:-1].strip()
+            if not inner:
+                return FanList.fromLiteral([], "sys::Obj")
+
+            # Split by comma and parse each element
+            elements = []
+            for elem in inner.split(','):
+                elem = elem.strip()
+                # Try to parse as int
+                try:
+                    elements.append(int(elem))
+                except ValueError:
+                    # Try float
+                    try:
+                        elements.append(float(elem))
+                    except ValueError:
+                        # Keep as string
+                        elements.append(elem)
+
+            # Determine element type
+            if all(isinstance(e, int) for e in elements):
+                return FanList.fromLiteral(elements, "sys::Int")
+            return FanList.fromLiteral(elements, "sys::Obj")
+        except Exception as e:
+            return s
 
     def typeof(self):
         """Return the facet type"""
@@ -2534,11 +2748,16 @@ class FacetInstance(Obj):
         """Dynamic field access via -> operator"""
         if args is None:
             args = []
+        # Check _fieldName attribute first
+        attr_name = f"_{name}"
+        if hasattr(self, attr_name):
+            return getattr(self, attr_name)
+        # Check facet_data
         if name in self._facet_data:
-            return self._facet_data[name]
-        # Check for method-style access (no args)
+            return self._decode_value(self._facet_data[name])
+        # No args means getter - return None if not found
         if not args:
-            return self._facet_data.get(name)
+            return None
         from .Err import UnknownSlotErr
         raise UnknownSlotErr.make(f"{self._facet_type}.{name}")
 
@@ -2546,16 +2765,23 @@ class FacetInstance(Obj):
         """Allow Python attribute access to facet fields"""
         if name.startswith('_'):
             return object.__getattribute__(self, name)
-        if name in self._facet_data:
-            return self._facet_data[name]
+        # Try _fieldName
+        attr_name = f"_{name}"
+        try:
+            return object.__getattribute__(self, attr_name)
+        except AttributeError:
+            pass
         raise AttributeError(f"Facet has no field: {name}")
 
     def equals(self, other):
-        """Check equality based on facet type"""
+        """Check equality based on facet type and values"""
         if other is None:
             return False
         if isinstance(other, FacetInstance):
             return self._facet_type.qname() == other._facet_type.qname()
+        # Also check against actual facet class instances
+        if hasattr(other, 'typeof') and callable(other.typeof):
+            return self._facet_type.qname() == other.typeof().qname()
         return False
 
     def __eq__(self, other):

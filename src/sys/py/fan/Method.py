@@ -30,6 +30,7 @@ class Method(Slot):
         self._returns = returns  # Return type
         self._params = params if params is not None else []  # Parameter list
         self._facets = facets if facets is not None else {}  # Facet metadata
+        self._facets_list = None  # Cached list for facets() - for identity comparison
         self._func = func  # Optional direct callable
         self._method_func = None  # Cached MethodFunc wrapper for identity
 
@@ -90,8 +91,11 @@ class Method(Slot):
         """Return list of all facets.
 
         Returns:
-            Immutable List of Facet instances
+            Immutable List of Facet instances (cached for identity comparison)
         """
+        if self._facets_list is not None:
+            return self._facets_list
+
         from .Type import Type, FacetInstance
         from .List import List as FanList
         result = []
@@ -99,7 +103,8 @@ class Method(Slot):
             facet_type = Type.find(facet_qname, True)
             result.append(FacetInstance(facet_type, facet_data))
         # Return immutable Fantom List with Facet element type
-        return FanList.fromLiteral(result, "sys::Facet").toImmutable()
+        self._facets_list = FanList.fromLiteral(result, "sys::Facet").toImmutable()
+        return self._facets_list
 
     def call(self, *args):
         """Call method with variable args.

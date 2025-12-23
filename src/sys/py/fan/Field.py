@@ -28,6 +28,7 @@ class Field(Slot):
         super().__init__(parent, name, flags)
         self._type = type_  # Field type
         self._facets = facets if facets is not None else {}  # Facet metadata
+        self._facets_list = None  # Cached list for facets() - for identity comparison
         # If setter_flags not provided, use field flags (same visibility for getter/setter)
         self._setter_flags = setter_flags if setter_flags is not None else flags
 
@@ -235,8 +236,11 @@ class Field(Slot):
         """Return list of all facets.
 
         Returns:
-            Immutable List of Facet instances
+            Immutable List of Facet instances (cached for identity comparison)
         """
+        if self._facets_list is not None:
+            return self._facets_list
+
         from .Type import Type, FacetInstance
         from .List import List as FanList
         result = []
@@ -244,7 +248,8 @@ class Field(Slot):
             facet_type = Type.find(facet_qname, True)
             result.append(FacetInstance(facet_type, facet_data))
         # Return immutable Fantom List with Facet element type
-        return FanList.fromLiteral(result, "sys::Facet").toImmutable()
+        self._facets_list = FanList.fromLiteral(result, "sys::Facet").toImmutable()
+        return self._facets_list
 
     def toStr(self):
         return self.qname()
