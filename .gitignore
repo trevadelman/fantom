@@ -58,3 +58,7 @@ obj/Release/
 temp-java/
 temp-es/
 
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
