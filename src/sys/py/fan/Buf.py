@@ -1166,6 +1166,7 @@ class BufInStream:
 
     def __init__(self, buf):
         self._buf = buf
+        self._charset = None  # Own charset field, lazy init to UTF-8 for isolation
         self._bitsBuf = 0  # Lower 8 bits = buffered byte, bits 8-15 = buffer size
 
     def avail(self):
@@ -1444,8 +1445,18 @@ class BufInStream:
         return ''.join(chars)
 
     def charset(self, val=None):
-        """Get or set charset (delegates to underlying buf)."""
-        return self._buf.charset(val)
+        """Get or set charset.
+
+        BufInStream maintains its own charset for stream isolation.
+        This allows wrapped streams to have different charsets from the underlying Buf.
+        """
+        if val is None:
+            if self._charset is None:
+                from .Charset import Charset
+                self._charset = Charset.utf8()
+            return self._charset
+        self._charset = val
+        return self
 
     def endian(self, val=None):
         """Get or set endian."""
