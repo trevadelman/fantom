@@ -180,6 +180,23 @@ class Obj:
         f(self)
         return self
 
+    # Constructor field-setting support methods
+    # These are called by generated code from ConstChecks compiler step
+    # for closures (it-blocks) that set const fields. In Python, closures
+    # capture 'self' from the outer class, not the Func, so these need
+    # to be available on all objects.
+    def enterCtor(self, obj):
+        """Called when entering a constructor with an it-block"""
+        pass
+
+    def exitCtor(self):
+        """Called when exiting a constructor with an it-block"""
+        pass
+
+    def checkInCtor(self, obj):
+        """Called to verify we're in a constructor when setting const fields"""
+        pass
+
     def __str__(self):
         return self.toStr()
 
