@@ -1,0 +1,98 @@
+#
+# Uuid - UUID for Fantom
+#
+import uuid as py_uuid
+from fan.sys.Obj import Obj
+
+class Uuid(Obj):
+    """
+    Uuid represents a 128-bit universally unique identifier.
+    """
+
+    def __init__(self, uuid_obj):
+        self._uuid = uuid_obj
+
+    @staticmethod
+    def make():
+        """Generate a new random UUID (version 4)"""
+        return Uuid(py_uuid.uuid4())
+
+    @staticmethod
+    def makeStr(s):
+        """Create UUID from string"""
+        return Uuid.fromStr(s)
+
+    @staticmethod
+    def fromStr(s, checked=True):
+        """Parse UUID from string"""
+        try:
+            return Uuid(py_uuid.UUID(s))
+        except ValueError as e:
+            if checked:
+                from fan.sys.Err import ParseErr
+                raise ParseErr(f"Invalid UUID: {s}")
+            return None
+
+    @staticmethod
+    def makeBits(hi, lo):
+        """Create UUID from high/low 64-bit values (signed 64-bit ints from Fantom)"""
+        # Convert signed 64-bit to unsigned 64-bit
+        if hi < 0:
+            hi = hi & 0xFFFFFFFFFFFFFFFF
+        if lo < 0:
+            lo = lo & 0xFFFFFFFFFFFFFFFF
+        # Combine hi and lo into 128-bit unsigned integer
+        val = (hi << 64) | lo
+        return Uuid(py_uuid.UUID(int=val))
+
+    def bitsHi(self):
+        """Get upper 64 bits as signed 64-bit int (Fantom convention)"""
+        val = self._uuid.int >> 64
+        # Convert to signed if high bit is set
+        if val >= 0x8000000000000000:
+            val -= 0x10000000000000000
+        return val
+
+    def bitsLo(self):
+        """Get lower 64 bits as signed 64-bit int (Fantom convention)"""
+        val = self._uuid.int & 0xFFFFFFFFFFFFFFFF
+        # Convert to signed if high bit is set
+        if val >= 0x8000000000000000:
+            val -= 0x10000000000000000
+        return val
+
+    def toStr(self):
+        """String representation"""
+        return str(self._uuid)
+
+    def equals(self, other):
+        """Test equality"""
+        if not isinstance(other, Uuid):
+            return False
+        return self._uuid == other._uuid
+
+    def hash_(self):
+        """Hash code"""
+        return hash(self._uuid)
+
+    def compare(self, other):
+        """Compare to another UUID"""
+        if not isinstance(other, Uuid):
+            return 1
+        if self._uuid < other._uuid:
+            return -1
+        if self._uuid > other._uuid:
+            return 1
+        return 0
+
+    def __lt__(self, other):
+        return self.compare(other) < 0
+
+    def __le__(self, other):
+        return self.compare(other) <= 0
+
+    def __gt__(self, other):
+        return self.compare(other) > 0
+
+    def __ge__(self, other):
+        return self.compare(other) >= 0

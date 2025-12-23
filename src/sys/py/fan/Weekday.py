@@ -1,0 +1,211 @@
+#
+# Weekday - Day of week enum for Fantom
+#
+from fan.sys.Obj import Obj
+
+class Weekday(Obj):
+    """
+    Weekday represents a day of the week (enum).
+    """
+
+    _vals = None
+    _byName = None
+    _localeValsCache = {}  # Cache per locale start day
+
+    def __init__(self, name, ordinal):
+        self._name = name
+        self._ordinal = ordinal
+
+    @staticmethod
+    def sun():
+        return Weekday.vals().get(0)
+
+    @staticmethod
+    def mon():
+        return Weekday.vals().get(1)
+
+    @staticmethod
+    def tue():
+        return Weekday.vals().get(2)
+
+    @staticmethod
+    def wed():
+        return Weekday.vals().get(3)
+
+    @staticmethod
+    def thu():
+        return Weekday.vals().get(4)
+
+    @staticmethod
+    def fri():
+        return Weekday.vals().get(5)
+
+    @staticmethod
+    def sat():
+        return Weekday.vals().get(6)
+
+    @staticmethod
+    def _make_enum(ordinal, name):
+        inst = object.__new__(Weekday)
+        inst._ordinal = ordinal
+        inst._name = name
+        return inst
+
+    @staticmethod
+    def vals():
+        """Get all weekday values"""
+        from fan.sys.List import List
+        if Weekday._vals is None:
+            Weekday._vals = List.toImmutable(List.fromList([
+                Weekday._make_enum(0, "sun"),
+                Weekday._make_enum(1, "mon"),
+                Weekday._make_enum(2, "tue"),
+                Weekday._make_enum(3, "wed"),
+                Weekday._make_enum(4, "thu"),
+                Weekday._make_enum(5, "fri"),
+                Weekday._make_enum(6, "sat")
+            ]))
+        return Weekday._vals
+
+    @staticmethod
+    def _get(ordinal):
+        """Get weekday by ordinal"""
+        return Weekday.vals().get(ordinal)
+
+    @staticmethod
+    def localeStartOfWeek():
+        """Get locale-specific start of week (Sunday in US, Monday in Europe)"""
+        from .Locale import Locale
+        cur = Locale.cur()
+        # US and Canada use Sunday as start of week
+        # Most other locales use Monday
+        lang = cur.lang()
+        country = cur.country()
+        # US (en-US) and Canada (en-CA) start on Sunday
+        if country in ['US', 'CA']:
+            return Weekday.sun()
+        # Default for most locales is Monday (ISO 8601 standard)
+        return Weekday.mon()
+
+    @staticmethod
+    def localeVals():
+        """Get weekdays in locale-specific order starting from localeStartOfWeek"""
+        from fan.sys.List import List
+        start = Weekday.localeStartOfWeek().ordinal()
+        # Cache per start day for identity (verifySame requirement)
+        if start not in Weekday._localeValsCache:
+            result = []
+            for i in range(7):
+                result.append(Weekday.vals().get((start + i) % 7))
+            Weekday._localeValsCache[start] = List.toImmutable(List.fromList(result))
+        return Weekday._localeValsCache[start]
+
+    @staticmethod
+    def fromStr(s, checked=True):
+        """Parse Weekday from string"""
+        if Weekday._byName is None:
+            Weekday._byName = {
+                "sun": 0, "sunday": 0,
+                "mon": 1, "monday": 1,
+                "tue": 2, "tuesday": 2,
+                "wed": 3, "wednesday": 3,
+                "thu": 4, "thursday": 4,
+                "fri": 5, "friday": 5,
+                "sat": 6, "saturday": 6,
+            }
+        s_lower = s.lower()
+        if s_lower in Weekday._byName:
+            return Weekday.vals().get(Weekday._byName[s_lower])
+        if checked:
+            from fan.sys.Err import ParseErr
+            raise ParseErr.make(f"Unknown weekday: {s}")
+        return None
+
+    def name(self):
+        """Get weekday name"""
+        return self._name
+
+    def ordinal(self):
+        """Get ordinal (0=Sunday, 6=Saturday in Fantom)"""
+        return self._ordinal
+
+    def increment(self, days=1):
+        """Return weekday + days"""
+        new_ord = (self._ordinal + days) % 7
+        return Weekday.vals().get(new_ord)
+
+    def decrement(self, days=1):
+        """Return weekday - days"""
+        new_ord = (self._ordinal - days) % 7
+        return Weekday.vals().get(new_ord)
+
+    def localeAbbr(self):
+        """Abbreviated locale name"""
+        return self._name[:3].title()
+
+    def localeFull(self):
+        """Full locale name"""
+        names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        return names[self._ordinal]
+
+    def toLocale(self, pattern=None, locale=None):
+        """Format weekday for locale"""
+        if pattern is None:
+            pattern = "WWW"
+        full_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        abbr_names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        if pattern == "W":
+            return abbr_names[self._ordinal][0]
+        elif pattern == "WW":
+            return abbr_names[self._ordinal][:2]
+        elif pattern == "WWW":
+            return abbr_names[self._ordinal]
+        elif pattern == "WWWW":
+            return full_names[self._ordinal]
+        else:
+            return abbr_names[self._ordinal]
+
+    def toStr(self):
+        return self._name
+
+    def __str__(self):
+        return self._name
+
+    def equals(self, other):
+        if not isinstance(other, Weekday):
+            return False
+        return self._ordinal == other._ordinal
+
+    def compare(self, other):
+        return self._ordinal - other._ordinal
+
+    def __lt__(self, other):
+        return self._ordinal < other._ordinal
+
+    def __le__(self, other):
+        return self._ordinal <= other._ordinal
+
+    def __gt__(self, other):
+        return self._ordinal > other._ordinal
+
+    def __ge__(self, other):
+        return self._ordinal >= other._ordinal
+
+    def __eq__(self, other):
+        if not isinstance(other, Weekday):
+            return False
+        return self._ordinal == other._ordinal
+
+    def __hash__(self):
+        return hash(self._ordinal)
+
+    def hash_(self):
+        return self._ordinal
+
+    def __add__(self, val):
+        """Weekday + Int -> Weekday"""
+        return self.increment(val)
+
+    def __sub__(self, val):
+        """Weekday - Int -> Weekday"""
+        return self.decrement(val)
