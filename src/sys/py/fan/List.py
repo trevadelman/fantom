@@ -89,6 +89,15 @@ class ListImpl(list):
         """Set size - grows or shrinks list, adjusting capacity"""
         current = len(self)
         if val > current:
+            # Check if element type is non-nullable (cannot add null values)
+            elemType = getattr(self, '_elementType', None)
+            if elemType is not None:
+                # Get signature and check if nullable
+                sig = elemType.signature() if hasattr(elemType, 'signature') else str(elemType)
+                if not sig.endswith("?"):
+                    # Non-nullable element type - cannot grow with nulls
+                    from .Err import ArgErr
+                    raise ArgErr(f"Cannot grow non-nullable list {sig}[] from {current} to {val}")
             # Grow list with None values
             if val > self._capacity:
                 self._capacity = val
@@ -562,6 +571,7 @@ class List:
     def getRange(lst, r):
         """Get a slice of the list using a Range"""
         from .Range import Range
+        from .Err import IndexErr
 
         # If object has its own getRange method, use it (Uri, Str, etc.)
         if hasattr(lst, 'getRange') and callable(getattr(lst, 'getRange')):
@@ -578,15 +588,22 @@ class List:
         if end < 0:
             end = n + end
 
-        # Apply exclusive adjustment
-        if not exclusive:
-            end = end + 1
+        # Apply exclusive adjustment for end
+        end_for_slice = end + 1 if not exclusive else end
 
-        # Handle edge case where end < start after conversion
-        if end < start:
-            return []
+        # Validate bounds (Fantom style)
+        # After conversion: start must be >= 0, end must be < n (for inclusive) or <= n (for exclusive)
+        # Also: end >= start (after inclusive adjustment)
+        if start < 0:
+            raise IndexErr(f"{r}")
+        if end_for_slice < start:
+            raise IndexErr(f"{r}")
+        if not exclusive and end >= n:
+            raise IndexErr(f"{r}")
+        if exclusive and end > n:
+            raise IndexErr(f"{r}")
 
-        return lst[start:end]
+        return lst[start:end_for_slice]
 
     @staticmethod
     def contains(lst, item):
@@ -601,14 +618,18 @@ class List:
     def index(lst, item, off=0):
         """Find index of item starting from offset"""
         from .ObjUtil import ObjUtil
+        from .Err import IndexErr
         n = len(lst)
-        # Convert negative offset to positive
-        if off < 0:
-            off = n + off
-        # If offset is still negative or beyond list, return None
-        if off < 0 or off >= n:
+        if n == 0:
             return None
-        for i in range(off, n):
+        start = off
+        # Convert negative offset to positive
+        if start < 0:
+            start = n + start
+        # Throw IndexErr if offset is out of bounds
+        if start >= n or start < 0:
+            raise IndexErr(f"{off}")
+        for i in range(start, n):
             if ObjUtil.equals(lst[i], item):
                 return i
         return None
@@ -693,13 +714,20 @@ class List:
     @staticmethod
     def insertAll(lst, index, items):
         """Insert all items at index"""
+        from .Err import IndexErr
+
         # Copy items to avoid infinite loop when inserting list into itself
         items_copy = list(items)
         n = len(lst)
+        orig_index = index
 
         # Convert negative index to positive
         if index < 0:
             index = n + index
+
+        # Validate bounds: index must be in range [0, size]
+        if index < 0 or index > n:
+            raise IndexErr(f"{orig_index}")
 
         for i, item in enumerate(items_copy):
             lst.insert(index + i, item)
@@ -1225,7 +1253,14 @@ class List:
 
     @staticmethod
     def trim(lst):
-        """Trim capacity to size (no-op in Python)"""
+        """Trim capacity to size (no-op in Python, but check readonly)"""
+        # Check if list is read-only
+        if isinstance(lst, (ImmutableList, ReadOnlyList)):
+            from .Err import ReadonlyErr
+            raise ReadonlyErr("List is read-only")
+        # For ListImpl, trim capacity to current size
+        if hasattr(lst, '_capacity'):
+            lst._capacity = len(lst)
         return lst
 
     @staticmethod
@@ -1416,30 +1451,35 @@ class ImmutableList(list):
         # Hash based on tuple of elements (only works if all elements are hashable)
         return hash(tuple(self))
 
+    def _checkModify(self):
+        """Throw ReadonlyErr if trying to modify"""
+        from .Err import ReadonlyErr
+        raise ReadonlyErr("List is immutable")
+
     # Block all mutating operations
     def append(self, item):
-        raise ReadonlyErr("List is immutable")
+        self._checkModify()
 
     def extend(self, items):
-        raise ReadonlyErr("List is immutable")
+        self._checkModify()
 
     def insert(self, index, item):
-        raise ReadonlyErr("List is immutable")
+        self._checkModify()
 
     def remove(self, item):
-        raise ReadonlyErr("List is immutable")
+        self._checkModify()
 
     def pop(self, index=-1):
-        raise ReadonlyErr("List is immutable")
+        self._checkModify()
 
     def clear(self):
-        raise ReadonlyErr("List is immutable")
+        self._checkModify()
 
     def __setitem__(self, key, value):
-        raise ReadonlyErr("List is immutable")
+        self._checkModify()
 
     def __delitem__(self, key):
-        raise ReadonlyErr("List is immutable")
+        self._checkModify()
 
 
 class ReadOnlyList(list):
@@ -1452,6 +1492,7 @@ class ReadOnlyList(list):
         self._elementType = None  # Fantom element type
         self._listType = None  # Cached ListType
         self._of = None
+        self._capacity = len(source)
 
     def __len__(self):
         """Support Python len() function"""
@@ -1463,6 +1504,26 @@ class ReadOnlyList(list):
     def isRW(self):
         return False
 
+    @property
+    def size(self):
+        """Return size"""
+        return len(self)
+
+    @size.setter
+    def size(self, val):
+        """Throw ReadonlyErr when trying to set size"""
+        self._checkModify()
+
+    @property
+    def capacity(self):
+        """Return capacity"""
+        return self._capacity
+
+    @capacity.setter
+    def capacity(self, val):
+        """Throw ReadonlyErr when trying to set capacity"""
+        self._checkModify()
+
     def isImmutable(self):
         return False
 
@@ -1473,10 +1534,6 @@ class ReadOnlyList(list):
     def rw(self):
         """Return the original mutable source"""
         return self._source
-
-    def size(self):
-        """Return number of elements"""
-        return len(self)
 
     def get(self, index, default=None):
         """Get element at index"""
@@ -1505,6 +1562,7 @@ class ReadOnlyList(list):
 
     def _checkModify(self):
         """Throw ReadonlyErr if trying to modify"""
+        from .Err import ReadonlyErr
         raise ReadonlyErr("List is read-only")
 
     # Block all mutating operations
@@ -1538,7 +1596,5 @@ class ReadOnlyList(list):
     def reverse(self):
         self._checkModify()
 
-
-class ReadonlyErr(Exception):
-    """Raised when attempting to modify an immutable object"""
-    pass
+    def trim(self):
+        self._checkModify()
