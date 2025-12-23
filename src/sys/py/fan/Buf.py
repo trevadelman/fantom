@@ -960,6 +960,7 @@ class BufOutStream:
 
     def __init__(self, buf):
         self._buf = buf
+        self._bitsBuf = 0  # Lower 8 bits = buffered byte, bits 8-15 = buffer size
 
     def write(self, b):
         self._buf.write(b)
@@ -1019,7 +1020,58 @@ class BufOutStream:
         self._buf.printLine(obj)
         return self
 
+    def writeBits(self, val, num):
+        """Write bits to stream.
+
+        Args:
+            val: The value containing the bits to write
+            num: Number of bits to write (0-64)
+
+        Bits are written most significant first. If the number of bits written
+        doesn't fill a complete byte, the remaining bits are buffered until
+        flush() is called or more bits are written.
+        """
+        # Arg checking
+        num = int(num)
+        if num == 0:
+            return self
+        if num < 0 or num > 64:
+            from .Err import ArgErr
+            raise ArgErr.make(f"Bit num not 0 - 64: {num}")
+
+        val = int(val)
+
+        # buffer is stored as: (bufSize << 8) | bufByte
+        bitsBuf = self._bitsBuf
+        bufByte = bitsBuf & 0xff
+        bufSize = (bitsBuf >> 8) & 0xff
+
+        # Write bits, sinking byte once we reach 8 bits
+        for i in range(num - 1, -1, -1):
+            bit = (val >> i) & 0x1
+            bufByte |= bit << (7 - bufSize)
+            bufSize += 1
+            if bufSize == 8:
+                self._buf.write(bufByte)
+                bufByte = 0
+                bufSize = 0
+
+        # Save buffer
+        self._bitsBuf = (bufSize << 8) | bufByte
+        return self
+
+    def numPendingBits(self):
+        """Return number of bits buffered but not yet written."""
+        return (self._bitsBuf >> 8) & 0xff
+
+    def _flushBits(self):
+        """Flush any pending bits to stream (pads with zeros)."""
+        if self._bitsBuf != 0:
+            self._buf.write(self._bitsBuf & 0xff)
+            self._bitsBuf = 0
+
     def flush(self):
+        self._flushBits()
         return self
 
     def writeXml(self, s, mask=0):
@@ -1113,6 +1165,7 @@ class BufInStream:
 
     def __init__(self, buf):
         self._buf = buf
+        self._bitsBuf = 0  # Lower 8 bits = buffered byte, bits 8-15 = buffer size
 
     def avail(self):
         return self._buf.remaining()
@@ -1168,6 +1221,63 @@ class BufInStream:
 
     def readUtf(self):
         return self._buf.readUtf()
+
+    def readDecimal(self):
+        """Read decimal serialized as UTF string."""
+        s = self._buf.readUtf()
+        from .Decimal import Decimal
+        return Decimal.fromStr(s, True)
+
+    def readBits(self, num):
+        """Read bits from stream.
+
+        Args:
+            num: Number of bits to read (0-64)
+
+        Returns:
+            The value containing the bits read (signed 64-bit)
+
+        Bits are read most significant first.
+        """
+        # Arg checking
+        num = int(num)
+        if num == 0:
+            return 0
+        if num < 0 or num > 64:
+            from .Err import ArgErr
+            raise ArgErr.make(f"Bit num not 0 - 64: {num}")
+
+        # buffer is stored as: (bufSize << 8) | bufByte
+        bitsBuf = self._bitsBuf
+        bufByte = bitsBuf & 0xff
+        bufSize = (bitsBuf >> 8) & 0xff
+
+        # Read bits, sourcing a new byte once we run out
+        result = 0
+        for _ in range(num):
+            if bufSize == 0:
+                b = self._buf.read()
+                if b is None:
+                    from .Err import IOErr
+                    raise IOErr.make("End of stream")
+                bufByte = b
+                bufSize = 8
+            bit = (bufByte >> (bufSize - 1)) & 0x1
+            bufSize -= 1
+            result = (result << 1) | bit
+
+        # Update buffer
+        self._bitsBuf = (bufSize << 8) | bufByte
+
+        # Convert to signed 64-bit if high bit set (Fantom Int is signed 64-bit)
+        if num == 64 and result >= 0x8000000000000000:
+            result = result - 0x10000000000000000
+
+        return result
+
+    def numPendingBits(self):
+        """Return number of bits buffered but not yet read."""
+        return (self._bitsBuf >> 8) & 0xff
 
     def readProps(self):
         """Read a properties file format and return as a Map.

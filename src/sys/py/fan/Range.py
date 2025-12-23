@@ -181,11 +181,18 @@ class Range(Obj):
         return result
 
     def random(self):
+        """Return a random integer within this range."""
         import random
-        lst = self.toList()
-        if not lst:
+        if self.isEmpty():
             return None
-        return random.choice(lst)
+        # Calculate first and last values
+        first = self._start
+        last = self._lastVal()
+        # Ensure first <= last for randint
+        if first <= last:
+            return random.randint(first, last)
+        else:
+            return random.randint(last, first)
 
     def toStr(self):
         if self._exclusive:
