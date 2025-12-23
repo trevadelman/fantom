@@ -591,6 +591,18 @@ class ObjUtil:
             print(ObjUtil.toStr(obj))
 
     @staticmethod
+    def throw_(err):
+        """Raise an exception as an expression (used in elvis, ternary, etc.).
+
+        Python's `raise` is a statement, not an expression. This helper
+        allows throw to be used in expression context:
+            x = v ?: throw ArgErr("boom")
+        Transpiles to:
+            x = ((lambda _v: _v if _v is not None else ObjUtil.throw_(ArgErr("boom")))(v))
+        """
+        raise err
+
+    @staticmethod
     def incField(obj, fieldName):
         """Increment a field and return new value (for ++field - pre-increment)"""
         val = getattr(obj, fieldName) + 1

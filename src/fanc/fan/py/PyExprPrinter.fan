@@ -61,6 +61,7 @@ class PyExprPrinter : PyPrinter
       case ExprId.typeLiteral:     typeLiteral(e)
       case ExprId.slotLiteral:     slotLiteral(e)
       case ExprId.itExpr:          itExpr(e)
+      case ExprId.throwExpr:       throwExpr(e)
       default:
         w("None")  // Placeholder for unimplemented expr: ${e.id}
     }
@@ -262,6 +263,17 @@ class PyExprPrinter : PyPrinter
   {
     // "it" is the implicit closure parameter - output as "it"
     w("it")
+  }
+
+  private Void throwExpr(Expr e)
+  {
+    // throw as an expression (used in elvis, ternary, etc.)
+    // Python's `raise` is a statement, so we use a helper function
+    // ObjUtil.throw_(err) raises the exception and never returns
+    te := e as ThrowExpr
+    w("ObjUtil.throw_(")
+    expr(te.exception)
+    w(")")
   }
 
 //////////////////////////////////////////////////////////////////////////
