@@ -567,6 +567,12 @@ class PyTypePrinter : PyPrinter
     // Find ALL constructors
     ctorMethods := t.methodDefs.findAll |m| { m.isCtor }
 
+    // Separate static ctors (factories) from instance ctors
+    // Static ctor: `static new make(...)` - just a factory, body should NOT go in __init__
+    // Instance ctor: `new make(...)` - body goes in __init__
+    instanceCtors := ctorMethods.findAll |m| { !m.isStatic }
+    staticCtors := ctorMethods.findAll |m| { m.isStatic }
+
     // If no constructors, use a simple default
     if (ctorMethods.isEmpty)
     {
@@ -594,13 +600,19 @@ class PyTypePrinter : PyPrinter
       return
     }
 
-    // Find the primary constructor (named "make" or first one)
-    primaryCtor := ctorMethods.find |m| { m.name == "make" } ?: ctorMethods.first
+    // Find the primary constructor for __init__:
+    // - Prefer instance ctor named "make", else first instance ctor
+    // - If no instance ctors, use first static ctor but __init__ will have minimal body
+    primaryCtor := instanceCtors.find |m| { m.name == "make" } ?: instanceCtors.first
+    hasInstanceCtor := primaryCtor != null
+    if (primaryCtor == null)
+      primaryCtor = staticCtors.find |m| { m.name == "make" } ?: staticCtors.first
 
     // Generate static factory methods for ALL constructors
     ctorMethods.each |ctorMethod|
     {
       ctorName := ctorMethod.name  // "make", "make1", "make2", etc.
+      isStaticFactory := ctorMethod.isStatic  // static new make(...) vs new make(...)
 
       nl
       w("@staticmethod").nl
@@ -618,10 +630,35 @@ class PyTypePrinter : PyPrinter
       colon
       indent
 
-      // For named constructors (not "make"), create instance and run ctor body
-      if (ctorName != "make")
+      // For static factories: run the factory body code (they call other ctors internally)
+      // For instance ctors: create instance and run body
+      if (isStaticFactory)
       {
-        // Create instance without calling __init__ body, then run this ctor's body
+        // Static factory - run the body code which creates/returns instance
+        // The body will call other ctors like makeImpl or makeSegs
+        emitDefaultParamChecks(ctorMethod)
+        if (ctorMethod.code != null && !ctorMethod.code.stmts.isEmpty)
+        {
+          // Mark static context
+          this.m.inStaticContext = true
+          stmtPrinter := PyStmtPrinter(this)
+          stmtPrinter.scanMethodForClosures(ctorMethod.code)
+          ctorMethod.code.stmts.each |s, idx|
+          {
+            this.m.stmtIndex = idx
+            stmtPrinter.stmt(s)
+          }
+          this.m.clearClosures()
+          this.m.inStaticContext = false
+        }
+        else
+        {
+          pass
+        }
+      }
+      else if (ctorName != "make")
+      {
+        // Named instance constructor (not "make") - create instance and run ctor body
         w("inst = object.__new__(${t.name})").eos
 
         // Check if this ctor chains to this.make() - if so, skip _ctor_init
@@ -647,7 +684,7 @@ class PyTypePrinter : PyPrinter
       }
       else
       {
-        // Primary make() just delegates to __init__
+        // Primary instance make() just delegates to __init__
         w("return ${t.name}(")
         ctorMethod.params.each |p, i|
         {
@@ -904,7 +941,10 @@ class PyTypePrinter : PyPrinter
     }
 
     // Primary constructor body
-    if (primaryCtor.code != null)
+    // ONLY emit body if primaryCtor is an instance ctor (not a static factory)
+    // Static factories (static new make(...)) should NOT have their body in __init__
+    // because they return newly constructed instances, not modify `self`
+    if (hasInstanceCtor && primaryCtor.code != null)
     {
       stmtPrinter := PyStmtPrinter(this)
       stmtPrinter.scanMethodForClosures(primaryCtor.code)
@@ -917,6 +957,9 @@ class PyTypePrinter : PyPrinter
         {
           ret := s as ReturnStmt
           if (ret.expr == null || ret.isSynthetic) return
+          // Skip return statements that return construction calls (factory pattern)
+          // These are static factory returns, not instance initialization
+          if (ret.expr.id == ExprId.call || ret.expr.id == ExprId.construction) return
         }
         // Skip synthetic instance init calls and enterCtor/exitCtor (field-not-set checks)
         if (s.id == StmtId.expr)
