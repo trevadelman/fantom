@@ -43,6 +43,9 @@ class Str(Obj):
     # Size and access
     @staticmethod
     def size(self):
+        if self is None:
+            from .Err import NullErr
+            raise NullErr.make("Str.size")
         return len(self)
 
     @staticmethod

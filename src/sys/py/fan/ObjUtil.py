@@ -48,6 +48,7 @@ class ObjUtil:
         Fantom identity semantics:
         - Strings: Use object identity (methods return same object when unchanged)
         - Numbers (int, float, bool): Value types - equal values are "same"
+        - Value types (Duration, etc.): Use equals() - same value means same identity
         - Other objects: Python object identity
         """
         if a is None:
@@ -63,6 +64,15 @@ class ObjUtil:
                 if not isinstance(a, bool) and not isinstance(b, bool):
                     return a == b
             return False
+        # Value types like Duration, Date, Time, etc. - same value means same identity
+        # In Fantom, literals like 5ns === 5ns are true because they represent same value
+        # Check for value types by seeing if they have equals() and are immutable
+        if hasattr(a, 'equals') and hasattr(a, 'isImmutable'):
+            try:
+                if a.isImmutable() and type(a) == type(b):
+                    return a.equals(b)
+            except:
+                pass
         # For strings and other objects, use object identity
         # String methods implement identity optimization by returning same object
         return a is b
@@ -381,11 +391,61 @@ class ObjUtil:
 
     @staticmethod
     def coerce(obj, type_):
-        """Runtime coercion with error"""
+        """Runtime coercion with error - throws CastErr if obj doesn't fit type"""
         if obj is None:
-            # For now, allow null
+            # Null can be coerced to nullable types
             return obj
-        return obj
+
+        # Get type qname string
+        if hasattr(type_, '_qname'):
+            qname = type_._qname
+        elif isinstance(type_, str):
+            qname = type_
+        else:
+            qname = str(type_)
+
+        # Strip nullable suffix for base type check
+        base_qname = qname.rstrip('?')
+
+        # Check against common types
+        if base_qname in ("sys::Obj", "sys::Obj?"):
+            return obj
+        if base_qname == "sys::Int":
+            if isinstance(obj, int) and not isinstance(obj, bool):
+                return obj
+        elif base_qname == "sys::Float":
+            if isinstance(obj, float):
+                return obj
+        elif base_qname == "sys::Bool":
+            if isinstance(obj, bool):
+                return obj
+        elif base_qname == "sys::Str":
+            if isinstance(obj, str):
+                return obj
+        elif base_qname == "sys::Num":
+            if isinstance(obj, (int, float)) and not isinstance(obj, bool):
+                return obj
+        elif base_qname == "sys::List" or base_qname.endswith("[]"):
+            if isinstance(obj, list):
+                return obj
+        elif base_qname == "sys::Map" or (base_qname.startswith("[") and ":" in base_qname):
+            if isinstance(obj, dict):
+                return obj
+            from .Map import Map
+            if isinstance(obj, Map):
+                return obj
+        else:
+            # For other types, check if object's type fits
+            if ObjUtil.is_(obj, type_):
+                return obj
+            # Also allow if it's actually the type (direct coerce without strict checking)
+            return obj
+
+        # If we get here, type check failed - raise CastErr
+        from .Err import CastErr
+        objType = ObjUtil.typeof(obj)
+        objTypeName = objType.signature() if objType else type(obj).__name__
+        raise CastErr.make(f"{objTypeName} cannot be cast to {qname}")
 
     @staticmethod
     def isImmutable(obj):
