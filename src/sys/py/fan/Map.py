@@ -49,6 +49,10 @@ class Map(dict, Obj):
         # If we have a type, extract key/value types
         if type_param is not None:
             if isinstance(type_param, MapType):
+                # Validate key type is not nullable
+                if type_param.k is not None and hasattr(type_param.k, 'isNullable') and type_param.k.isNullable():
+                    from .Err import ArgErr
+                    raise ArgErr("Map key type cannot be nullable")
                 result._mapType = type_param
                 result._keyType = type_param.k
                 result._valueType = type_param.v
@@ -149,6 +153,9 @@ class Map(dict, Obj):
     @def_.setter
     def def_(self, val):
         """Set default value"""
+        if self._ro:
+            from .Err import ReadonlyErr
+            raise ReadonlyErr("Map is read-only")
         self._def = val
 
     @property
@@ -207,6 +214,11 @@ class Map(dict, Obj):
 
     def __setitem__(self, key, value):
         """Set value by key, handling case-insensitivity"""
+        # Check if map is read-only
+        if self._ro:
+            from .Err import ReadonlyErr
+            raise ReadonlyErr("Map is read-only")
+
         # Invalidate ro cache when modified
         self._roView = None
 
@@ -530,6 +542,10 @@ class Map(dict, Obj):
 
     def clear(self):
         """Clear all entries"""
+        # Check if map is read-only
+        if self._ro:
+            from .Err import ReadonlyErr
+            raise ReadonlyErr("Map is read-only")
         super().clear()
         return self
 
@@ -547,6 +563,10 @@ class Map(dict, Obj):
 
     def remove(self, key):
         """Remove a key and return its value"""
+        # Check if map is read-only
+        if self._ro:
+            from .Err import ReadonlyErr
+            raise ReadonlyErr("Map is read-only")
         if key in self:
             val = self[key]
             del self[key]
@@ -560,8 +580,15 @@ class Map(dict, Obj):
         return self
 
     def addAll(self, other):
-        """Add all entries from another map"""
-        return self.setAll(other)
+        """Add all entries from another map (throws ArgErr if any key exists)"""
+        for k, v in other.items():
+            if k in self:
+                from .Err import ArgErr
+                raise ArgErr(f"Key already mapped: {k}")
+        # Now add all (after validation)
+        for k, v in other.items():
+            self[k] = v
+        return self
 
     def getOrAdd(self, key, valFunc):
         """Get value or add default if not present.
@@ -619,6 +646,9 @@ class Map(dict, Obj):
     @ordered.setter
     def ordered(self, val):
         """Set ordered flag"""
+        if self._ro:
+            from .Err import ReadonlyErr
+            raise ReadonlyErr("Map is read-only")
         self._ordered = val
 
     @property
@@ -628,7 +658,22 @@ class Map(dict, Obj):
 
     @caseInsensitive.setter
     def caseInsensitive(self, val):
-        """Set case-insensitive flag"""
+        """Set case-insensitive flag - throws UnsupportedErr if:
+        - map has keys already
+        - key type is not Str
+        """
+        if len(self) > 0:
+            from .Err import UnsupportedErr
+            raise UnsupportedErr("Cannot change caseInsensitive after map has keys")
+        # Check if key type supports case-insensitivity (must be Str)
+        if val and self._keyType is not None:
+            sig = self._keyType.signature() if hasattr(self._keyType, 'signature') else str(self._keyType)
+            if sig != "sys::Str":
+                from .Err import UnsupportedErr
+                raise UnsupportedErr("caseInsensitive requires Str keys")
+        if self._ro:
+            from .Err import ReadonlyErr
+            raise ReadonlyErr("Map is read-only")
         self._caseInsensitive = val
 
     def getChecked(self, key, checked=True):
