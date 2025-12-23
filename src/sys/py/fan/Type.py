@@ -1597,7 +1597,7 @@ class Type(Obj):
         return facet_qname in self._type_facets
 
     def facet(self, facetType, checked=True):
-        """Get facet value.
+        """Get facet value including inherited facets.
 
         Args:
             facetType: Type of facet to get
@@ -1607,35 +1607,89 @@ class Type(Obj):
             Facet instance or None
         """
         facet_qname = facetType.qname() if hasattr(facetType, 'qname') else str(facetType)
+
+        # Check own facets first
         if facet_qname in self._type_facets:
-            facet_data = self._type_facets[facet_qname]
+            return self._create_facet_instance(facet_qname, self._type_facets[facet_qname])
 
-            # For marker facets (no values), return the singleton defVal() instance
-            # This ensures identity equality: type.facet(FacetM1#) === FacetM1.defVal()
-            if not facet_data:
-                # Try to import the facet class and get defVal()
-                try:
-                    parts = facet_qname.split("::")
-                    if len(parts) == 2:
-                        pod, name = parts
-                        module = __import__(f'fan.{pod}.{name}', fromlist=[name])
-                        cls = getattr(module, name, None)
-                        if cls is not None and hasattr(cls, 'defVal'):
-                            return cls.defVal()
-                except:
-                    pass
-                # Fallback to FacetInstance
-                return FacetInstance(facetType, facet_data)
+        # Check inherited facets (only if facet has inherited=true)
+        inherited_data = self._find_inherited_facet(facet_qname)
+        if inherited_data is not None:
+            return self._create_facet_instance(facet_qname, inherited_data)
 
-            # For facets with values, create an instance with the stored values
-            return FacetInstance(facetType, facet_data)
         if checked:
             from .Err import UnknownFacetErr
             raise UnknownFacetErr.make(f"Facet not found: {facetType}")
         return None
 
+    def _create_facet_instance(self, facet_qname, facet_data):
+        """Create a FacetInstance for the given facet qname and data."""
+        facet_type = Type.find(facet_qname, True)
+
+        # For marker facets (no values), return the singleton defVal() instance
+        # This ensures identity equality: type.facet(FacetM1#) === FacetM1.defVal()
+        if not facet_data:
+            # Try to import the facet class and get defVal()
+            try:
+                parts = facet_qname.split("::")
+                if len(parts) == 2:
+                    pod, name = parts
+                    module = __import__(f'fan.{pod}.{name}', fromlist=[name])
+                    cls = getattr(module, name, None)
+                    if cls is not None and hasattr(cls, 'defVal'):
+                        return cls.defVal()
+            except:
+                pass
+            # Fallback to FacetInstance
+            return FacetInstance(facet_type, facet_data)
+
+        # For facets with values, create an instance with the stored values
+        return FacetInstance(facet_type, facet_data)
+
+    def _find_inherited_facet(self, facet_qname):
+        """Find an inherited facet by qname.
+
+        Only returns facets with @FacetMeta{inherited=true}.
+
+        Args:
+            facet_qname: Qualified name of facet to find
+
+        Returns:
+            Facet data dict if found, None otherwise
+        """
+        # Only inheritable facets can be inherited
+        if not self._is_inherited_facet(facet_qname):
+            return None
+
+        # Check mixins
+        for mixin in self.mixins():
+            mixin._ensure_loaded()
+            if facet_qname in mixin._type_facets:
+                return mixin._type_facets[facet_qname]
+            # Recursively check mixin's parents
+            inherited = mixin._find_inherited_facet(facet_qname)
+            if inherited is not None:
+                return inherited
+
+        # Check base class
+        base = self.base()
+        if base is not None and base._qname != self._qname and base._qname != "sys::Obj":
+            base._ensure_loaded()
+            if facet_qname in base._type_facets:
+                return base._type_facets[facet_qname]
+            # Recursively check base's parents
+            inherited = base._find_inherited_facet(facet_qname)
+            if inherited is not None:
+                return inherited
+
+        return None
+
     def facets(self):
-        """Return list of all facets.
+        """Return list of all facets including inherited facets.
+
+        Facets with @FacetMeta{inherited=true} are inherited from:
+        - Mixins (directly implemented)
+        - Base class
 
         Returns:
             Immutable List of Facet instances (cached for identity comparison)
@@ -1644,14 +1698,96 @@ class Type(Obj):
             return self._facets_list
 
         from .List import List as FanList
-        result = []
+
+        # Collect facets: own facets first, then inherited
+        # Use dict to track by qname (own facets override inherited)
+        facet_map = {}  # facet_qname -> (facet_type, facet_data)
+
+        # Collect inherited facets first (so own facets can override)
+        self._collect_inherited_facets(facet_map, set())
+
+        # Own facets (override any inherited with same qname)
         for facet_qname, facet_data in self._type_facets.items():
-            # Use checked=True to create the type even if not in KNOWN_TYPES
             facet_type = Type.find(facet_qname, True)
+            facet_map[facet_qname] = (facet_type, facet_data)
+
+        # Build result list
+        result = []
+        for facet_qname, (facet_type, facet_data) in facet_map.items():
             result.append(FacetInstance(facet_type, facet_data))
+
         # Return immutable Fantom List with Facet element type
         self._facets_list = FanList.fromLiteral(result, "sys::Facet").toImmutable()
         return self._facets_list
+
+    def _collect_inherited_facets(self, facet_map, visited):
+        """Collect inherited facets from mixins and base class.
+
+        Only facets with @FacetMeta{inherited=true} are inherited.
+
+        Args:
+            facet_map: Dict to accumulate facets (facet_qname -> (type, data))
+            visited: Set of already-visited type qnames (prevent cycles)
+        """
+        if self._qname in visited:
+            return
+        visited.add(self._qname)
+
+        # Collect from mixins first
+        for mixin in self.mixins():
+            mixin._ensure_loaded()
+            for facet_qname, facet_data in mixin._type_facets.items():
+                if self._is_inherited_facet(facet_qname):
+                    if facet_qname not in facet_map:
+                        facet_type = Type.find(facet_qname, True)
+                        facet_map[facet_qname] = (facet_type, facet_data)
+            # Recursively collect from mixin's parents
+            mixin._collect_inherited_facets(facet_map, visited)
+
+        # Collect from base class
+        base = self.base()
+        if base is not None and base._qname != self._qname and base._qname != "sys::Obj":
+            base._ensure_loaded()
+            for facet_qname, facet_data in base._type_facets.items():
+                if self._is_inherited_facet(facet_qname):
+                    if facet_qname not in facet_map:
+                        facet_type = Type.find(facet_qname, True)
+                        facet_map[facet_qname] = (facet_type, facet_data)
+            # Recursively collect from base's parents
+            base._collect_inherited_facets(facet_map, visited)
+
+    def _ensure_loaded(self):
+        """Ensure this type's metadata is loaded (trigger tf_() if needed)."""
+        # If we already have facets or reflected, we're loaded
+        if self._type_facets or self._reflected:
+            return
+
+        # Try to import the module to trigger tf_() metadata registration
+        if "::" in self._qname:
+            parts = self._qname.split("::")
+            if len(parts) == 2:
+                pod, name = parts
+                try:
+                    __import__(f'fan.{pod}.{name}', fromlist=[name])
+                except ImportError:
+                    pass
+
+    def _is_inherited_facet(self, facet_qname):
+        """Check if a facet type has @FacetMeta{inherited=true}."""
+        # Load the facet type to check its metadata
+        facet_type = Type.find(facet_qname, False)
+        if facet_type is None:
+            return False
+
+        # Ensure facet type is loaded
+        facet_type._ensure_loaded()
+
+        # Check if it has @FacetMeta{inherited=true}
+        facet_meta = facet_type._type_facets.get("sys::FacetMeta")
+        if facet_meta is not None:
+            return facet_meta.get("inherited", False) == True
+
+        return False
 
     def __eq__(self, other):
         if other is None:

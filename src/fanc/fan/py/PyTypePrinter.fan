@@ -1382,7 +1382,14 @@ class PyTypePrinter : PyPrinter
     hasSlots := t.fieldDefs.any |f| { !f.isSynthetic } ||
                 t.methodDefs.any |m| { !m.isSynthetic && !m.isInstanceInit && !m.isStaticInit }
 
-    if (!hasSlots) return
+    // Always need to emit tf_() for type-level metadata (facets, mixins, base type)
+    // even if there are no slots (e.g., mixins with only inherited members)
+    hasFacets := t.facets != null && !t.facets.isEmpty
+    hasMixins := !t.mixins.isEmpty && t.mixins.any |m| { m.qname != "sys::Obj" }
+    hasBase := t.base != null && !t.base.isObj
+
+    // Skip only if there's nothing to register
+    if (!hasSlots && !hasFacets && !hasMixins && !hasBase) return
 
     nl
     w("# Type metadata registration for reflection").nl
