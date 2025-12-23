@@ -685,7 +685,7 @@ class File(Obj):
         from .Buf import Buf
         data = self._path.read_bytes() if self._path.exists() else b''
         buf = Buf(data)
-        return buf.in_()
+        return SysInStream(buf)
 
     def out(self, append=False, bufSize=None):
         """Open file for writing, return OutStream."""
@@ -804,13 +804,21 @@ class File(Obj):
         raise UnknownSlotErr.make(f"sys::File.{name}")
 
 
-class FileOutStream:
-    """OutStream wrapper that writes to file on close."""
+class SysOutStream(Obj):
+    """SysOutStream - file-backed output stream.
+
+    This is returned by File.out() and reports type sys::SysOutStream
+    with base type sys::OutStream.
+    """
 
     def __init__(self, buf, path, append=False):
         self._buf = buf
         self._path = path
         self._append = append
+
+    def typeof(self):
+        from .Type import Type
+        return Type.find("sys::SysOutStream")
 
     def write(self, b):
         self._buf.write(b)
@@ -842,6 +850,10 @@ class FileOutStream:
 
     def writeBool(self, x):
         self._buf.writeBool(x)
+        return self
+
+    def writeDecimal(self, x):
+        self._buf.writeDecimal(x)
         return self
 
     def writeUtf(self, s):
@@ -886,3 +898,197 @@ class FileOutStream:
 
     def endian(self, val=None):
         return self._buf.endian(val)
+
+
+class SysInStream(Obj):
+    """SysInStream - file-backed input stream.
+
+    This is returned by File.in_() and reports type sys::SysInStream
+    with base type sys::InStream.
+    """
+
+    def __init__(self, buf):
+        self._buf = buf
+
+    def typeof(self):
+        from .Type import Type
+        return Type.find("sys::SysInStream")
+
+    def avail(self):
+        return self._buf.remaining()
+
+    def read(self):
+        return self._buf.read()
+
+    def readBuf(self, other, n):
+        return self._buf.readBuf(other, n)
+
+    def unread(self, n):
+        self._buf.unread(n)
+        return self
+
+    def readAllBuf(self):
+        return self._buf.readAllBuf()
+
+    def readBufFully(self, buf, n):
+        return self._buf.readBufFully(buf, n)
+
+    def peek(self):
+        return self._buf.peek()
+
+    def readU1(self):
+        return self._buf.readU1()
+
+    def readS1(self):
+        return self._buf.readS1()
+
+    def readU2(self):
+        return self._buf.readU2()
+
+    def readS2(self):
+        return self._buf.readS2()
+
+    def readU4(self):
+        return self._buf.readU4()
+
+    def readS4(self):
+        return self._buf.readS4()
+
+    def readS8(self):
+        return self._buf.readS8()
+
+    def readF4(self):
+        return self._buf.readF4()
+
+    def readF8(self):
+        return self._buf.readF8()
+
+    def readBool(self):
+        return self._buf.readBool()
+
+    def readUtf(self):
+        return self._buf.readUtf()
+
+    def readChar(self):
+        return self._buf.readChar()
+
+    def unreadChar(self, c):
+        self._buf.unreadChar(c)
+        return self
+
+    def peekChar(self):
+        return self._buf.peekChar()
+
+    def readChars(self, n):
+        return self._buf.readChars(n)
+
+    def readLine(self, max_chars=None):
+        return self._buf.readLine(max_chars)
+
+    def readAllStr(self, normalize=True):
+        return self._buf.readAllStr(normalize)
+
+    def readAllLines(self):
+        return self._buf.readAllLines()
+
+    def eachLine(self, f):
+        self._buf.eachLine(f)
+
+    def skip(self, n):
+        """Skip n bytes."""
+        skipped = 0
+        for _ in range(int(n)):
+            b = self._buf.read()
+            if b is None:
+                break
+            skipped += 1
+        return skipped
+
+    def pipe(self, out, n=None, close=True):
+        """Pipe data from this InStream to an OutStream."""
+        from .Err import IOErr
+        try:
+            total = 0
+            if n is None:
+                while True:
+                    b = self._buf.read()
+                    if b is None:
+                        break
+                    out.write(b)
+                    total += 1
+            else:
+                for _ in range(int(n)):
+                    b = self._buf.read()
+                    if b is None:
+                        raise IOErr.make("Unexpected end of stream")
+                    out.write(b)
+                    total += 1
+            return total
+        finally:
+            if close:
+                self.close()
+
+    def readStrToken(self, max_chars=None, func=None):
+        """Read string token until whitespace or func returns true."""
+        from .Int import Int
+        max_len = int(max_chars) if max_chars is not None else 2147483647
+        if max_len <= 0:
+            return ""
+        c = self._buf.readChar()
+        if c is None:
+            return None
+        chars = []
+        while True:
+            if func is None:
+                terminate = Int.isSpace(c)
+            else:
+                terminate = func.call(c)
+            if terminate:
+                self._buf.unreadChar(c)
+                break
+            chars.append(chr(c))
+            if len(chars) >= max_len:
+                break
+            c = self._buf.readChar()
+            if c is None:
+                break
+        return ''.join(chars)
+
+    def readNullTerminatedStr(self, max_chars=None):
+        """Read string until null byte or max chars."""
+        max_len = int(max_chars) if max_chars is not None else 2147483647
+        if max_len <= 0:
+            return ""
+        c = self._buf.readChar()
+        if c is None:
+            return None
+        chars = []
+        while True:
+            if c == 0:
+                break
+            chars.append(chr(c))
+            if len(chars) >= max_len:
+                break
+            c = self._buf.readChar()
+            if c is None:
+                break
+        return ''.join(chars)
+
+    def readDecimal(self):
+        """Read decimal as string (Fantom serialization)."""
+        s = self._buf.readUtf()
+        from .Decimal import Decimal
+        return Decimal.fromStr(s)
+
+    def charset(self, val=None):
+        return self._buf.charset(val)
+
+    def endian(self, val=None):
+        return self._buf.endian(val)
+
+    def close(self):
+        return True
+
+
+# Backward compatibility alias
+FileOutStream = SysOutStream

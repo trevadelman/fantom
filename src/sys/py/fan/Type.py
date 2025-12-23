@@ -40,6 +40,9 @@ class Type(Obj):
         "sys::Slot": "sys::Obj",  # Slot extends Obj
         "sys::Field": "sys::Slot",  # Field extends Slot
         "sys::Method": "sys::Slot",  # Method extends Slot
+        # Stream hierarchy
+        "sys::SysOutStream": "sys::OutStream",  # SysOutStream extends OutStream
+        "sys::SysInStream": "sys::InStream",    # SysInStream extends InStream
         # System enums
         "sys::Weekday": "sys::Enum",
         "sys::Month": "sys::Enum",
