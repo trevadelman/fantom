@@ -404,6 +404,7 @@ class PyExprPrinter : PyPrinter
     // Method call
     // Check for private methods - they are non-virtual in Fantom
     // Use static dispatch: ClassName.method(self/target, args)
+    // BUT: In static context, there's no self - use factory pattern without self
     if (e.method.isPrivate && !e.method.isStatic)
     {
       w(e.method.parent.name).w(".").w(escapeName(e.method.name)).w("(")
@@ -411,11 +412,13 @@ class PyExprPrinter : PyPrinter
       {
         expr(e.target)
       }
-      else
+      else if (!m.inStaticContext)
       {
+        // Only add self if NOT in static context
         w("self")
       }
-      if (!e.args.isEmpty) w(", ")
+      // Add comma separator only if we added a target/self AND have args
+      if ((e.target != null || !m.inStaticContext) && !e.args.isEmpty) w(", ")
       e.args.each |arg, i|
       {
         if (i > 0) w(", ")
@@ -729,12 +732,17 @@ class PyExprPrinter : PyPrinter
 
   private Void construction(CallExpr e)
   {
-    // Constructor call - ClassName()
+    // Constructor call - ClassName() or ClassName.factory()
     // Check if this is a same-pod type reference (not sys pod)
     // For same-pod types, use a runtime import to avoid circular import issues
     curPod := m.curType?.pod?.name
     targetPod := e.method.parent.pod.name
     typeName := e.method.parent.name
+    methodName := e.method.name
+
+    // Check if this is a non-make factory (like fromStr)
+    // In this case we need ClassName.factory(args) not ClassName(args)
+    isNonMakeFactory := methodName != "make" && methodName != "<ctor>"
 
     if (curPod != null && curPod != "sys" && curPod == targetPod)
     {
@@ -746,6 +754,13 @@ class PyExprPrinter : PyPrinter
     {
       w(typeName)
     }
+
+    // For non-make factories, call the factory method explicitly
+    if (isNonMakeFactory)
+    {
+      w(".").w(escapeName(methodName))
+    }
+
     w("(")
     e.args.each |arg, i|
     {
@@ -904,11 +919,16 @@ class PyExprPrinter : PyPrinter
       }
       else
       {
-        // Direct storage access: self._count = value
+        // Direct storage access: self._count = value or ClassName._count for static
         if (fieldExpr.target != null)
         {
           expr(fieldExpr.target)
           w(".")
+        }
+        else if (fieldExpr.field.isStatic)
+        {
+          // Static field without explicit target - need class prefix
+          w(fieldExpr.field.parent.name).w(".")
         }
         w("_").w(escapeName(fieldExpr.field.name))
         w(" = ")

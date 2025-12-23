@@ -60,15 +60,18 @@ class PyTypePrinter : PyPrinter
     w("sys_module.path.insert(0, '.')").nl
     nl
 
-    // Import base class
-    if (t.base != null && !t.base.isObj)
+    // Import base class (but skip if this IS Obj - no self-import)
+    if (t.qname != "sys::Obj")
     {
-      podPath := PyUtil.podImport(t.base.pod.name)
-      w("from ${podPath}.${t.base.name} import ${t.base.name}").nl
-    }
-    else
-    {
-      w("from fan.sys.Obj import Obj").nl
+      if (t.base != null && !t.base.isObj)
+      {
+        podPath := PyUtil.podImport(t.base.pod.name)
+        w("from ${podPath}.${t.base.name} import ${t.base.name}").nl
+      }
+      else
+      {
+        w("from fan.sys.Obj import Obj").nl
+      }
     }
 
     // Core sys utilities - always needed for runtime
@@ -826,11 +829,27 @@ class PyTypePrinter : PyPrinter
     // Generate __init__ constructor (uses primary ctor's signature)
     nl
     w("def __init__(self")
-    primaryCtor.params.each |p|
+
+    // In Python, once we emit a default parameter, ALL following params must have defaults
+    // Find the first index where we should start emitting defaults:
+    // - explicit hasDefault, OR
+    // - nullable type AND all following params also have defaults or are nullable
+    firstDefaultIdx := primaryCtor.params.size
+    for (i := primaryCtor.params.size - 1; i >= 0; i--)
+    {
+      p := primaryCtor.params[i]
+      if (p.hasDefault || p.type.isNullable)
+        firstDefaultIdx = i
+      else
+        break  // Found a required param, stop
+    }
+
+    primaryCtor.params.each |p, i|
     {
       w(", ")
       w(escapeName(p.name))
-      if (p.hasDefault)
+      // Only add =None if at or after firstDefaultIdx
+      if (i >= firstDefaultIdx)
       {
         w("=None")
       }
@@ -1056,6 +1075,7 @@ class PyTypePrinter : PyPrinter
   }
 
   ** Generate _static_init() method that initializes all static fields
+  ** Follows Fantom's source order: static blocks run before fields declared after them
   private Void staticInit(TypeDef t, MethodDef? staticInitMethod, FieldDef[] staticFieldDefs)
   {
     typeName := t.name
@@ -1065,26 +1085,20 @@ class PyTypePrinter : PyPrinter
     w("def _static_init()").colon
     indent
 
+    // Add re-entry guard to prevent infinite recursion
+    // This handles circular dependencies between static fields
+    w("if hasattr(${typeName}, '_static_init_in_progress') and ${typeName}._static_init_in_progress").colon
+    indent
+    w("return").eos
+    unindent
+    w("${typeName}._static_init_in_progress = True").eos
+
     // Mark that we're in a static context (no 'self' available)
     m.inStaticContext = true
 
-    // Initialize fields with initializers
-    // Guard against double-init (facets may have both field init and static block init)
-    staticFieldDefs.each |f|
-    {
-      if (f.init == null) return
-      name := escapeName(f.name)
-      w("if ${typeName}._${name} is None").colon
-      indent
-      w("${typeName}._${name} = ")
-      PyExprPrinter(this).expr(f.init)
-      eos
-      unindent
-    }
-
-    // Run static init block if present
-    // Skip statements that are just field assignments we've already initialized
-    initedFieldNames := staticFieldDefs.findAll |f| { f.init != null }.map |f->Str| { f.name }
+    // If there's a static init method, it contains EVERYTHING (Fantom compiler combines
+    // all static initialization into one method). Just emit it, skipping the final return
+    // so we can clear the guard flag after.
     if (staticInitMethod != null && staticInitMethod.code != null)
     {
       stmtPrinter := PyStmtPrinter(this)
@@ -1092,19 +1106,34 @@ class PyTypePrinter : PyPrinter
       staticInitMethod.code.stmts.each |s, idx|
       {
         this.m.stmtIndex = idx
-        // Skip field assignments that duplicate what we've already initialized
-        if (isStaticFieldAssignment(s, initedFieldNames))
-          return
+        // Skip synthetic return at end - we'll handle cleanup after
+        if (s.id == StmtId.returnStmt)
+        {
+          ret := s as ReturnStmt
+          if (ret.expr == null) return  // Skip void return
+        }
         stmtPrinter.stmt(s)
       }
       this.m.clearClosures()
     }
-
-    // Ensure at least one statement (pass) for valid Python
-    if (staticFieldDefs.all |f| { f.init == null } && staticInitMethod?.code?.stmts?.isEmpty != false)
+    else
     {
-      pass
+      // No static block - just initialize fields with inline initializers
+      staticFieldDefs.each |f|
+      {
+        if (f.init == null) return
+        name := escapeName(f.name)
+        w("if ${typeName}._${name} is None").colon
+        indent
+        w("${typeName}._${name} = ")
+        PyExprPrinter(this).expr(f.init)
+        eos
+        unindent
+      }
     }
+
+    // Clear the re-entry guard
+    w("${typeName}._static_init_in_progress = False").eos
 
     // Reset static context flag
     m.inStaticContext = false
