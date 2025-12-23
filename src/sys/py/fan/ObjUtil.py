@@ -392,11 +392,24 @@ class ObjUtil:
     @staticmethod
     def coerce(obj, type_):
         """Runtime coercion with error - throws CastErr if obj doesn't fit type"""
-        if obj is None:
-            # Null can be coerced to nullable types
-            return obj
-
         # Get type qname string
+        if hasattr(type_, '_qname'):
+            qname = type_._qname
+        elif isinstance(type_, str):
+            qname = type_
+        else:
+            qname = str(type_)
+
+        # Handle null case
+        if obj is None:
+            # Null can only be coerced to nullable types (ending with ?)
+            if qname.endswith('?'):
+                return obj
+            # Coercing null to non-nullable type throws NullErr
+            from .Err import NullErr
+            raise NullErr.make(f"Coerce to non-null: {qname}")
+
+        # Already have qname from above
         if hasattr(type_, '_qname'):
             qname = type_._qname
         elif isinstance(type_, str):
