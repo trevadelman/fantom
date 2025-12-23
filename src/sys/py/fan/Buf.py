@@ -704,7 +704,10 @@ class Buf(Obj):
         return ch
 
     def readChars(self, n):
-        """Read n characters."""
+        """Read exactly n characters.
+
+        Throws IOErr if fewer than n characters are available.
+        """
         if n < 0:
             from .Err import ArgErr
             raise ArgErr.make(f"readChars n < 0: {n}")
@@ -712,7 +715,8 @@ class Buf(Obj):
         for _ in range(int(n)):
             ch = self.readChar()
             if ch is None:
-                break
+                from .Err import IOErr
+                raise IOErr.make("Unexpected end of stream")
             chars.append(chr(ch))
         return ''.join(chars)
 

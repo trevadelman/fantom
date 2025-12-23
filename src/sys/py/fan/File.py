@@ -368,6 +368,11 @@ class File(Obj):
         mtime = self._path.stat().st_mtime
         return DateTime.fromPosix(int(mtime))
 
+    def store(self):
+        """Return the storage device for this file."""
+        from .FileStore import LocalFileStore
+        return LocalFileStore(str(self._path))
+
     #########################################################################
     # Listing
     #########################################################################

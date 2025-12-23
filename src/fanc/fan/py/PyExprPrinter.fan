@@ -1879,6 +1879,9 @@ class PyExprPrinter : PyPrinter
 
     // Use doCall.params for parameter names, but LIMIT to expected count
     // This handles cases where closure declares extra params that get coerced away
+    // ALL params get =None default because Python (unlike JS) requires all args
+    // JS: f(a,b) called as f() gives a=undefined, b=undefined
+    // Python: f(a,b) called as f() raises TypeError
     if (e.doCall?.params != null && !e.doCall.params.isEmpty)
     {
       // Only output up to expectedParamCount params (or all if signature unavailable)
@@ -1888,7 +1891,7 @@ class PyExprPrinter : PyPrinter
       actualCount.times |i|
       {
         if (i > 0) w(", ")
-        w(escapeName(e.doCall.params[i].name))
+        w(escapeName(e.doCall.params[i].name)).w("=None")
       }
 
       // If no params were output but we need at least one for lambda syntax
@@ -1904,7 +1907,7 @@ class PyExprPrinter : PyPrinter
         // Check if this is an it-block (uses implicit it)
         if (e.isItBlock)
         {
-          w("it")
+          w("it=None")
         }
         else
         {
@@ -1912,9 +1915,9 @@ class PyExprPrinter : PyPrinter
           {
             if (i > 0) w(", ")
             if (name.isEmpty)
-              w("_p${i}")
+              w("_p${i}=None")
             else
-              w(escapeName(name))
+              w(escapeName(name)).w("=None")
           }
         }
       }

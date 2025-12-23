@@ -469,6 +469,9 @@ class PyStmtPrinter : PyPrinter
 
     // Parameters from closure's doCall method - these have the actual names
     // from the source code, but LIMIT to expected count from signature
+    // ALL params get =None default because Python (unlike JS) requires all args
+    // JS: f(a,b) called as f() gives a=undefined, b=undefined
+    // Python: f(a,b) called as f() raises TypeError
     hasParams := false
     if (ce.doCall?.params != null && !ce.doCall.params.isEmpty)
     {
@@ -479,7 +482,7 @@ class PyStmtPrinter : PyPrinter
       actualCount.times |i|
       {
         if (i > 0) w(", ")
-        w(escapeName(ce.doCall.params[i].name))
+        w(escapeName(ce.doCall.params[i].name)).w("=None")
         hasParams = true
       }
     }
@@ -492,7 +495,7 @@ class PyStmtPrinter : PyPrinter
         // Check if this is an it-block (uses implicit it)
         if (ce.isItBlock)
         {
-          w("it")
+          w("it=None")
           hasParams = true
         }
         else
@@ -501,9 +504,9 @@ class PyStmtPrinter : PyPrinter
           {
             if (i > 0) w(", ")
             if (name.isEmpty)
-              w("_p${i}")
+              w("_p${i}=None")
             else
-              w(escapeName(name))
+              w(escapeName(name)).w("=None")
             hasParams = true
           }
         }
