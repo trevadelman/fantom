@@ -14,8 +14,29 @@ class Regex(Obj):
 
     def __init__(self, pattern, flags=0):
         self._pattern = pattern
+        # Convert string flags to Python int flags
+        if isinstance(flags, str):
+            int_flags = 0
+            if 'i' in flags:
+                int_flags |= re.IGNORECASE
+            if 'm' in flags:
+                int_flags |= re.MULTILINE
+            if 's' in flags:
+                int_flags |= re.DOTALL
+            if 'x' in flags:
+                int_flags |= re.VERBOSE
+            flags = int_flags
         self._flags = flags
-        self._compiled = re.compile(pattern, flags)
+        # Pre-process pattern for Java regex escapes not in Python
+        processed = self._preprocess_pattern(pattern)
+        self._compiled = re.compile(processed, flags)
+
+    @staticmethod
+    def _preprocess_pattern(pattern):
+        """Convert Java regex escapes to Python equivalents."""
+        # \e (escape char) -> \x1b
+        result = pattern.replace('\\e', '\\x1b')
+        return result
 
     @staticmethod
     def fromStr(pattern, checked=True):
@@ -79,12 +100,29 @@ class Regex(Obj):
         return RegexMatcher(self._compiled, s)
 
     def split(self, s, limit=0):
-        """Split string using this pattern as delimiter"""
+        """Split string using this pattern as delimiter.
+
+        Java/Fantom semantics:
+        - limit > 0: pattern applied at most limit-1 times, array length <= limit
+        - limit == 0: unlimited splits, trailing empty strings DISCARDED
+        - limit < 0: unlimited splits, trailing empty strings KEPT
+        """
         from fan.sys.List import List
-        if limit == 0:
-            return List.fromList(self._compiled.split(s))
+        if limit == 1:
+            # No splitting - return original string as single element
+            return List.fromList([s])
+        elif limit > 1:
+            # Python maxsplit = limit - 1 (limit=2 means 1 split = 2 parts)
+            parts = self._compiled.split(s, limit - 1)
         else:
-            return List.fromList(self._compiled.split(s, limit - 1))
+            # limit <= 0: unlimited splits
+            parts = self._compiled.split(s)
+
+        # Only strip trailing empty strings when limit == 0
+        if limit == 0:
+            while parts and parts[-1] == '':
+                parts.pop()
+        return List.fromList(parts)
 
     def equals(self, other):
         """Test equality"""
