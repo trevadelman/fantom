@@ -279,7 +279,7 @@ class Env(Obj):
             maxAge: Maximum cache age (Duration)
 
         Returns:
-            Immutable Map of properties
+            Immutable Map[Str,Str] of properties
         """
         from .Map import Map
         from .Duration import Duration
@@ -305,10 +305,12 @@ class Env(Obj):
         etc_dir = self.workDir().plus(f"etc/{pod_name}/", False)
         props_file = etc_dir.plus(uri, False)
 
-        # Load props
-        props = Map()
+        # Load props - create properly typed empty map if file not found
+        props = Map.makeWithType("sys::Str", "sys::Str")
         if props_file.exists():
-            props = props_file.readProps()
+            loaded = props_file.readProps()
+            for k, v in loaded.items():
+                props.set(k, v)
 
         # Make immutable and cache
         result = props.toImmutable()
@@ -339,19 +341,23 @@ class Env(Obj):
 
         return defVal
 
-    def locale(self, pod, key, defVal=None, locale=None):
+    # Sentinel value to detect "no default provided"
+    _LOCALE_NO_DEFAULT = object()
+
+    def locale(self, pod, key, defVal=_LOCALE_NO_DEFAULT, locale=None):
         """Get localized string.
 
         Args:
             pod: Pod to get locale for
             key: Locale key
-            defVal: Default value if not found
+            defVal: Default value if not found. If not provided, returns pod::key pattern
             locale: Locale to use (default: Locale.cur)
 
         Returns:
-            Localized string or default
+            Localized string, default, or pod::key pattern
         """
         from .Locale import Locale
+        from .File import File
 
         # Get locale
         if locale is None:
@@ -359,37 +365,50 @@ class Env(Obj):
 
         pod_name = pod.name() if hasattr(pod, 'name') else str(pod)
 
-        # Try locale-specific files in order:
-        # 1. etc/{pod}/locale/{lang}-{country}.props
-        # 2. etc/{pod}/locale/{lang}.props
-        # 3. Pod's bundled locale files (not implemented yet)
-        # 4. etc/testSys/locale/{lang}-{country}.props (for tests)
-        # 5. etc/testSys/locale/{lang}.props (for tests)
-
         lang = locale.lang()
         country = locale.country() if hasattr(locale, 'country') else None
 
-        # Build list of files to check
+        # Build list of files to check, in order of precedence:
+        # 1. etc/{pod}/locale/{lang}-{country}.props (overrides)
+        # 2. etc/{pod}/locale/{lang}.props (overrides)
+        # 3. Pod's bundled locale/{lang}-{country}.props
+        # 4. Pod's bundled locale/{lang}.props
+        # 5. Fallback to English
         files_to_check = []
 
-        # Check etc/{pod}/locale/ first
+        # Check etc/{pod}/locale/ first (overrides)
         etc_locale = self.workDir().plus(f"etc/{pod_name}/locale/", False)
         if country:
             files_to_check.append(etc_locale.plus(f"{lang}-{country}.props", False))
         files_to_check.append(etc_locale.plus(f"{lang}.props", False))
-        files_to_check.append(etc_locale.plus("en.props", False))  # Fallback to English
+
+        # Check pod's bundled locale files (fan/src/{pod}/locale/)
+        home = self.homeDir()
+        pod_locale = home.plus(f"src/{pod_name}/locale/", False)
+        if country:
+            files_to_check.append(pod_locale.plus(f"{lang}-{country}.props", False))
+        files_to_check.append(pod_locale.plus(f"{lang}.props", False))
+
+        # Fallback to English from both locations
+        files_to_check.append(etc_locale.plus("en.props", False))
+        files_to_check.append(pod_locale.plus("en.props", False))
 
         # Check each file
         for props_file in files_to_check:
-            if props_file.exists():
-                props = props_file.readProps()
-                val = props.get(key, None)
-                if val is not None:
-                    return val
+            try:
+                if props_file.exists():
+                    props = props_file.readProps()
+                    val = props.get(key, None)
+                    if val is not None:
+                        return val
+            except:
+                continue
 
-        # Return default or pod::key pattern
-        if defVal is not None:
+        # Key not found - return based on whether defVal was provided
+        if defVal is not Env._LOCALE_NO_DEFAULT:
+            # defVal was explicitly provided (including None)
             return defVal
+        # No defVal provided - return pod::key pattern
         return f"{pod_name}::{key}"
 
     def out(self):

@@ -767,8 +767,8 @@ class File(Obj):
         with open(self._path, 'w', encoding='utf-8') as f:
             # Handle both Map and dict
             if hasattr(props, 'each'):
-                # Fantom Map
-                def write_kv(key, val):
+                # Fantom Map.each callback is |V val, K key| - note: value first!
+                def write_kv(val, key):
                     f.write(f"{key}={val}\n")
                 props.each(write_kv)
             else:

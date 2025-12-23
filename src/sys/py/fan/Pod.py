@@ -230,14 +230,20 @@ class Pod(Obj):
         """Return fandoc for this pod (not supported in Python runtime)"""
         return None
 
-    def locale(self, key, def_=None):
-        """Lookup a localized string by key"""
-        # Simplified locale lookup
-        return def_
+    # Sentinel value to detect "no default provided"
+    _LOCALE_NO_DEFAULT = object()
+
+    def locale(self, key, def_=_LOCALE_NO_DEFAULT):
+        """Lookup a localized string by key using current Locale"""
+        from .Env import Env
+        if def_ is Pod._LOCALE_NO_DEFAULT:
+            return Env.cur().locale(self, key)
+        return Env.cur().locale(self, key, def_)
 
     def config(self, key, def_=None):
         """Lookup a config value by key"""
-        return def_
+        from .Env import Env
+        return Env.cur().config(self, key, def_)
 
     def toStr(self):
         return self._name
