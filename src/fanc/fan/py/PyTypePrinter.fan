@@ -209,18 +209,12 @@ class PyTypePrinter : PyPrinter
       }
       else
       {
-        // Whole-pod import: using concurrent
-        // For known pods, add common types that exist in transpiled output
-        if (u.podName == "concurrent")
+        // Whole-pod import: using concurrent, using haystack, etc.
+        // Scan all method bodies for types from this pod
+        t.methodDefs.each |m|
         {
-          addByName("concurrent", "Actor")
-          addByName("concurrent", "ActorPool")
-          // Note: Service is actually in sys pod (native type)
-        }
-        else if (u.podName == "util")
-        {
-          addByName("util", "Random")
-          addByName("util", "FileLogger")
+          if (m.code == null) return
+          scanBlockForTypes(m.code, u.podName, addByName)
         }
       }
     }
@@ -256,6 +250,187 @@ class PyTypePrinter : PyPrinter
     if (t.isNullable) t = t.toNonNullable
     // For list/map/func, we'd need to recurse, but for imports we just need the outer type
     return t
+  }
+
+  ** Scan a block for type references from a specific pod
+  ** This finds construction calls, static method calls, etc.
+  private Void scanBlockForTypes(Block block, Str podName, |Str,Str?| addByName)
+  {
+    block.stmts.each |stmt|
+    {
+      scanStmtForTypes(stmt, podName, addByName)
+    }
+  }
+
+  ** Scan a statement for type references
+  private Void scanStmtForTypes(Stmt stmt, Str podName, |Str,Str?| addByName)
+  {
+    // Handle different statement types
+    switch (stmt.id)
+    {
+      case StmtId.expr:
+        scanExprForTypes((stmt as ExprStmt).expr, podName, addByName)
+      case StmtId.localDef:
+        localDef := stmt as LocalDefStmt
+        if (localDef.init != null)
+          scanExprForTypes(localDef.init, podName, addByName)
+        // Check local variable type
+        if (localDef.ctype != null && localDef.ctype.pod.name == podName)
+          addByName(podName, localDef.ctype.name)
+      case StmtId.ifStmt:
+        ifStmt := stmt as IfStmt
+        scanExprForTypes(ifStmt.condition, podName, addByName)
+        scanBlockForTypes(ifStmt.trueBlock, podName, addByName)
+        if (ifStmt.falseBlock != null)
+          scanBlockForTypes(ifStmt.falseBlock, podName, addByName)
+      case StmtId.returnStmt:
+        ret := stmt as ReturnStmt
+        if (ret.expr != null)
+          scanExprForTypes(ret.expr, podName, addByName)
+      case StmtId.forStmt:
+        forStmt := stmt as ForStmt
+        if (forStmt.init != null) scanStmtForTypes(forStmt.init, podName, addByName)
+        if (forStmt.condition != null) scanExprForTypes(forStmt.condition, podName, addByName)
+        if (forStmt.update != null) scanExprForTypes(forStmt.update, podName, addByName)
+        scanBlockForTypes(forStmt.block, podName, addByName)
+      case StmtId.whileStmt:
+        whileStmt := stmt as WhileStmt
+        scanExprForTypes(whileStmt.condition, podName, addByName)
+        scanBlockForTypes(whileStmt.block, podName, addByName)
+      case StmtId.tryStmt:
+        tryStmt := stmt as TryStmt
+        scanBlockForTypes(tryStmt.block, podName, addByName)
+        tryStmt.catches.each |c|
+        {
+          if (c.errType != null && c.errType.pod.name == podName)
+            addByName(podName, c.errType.name)
+          scanBlockForTypes(c.block, podName, addByName)
+        }
+        if (tryStmt.finallyBlock != null)
+          scanBlockForTypes(tryStmt.finallyBlock, podName, addByName)
+      case StmtId.switchStmt:
+        switchStmt := stmt as SwitchStmt
+        scanExprForTypes(switchStmt.condition, podName, addByName)
+        switchStmt.cases.each |c|
+        {
+          c.cases.each |caseExpr| { scanExprForTypes(caseExpr, podName, addByName) }
+          scanBlockForTypes(c.block, podName, addByName)
+        }
+        if (switchStmt.defaultBlock != null)
+          scanBlockForTypes(switchStmt.defaultBlock, podName, addByName)
+    }
+  }
+
+  ** Scan an expression for type references
+  private Void scanExprForTypes(Expr expr, Str podName, |Str,Str?| addByName)
+  {
+    // Handle construction calls: Coord(lat, lng)
+    if (expr.id == ExprId.construction)
+    {
+      callExpr := expr as CallExpr
+      if (callExpr.method.parent.pod.name == podName)
+        addByName(podName, callExpr.method.parent.name)
+      callExpr.args.each |arg| { scanExprForTypes(arg, podName, addByName) }
+      return
+    }
+
+    // Handle call expressions
+    if (expr.id == ExprId.call)
+    {
+      callExpr := expr as CallExpr
+      // Static method calls: Coord.fromStr(...)
+      if (callExpr.target != null)
+        scanExprForTypes(callExpr.target, podName, addByName)
+      // Check if method is from target pod
+      if (callExpr.method.parent.pod.name == podName)
+        addByName(podName, callExpr.method.parent.name)
+      callExpr.args.each |arg| { scanExprForTypes(arg, podName, addByName) }
+      return
+    }
+
+    // Handle static target: Coord.make
+    if (expr.id == ExprId.staticTarget)
+    {
+      staticTarget := expr as StaticTargetExpr
+      if (staticTarget.ctype.pod.name == podName)
+        addByName(podName, staticTarget.ctype.name)
+      return
+    }
+
+    // Handle type literal: Coord#
+    if (expr.id == ExprId.typeLiteral)
+    {
+      typeLit := expr as LiteralExpr
+      ctype := typeLit.val as CType
+      if (ctype != null && ctype.pod.name == podName)
+        addByName(podName, ctype.name)
+      return
+    }
+
+    // Handle binary expressions (including assign, same, notSame, boolOr, boolAnd, elvis)
+    if (expr is BinaryExpr)
+    {
+      binExpr := expr as BinaryExpr
+      scanExprForTypes(binExpr.lhs, podName, addByName)
+      scanExprForTypes(binExpr.rhs, podName, addByName)
+      return
+    }
+
+    // Handle ternary
+    if (expr is TernaryExpr)
+    {
+      ternary := expr as TernaryExpr
+      scanExprForTypes(ternary.condition, podName, addByName)
+      scanExprForTypes(ternary.trueExpr, podName, addByName)
+      scanExprForTypes(ternary.falseExpr, podName, addByName)
+      return
+    }
+
+    // Handle unary expressions (cmpNull, cmpNotNull, boolNot)
+    if (expr is UnaryExpr)
+    {
+      unary := expr as UnaryExpr
+      scanExprForTypes(unary.operand, podName, addByName)
+      return
+    }
+
+    // Handle shortcut expressions (comparisons like <, >, ==, etc.)
+    if (expr is ShortcutExpr)
+    {
+      shortcut := expr as ShortcutExpr
+      scanExprForTypes(shortcut.target, podName, addByName)
+      shortcut.args.each |arg| { scanExprForTypes(arg, podName, addByName) }
+      return
+    }
+
+    // Handle closures
+    if (expr.id == ExprId.closure)
+    {
+      closure := expr as ClosureExpr
+      if (closure.code != null)
+        scanBlockForTypes(closure.code, podName, addByName)
+      return
+    }
+
+    // Handle coerce/cast
+    if (expr.id == ExprId.coerce)
+    {
+      coerce := expr as TypeCheckExpr
+      scanExprForTypes(coerce.target, podName, addByName)
+      if (coerce.check.pod.name == podName)
+        addByName(podName, coerce.check.name)
+      return
+    }
+
+    // Handle is/as
+    if (expr.id == ExprId.isExpr || expr.id == ExprId.asExpr)
+    {
+      typeCheck := expr as TypeCheckExpr
+      scanExprForTypes(typeCheck.target, podName, addByName)
+      if (typeCheck.check.pod.name == podName)
+        addByName(podName, typeCheck.check.name)
+      return
+    }
   }
 
 //////////////////////////////////////////////////////////////////////////
