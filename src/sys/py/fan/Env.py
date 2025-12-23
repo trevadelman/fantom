@@ -411,6 +411,176 @@ class Env(Obj):
         # No defVal provided - return pod::key pattern
         return f"{pod_name}::{key}"
 
+    #################################################################
+    # Pod Index System
+    #################################################################
+
+    def _loadIndex(self):
+        """Load index.props from all pods and build index cache.
+
+        The index maps keys to a dict of {pod_name: [values]}.
+        """
+        if hasattr(self, '_indexCache'):
+            return
+
+        import zipfile
+        from pathlib import Path
+
+        self._indexCache = {}  # key -> {pod_name -> [values]}
+        self._indexKeysCache = None
+
+        # Find all pod files in lib/fan/
+        home = self.homeDir()
+        lib_fan = home._path / "lib" / "fan"
+        if not lib_fan.exists():
+            return
+
+        # Find path to generated Python modules
+        # Look for fan/gen/py/fan/{pod}/ directories
+        gen_py_path = None
+        for parent in [home._path, home._path.parent]:
+            candidate = parent / "gen" / "py" / "fan"
+            if candidate.exists():
+                gen_py_path = candidate
+                break
+
+        pod_count = 0
+        for pod_path in lib_fan.glob("*.pod"):
+            pod_name = pod_path.stem
+            pod_count += 1
+
+            # Only include pods that have Python modules available
+            # This filters out Java-only pods like testNative
+            if gen_py_path:
+                pod_py_dir = gen_py_path / pod_name
+                if not pod_py_dir.exists():
+                    continue  # Skip pods without Python code
+
+            try:
+                with zipfile.ZipFile(pod_path, 'r') as zf:
+                    if 'index.props' in zf.namelist():
+                        content = zf.read('index.props').decode('utf-8')
+                        for line in content.strip().split('\n'):
+                            line = line.strip()
+                            if not line or line.startswith('#') or line.startswith('//'):
+                                continue
+                            if '=' in line:
+                                key, value = line.split('=', 1)
+                                key = key.strip()
+                                value = value.strip()
+                                if key not in self._indexCache:
+                                    self._indexCache[key] = {}
+                                if pod_name not in self._indexCache[key]:
+                                    self._indexCache[key][pod_name] = []
+                                self._indexCache[key][pod_name].append(value)
+            except Exception as e:
+                continue
+
+    def indexKeys(self):
+        """Get all index keys as an immutable Str list.
+
+        Returns:
+            Immutable list of all unique index keys across all pods
+        """
+        from .List import List
+
+        self._loadIndex()
+
+        if self._indexKeysCache is None:
+            keys = sorted(self._indexCache.keys())
+            self._indexKeysCache = List.fromLiteral(keys, "sys::Str").toImmutable()
+
+        return self._indexKeysCache
+
+    def index(self, key):
+        """Get all values for an index key across all pods.
+
+        Args:
+            key: The index key to lookup
+
+        Returns:
+            Immutable list of all values for this key (may be empty)
+        """
+        from .List import List
+
+        self._loadIndex()
+
+        # Check cache
+        if not hasattr(self, '_indexResultCache'):
+            self._indexResultCache = {}
+        if key in self._indexResultCache:
+            return self._indexResultCache[key]
+
+        values = []
+        if key in self._indexCache:
+            for pod_name, pod_values in self._indexCache[key].items():
+                values.extend(pod_values)
+
+        result = List.fromLiteral(values, "sys::Str").toImmutable()
+        self._indexResultCache[key] = result
+        return result
+
+    def indexPodNames(self, key):
+        """Get names of all pods that have the given index key.
+
+        Args:
+            key: The index key to lookup
+
+        Returns:
+            Immutable list of pod names that have this key
+        """
+        from .List import List
+
+        self._loadIndex()
+
+        # Check cache
+        if not hasattr(self, '_indexPodNamesCache'):
+            self._indexPodNamesCache = {}
+        if key in self._indexPodNamesCache:
+            return self._indexPodNamesCache[key]
+
+        pod_names = []
+        if key in self._indexCache:
+            pod_names = sorted(self._indexCache[key].keys())
+
+        result = List.fromLiteral(pod_names, "sys::Str").toImmutable()
+        self._indexPodNamesCache[key] = result
+        return result
+
+    def indexByPodName(self, key):
+        """Get values for an index key grouped by pod name.
+
+        Args:
+            key: The index key to lookup
+
+        Returns:
+            Immutable map of pod name to list of values
+        """
+        from .List import List
+        from .Map import Map
+
+        self._loadIndex()
+
+        # Check cache
+        if not hasattr(self, '_indexByPodNameCache'):
+            self._indexByPodNameCache = {}
+        if key in self._indexByPodNameCache:
+            return self._indexByPodNameCache[key]
+
+        result = Map.makeWithType("sys::Str", "sys::Str[]")
+        if key in self._indexCache:
+            for pod_name, pod_values in self._indexCache[key].items():
+                values_list = List.fromLiteral(pod_values, "sys::Str").toImmutable()
+                result.set(pod_name, values_list)
+
+        result = result.toImmutable()
+        self._indexByPodNameCache[key] = result
+        return result
+
+    #################################################################
+    # Standard I/O
+    #################################################################
+
     def out(self):
         """Get standard output stream as OutStream."""
         if not hasattr(self, '_out'):
