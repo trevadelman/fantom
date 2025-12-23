@@ -364,7 +364,7 @@ class PyTypePrinter : PyPrinter
       def := f.enumDef
       nl
       w("@staticmethod").nl
-      w("def ${def.name}()").colon
+      w("def ${escapeName(def.name)}()").colon
       indent
       w("return ${t.name}.vals().get(${def.ordinal})").eos
       unindent
