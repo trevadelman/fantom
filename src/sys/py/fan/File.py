@@ -751,6 +751,55 @@ class File(Obj):
         for line in self.readAllLines():
             callback(line)
 
+    def writeProps(self, props):
+        """Write a properties file format.
+
+        Args:
+            props: Map or dict of key/value pairs
+
+        Returns:
+            This File for chaining
+        """
+        # Ensure parent directory exists
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write props file (UTF-8 encoded)
+        with open(self._path, 'w', encoding='utf-8') as f:
+            # Handle both Map and dict
+            if hasattr(props, 'each'):
+                # Fantom Map
+                def write_kv(key, val):
+                    f.write(f"{key}={val}\n")
+                props.each(write_kv)
+            else:
+                # Python dict or Map with items()
+                items = props.items() if hasattr(props, 'items') else props
+                for key, val in items:
+                    f.write(f"{key}={val}\n")
+        return self
+
+    def readProps(self):
+        """Read a properties file and return as Map."""
+        from .Map import Map
+
+        props = Map()
+        if not self._path.exists():
+            return props
+
+        with open(self._path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                # Skip empty lines and comments
+                if not line or line.startswith('#') or line.startswith('//'):
+                    continue
+                # Find = separator
+                eq = line.find('=')
+                if eq > 0:
+                    key = line[:eq].strip()
+                    val = line[eq+1:].strip()
+                    props.set(key, val)
+        return props
+
     def withOut(self, callback, append=False, bufSize=None):
         """Open file for writing, call callback with OutStream, then close.
 

@@ -146,6 +146,11 @@ class UnknownFacetErr(Err):
     pass
 
 
+class UnresolvedErr(Err):
+    """Unresolved error - thrown when resource cannot be found"""
+    pass
+
+
 class UnknownServiceErr(Err):
     """Unknown service error - thrown when service lookup fails"""
     pass

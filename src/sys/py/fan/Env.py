@@ -163,18 +163,234 @@ class Env(Obj):
     def vars(self):
         """Return environment variables as a Map[Str,Str].
 
-        Returns an immutable Map containing environment variables.
-        For Python runtime, this will NOT include java.home since we're not on JVM.
+        Returns an immutable, case-insensitive Map containing environment variables.
+        Includes os.name, os.version, user.name, user.home for Java compatibility.
         """
         import os
+        import platform
         from .Map import Map
 
-        # Create a map from Python environment variables
-        env_map = Map()
+        # Create a case-insensitive map with proper type signature
+        env_map = Map.makeWithType("sys::Str", "sys::Str")
+        env_map.caseInsensitive = True
+
+        # Add Python environment variables
         for key, value in os.environ.items():
             env_map.set(key, value)
 
+        # Add Java-compatible system properties that tests expect
+        # os.name - OS name
+        sys_name = platform.system()
+        if sys_name == 'Darwin':
+            os_name = 'Mac OS X'
+        elif sys_name == 'Windows':
+            os_name = 'Windows'
+        else:
+            os_name = sys_name
+        env_map.set("os.name", os_name)
+
+        # os.version - OS version
+        env_map.set("os.version", platform.release())
+
+        # user.name - Current user
+        env_map.set("user.name", os.environ.get("USER", os.environ.get("USERNAME", "unknown")))
+
+        # user.home - User home directory
+        env_map.set("user.home", os.path.expanduser("~"))
+
         return env_map.toImmutable()
+
+    def findFile(self, uri, checked=True):
+        """Find a file in the environment path.
+
+        Searches workDir then homeDir for the given URI.
+
+        Args:
+            uri: Relative URI to search for
+            checked: If true, throw UnresolvedErr if not found
+
+        Returns:
+            File if found, None if not found and checked=False
+        """
+        from .Uri import Uri
+        from .Err import ArgErr, UnresolvedErr
+
+        # Convert to Uri if string
+        if isinstance(uri, str):
+            uri = Uri.fromStr(uri)
+
+        # Must be relative URI
+        if uri.isAbs():
+            raise ArgErr.make(f"Uri must be relative: {uri}")
+
+        # Search path directories
+        for dir_file in self.path():
+            try:
+                candidate = dir_file.plus(uri, False)  # checkSlash=False
+                if candidate.exists():
+                    return candidate
+            except:
+                continue
+
+        # Not found
+        if checked:
+            raise UnresolvedErr.make(f"File not found in path: {uri}")
+        return None
+
+    def findAllFiles(self, uri):
+        """Find all files matching URI in the environment path.
+
+        Args:
+            uri: Relative URI to search for
+
+        Returns:
+            List of matching Files (may be empty)
+        """
+        from .Uri import Uri
+        from .List import List
+        from .Err import ArgErr
+
+        # Convert to Uri if string
+        if isinstance(uri, str):
+            uri = Uri.fromStr(uri)
+
+        # Must be relative URI
+        if uri.isAbs():
+            raise ArgErr.make(f"Uri must be relative: {uri}")
+
+        result = []
+        # Search all path directories
+        for dir_file in self.path():
+            try:
+                candidate = dir_file.plus(uri, False)  # checkSlash=False
+                if candidate.exists():
+                    result.append(candidate)
+            except:
+                continue
+
+        return List.fromLiteral(result, "sys::File")
+
+    def props(self, pod, uri, maxAge):
+        """Load props file with caching.
+
+        Args:
+            pod: Pod to load props for
+            uri: Uri of props file relative to etc/{pod}/
+            maxAge: Maximum cache age (Duration)
+
+        Returns:
+            Immutable Map of properties
+        """
+        from .Map import Map
+        from .Duration import Duration
+        import time
+
+        # Initialize cache if needed
+        if not hasattr(self, '_propsCache'):
+            self._propsCache = {}
+
+        # Build cache key
+        pod_name = pod.name() if hasattr(pod, 'name') else str(pod)
+        cache_key = f"{pod_name}:{uri}"
+
+        # Check cache
+        now = time.time()
+        if cache_key in self._propsCache:
+            cached_time, cached_props = self._propsCache[cache_key]
+            max_age_secs = maxAge.toMillis() / 1000.0 if hasattr(maxAge, 'toMillis') else float(maxAge) / 1e9
+            if now - cached_time < max_age_secs:
+                return cached_props
+
+        # Build file path: etc/{pod}/{uri}
+        etc_dir = self.workDir().plus(f"etc/{pod_name}/", False)
+        props_file = etc_dir.plus(uri, False)
+
+        # Load props
+        props = Map()
+        if props_file.exists():
+            props = props_file.readProps()
+
+        # Make immutable and cache
+        result = props.toImmutable()
+        self._propsCache[cache_key] = (now, result)
+
+        return result
+
+    def config(self, pod, key, defVal=None):
+        """Get pod configuration value.
+
+        Args:
+            pod: Pod to get config for
+            key: Config key
+            defVal: Default value if not found
+
+        Returns:
+            Config value or default
+        """
+        # Load from etc/{pod}/config.props
+        pod_name = pod.name() if hasattr(pod, 'name') else str(pod)
+        etc_file = self.workDir().plus(f"etc/{pod_name}/config.props", False)
+
+        if etc_file.exists():
+            props = etc_file.readProps()
+            val = props.get(key, None)
+            if val is not None:
+                return val
+
+        return defVal
+
+    def locale(self, pod, key, defVal=None, locale=None):
+        """Get localized string.
+
+        Args:
+            pod: Pod to get locale for
+            key: Locale key
+            defVal: Default value if not found
+            locale: Locale to use (default: Locale.cur)
+
+        Returns:
+            Localized string or default
+        """
+        from .Locale import Locale
+
+        # Get locale
+        if locale is None:
+            locale = Locale.cur()
+
+        pod_name = pod.name() if hasattr(pod, 'name') else str(pod)
+
+        # Try locale-specific files in order:
+        # 1. etc/{pod}/locale/{lang}-{country}.props
+        # 2. etc/{pod}/locale/{lang}.props
+        # 3. Pod's bundled locale files (not implemented yet)
+        # 4. etc/testSys/locale/{lang}-{country}.props (for tests)
+        # 5. etc/testSys/locale/{lang}.props (for tests)
+
+        lang = locale.lang()
+        country = locale.country() if hasattr(locale, 'country') else None
+
+        # Build list of files to check
+        files_to_check = []
+
+        # Check etc/{pod}/locale/ first
+        etc_locale = self.workDir().plus(f"etc/{pod_name}/locale/", False)
+        if country:
+            files_to_check.append(etc_locale.plus(f"{lang}-{country}.props", False))
+        files_to_check.append(etc_locale.plus(f"{lang}.props", False))
+        files_to_check.append(etc_locale.plus("en.props", False))  # Fallback to English
+
+        # Check each file
+        for props_file in files_to_check:
+            if props_file.exists():
+                props = props_file.readProps()
+                val = props.get(key, None)
+                if val is not None:
+                    return val
+
+        # Return default or pod::key pattern
+        if defVal is not None:
+            return defVal
+        return f"{pod_name}::{key}"
 
     def out(self):
         """Get standard output stream as OutStream."""
