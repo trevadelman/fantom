@@ -582,7 +582,7 @@ class Buf(Obj):
         return Buf(data)
 
     def readBufFully(self, buf, n):
-        """Read exactly n bytes into buf."""
+        """Read exactly n bytes into buf, then flip buf for reading."""
         n = int(n)
         if buf is None:
             buf = Buf.make(n)
@@ -590,6 +590,7 @@ class Buf(Obj):
         if result is None or result < n:
             from .Err import IOErr
             raise IOErr.make("Unexpected end of stream")
+        buf.flip()  # Reset pos to 0 so caller can read the bytes
         return buf
 
     def peek(self):
@@ -1449,6 +1450,21 @@ class BufInStream:
     def endian(self, val=None):
         """Get or set endian."""
         return self._buf.endian(val)
+
+    def skip(self, n):
+        """Skip n bytes in the stream.
+
+        Args:
+            n: Number of bytes to skip
+
+        Returns:
+            Number of bytes actually skipped
+        """
+        n = int(n)
+        avail = self._buf.remaining()
+        to_skip = min(n, avail)
+        self._buf._pos += to_skip
+        return to_skip
 
     def close(self):
         return True
