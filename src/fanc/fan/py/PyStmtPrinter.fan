@@ -867,8 +867,9 @@ class PyStmtPrinter : PyPrinter
         eos
         // Then return the value
         w("return ")
-        // Return the RHS (the assigned value)
-        expr(assign.rhs)
+        // Return the LHS (the variable that now holds the assigned value)
+        // This avoids re-evaluating the RHS which may have side effects
+        expr(assign.lhs)
         eos
         return
       }
