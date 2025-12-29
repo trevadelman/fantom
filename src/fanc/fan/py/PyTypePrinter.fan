@@ -610,6 +610,12 @@ class PyTypePrinter : PyPrinter
       {
         w(", ")
         w(escapeName(p.name))
+        // Add default value if param has one
+        if (p.hasDefault)
+        {
+          w("=")
+          PyExprPrinter(this).expr(p->def)
+        }
       }
     }
     w(")").colon
