@@ -357,6 +357,19 @@ class PyTypePrinter : PyPrinter
       return
     }
 
+    // Handle field expressions: Marker.val (static field access)
+    if (expr.id == ExprId.field)
+    {
+      fieldExpr := expr as FieldExpr
+      // If field has a target (e.g., staticTarget), scan it for types
+      if (fieldExpr.target != null)
+        scanExprForTypes(fieldExpr.target, podName, addByName)
+      // Also check if field's parent type is from target pod
+      if (fieldExpr.field.parent.pod.name == podName)
+        addByName(podName, fieldExpr.field.parent.name)
+      return
+    }
+
     // Handle type literal: Coord#
     if (expr.id == ExprId.typeLiteral)
     {
@@ -407,8 +420,30 @@ class PyTypePrinter : PyPrinter
     if (expr.id == ExprId.closure)
     {
       closure := expr as ClosureExpr
+      // Try closure.code first (original code block)
       if (closure.code != null)
         scanBlockForTypes(closure.code, podName, addByName)
+      // Also check doCall method (synthetic method created for closure)
+      // After compiler processing, code may have been moved to doCall
+      if (closure.doCall != null && closure.doCall.code != null)
+        scanBlockForTypes(closure.doCall.code, podName, addByName)
+      return
+    }
+
+    // Handle list literals: [HisItem(ts, NA.val)]
+    if (expr.id == ExprId.listLiteral)
+    {
+      listLit := expr as ListLiteralExpr
+      listLit.vals.each |val| { scanExprForTypes(val, podName, addByName) }
+      return
+    }
+
+    // Handle map literals: ["key": Marker.val]
+    if (expr.id == ExprId.mapLiteral)
+    {
+      mapLit := expr as MapLiteralExpr
+      mapLit.keys.each |key| { scanExprForTypes(key, podName, addByName) }
+      mapLit.vals.each |val| { scanExprForTypes(val, podName, addByName) }
       return
     }
 
