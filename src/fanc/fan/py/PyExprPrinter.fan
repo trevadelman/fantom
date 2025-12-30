@@ -282,6 +282,19 @@ class PyExprPrinter : PyPrinter
 
   private Void call(CallExpr e)
   {
+    // Skip compiler-injected const field validation calls (checkInCtor, enterCtor, exitCtor, checkFields$*)
+    // These are added by ConstChecks.fan for runtime validation of const field setting.
+    // In Python we skip these since const protection is not strictly enforced.
+    // They reference 'this' which doesn't exist in static context (e.g., static factory methods).
+    methodName := e.method.name
+    if (methodName == "checkInCtor" || methodName == "enterCtor" || methodName == "exitCtor" ||
+        methodName.startsWith("checkFields\$"))
+    {
+      // Output None as a placeholder (these are always no-return statements)
+      w("None")
+      return
+    }
+
     // Handle safe navigation operator (?.): short-circuit to null if target is null
     // Pattern: ((lambda _safe_: None if _safe_ is None else <call>)(<target>))
     if (e.isSafe && e.target != null)
@@ -297,13 +310,21 @@ class PyExprPrinter : PyPrinter
     // Check if this is a cvar wrapper call (closure-captured variable)
     // Pattern: self.make(value) with no target -> ObjUtil.cvar(value)
     // The Fantom compiler generates this.make(x) for closure-captured variables
+    // IMPORTANT: Do NOT match it-block constructors like `return make { it.x = val }`
+    // Cvar wrappers wrap LOCAL VARIABLES, it-block constructors wrap CLOSURES
     if (e.target == null && !e.method.isStatic && e.method.name == "make" && e.args.size == 1)
     {
-      // This is a cvar wrapper - use ObjUtil.cvar() instead of self.make()
-      w("ObjUtil.cvar(")
-      expr(e.args.first)
-      w(")")
-      return
+      arg := e.args.first
+      // Only treat as cvar if argument is NOT a closure (closures are it-blocks)
+      if (arg.id != ExprId.closure)
+      {
+        // This is a cvar wrapper - use ObjUtil.cvar() instead of self.make()
+        w("ObjUtil.cvar(")
+        expr(arg)
+        w(")")
+        return
+      }
+      // If argument IS a closure, fall through to handle as constructor call
     }
 
     // Check if this is a dynamic call (-> operator)
