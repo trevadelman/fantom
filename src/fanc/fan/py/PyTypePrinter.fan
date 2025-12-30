@@ -548,6 +548,9 @@ class PyTypePrinter : PyPrinter
         method(m)
       }
 
+      // Generate Python operator methods for Fantom operator methods
+      operatorMethods(t)
+
       // If no methods, add pass
       if (t.methodDefs.isEmpty)
         pass
@@ -555,6 +558,50 @@ class PyTypePrinter : PyPrinter
 
     unindent
     nl
+  }
+
+  ** Generate Python operator methods (__add__, __sub__, etc.)
+  ** for Fantom methods with @Operator facet
+  private Void operatorMethods(TypeDef t)
+  {
+    // Map Fantom operator methods to Python special methods
+    operatorMap := Str:Str[
+      "plus": "__add__",
+      "minus": "__sub__",
+      "mult": "__mul__",
+      "div": "__truediv__",
+      "mod": "__mod__",
+      "negate": "__neg__"
+    ]
+
+    t.methodDefs.each |m|
+    {
+      // Skip methods without @Operator facet
+      hasOperator := m.facets?.any |f| { f.type.qname == "sys::Operator" } ?: false
+      if (!hasOperator) return
+
+      pyMethod := operatorMap[m.name]
+      if (pyMethod == null) return
+
+      // Generate Python operator method
+      nl
+      w("def ${pyMethod}(self")
+      if (m.params.size > 0)
+      {
+        w(", other")
+      }
+      w(")").colon
+      indent
+      if (m.params.size > 0)
+      {
+        w("return self.${m.name}(other)").eos
+      }
+      else
+      {
+        w("return self.${m.name}()").eos
+      }
+      unindent
+    }
   }
 
 //////////////////////////////////////////////////////////////////////////
