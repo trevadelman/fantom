@@ -744,17 +744,14 @@ class PyExprPrinter : PyPrinter
 
   private Void construction(CallExpr e)
   {
-    // Constructor call - ClassName() or ClassName.factory()
-    // Check if this is a same-pod type reference (not sys pod)
-    // For same-pod types, use a runtime import to avoid circular import issues
+    // Constructor call - always use factory pattern: ClassName.make(args)
+    // This is needed because Fantom may have multiple constructors with
+    // different signatures, but Python __init__ only has one signature.
+    // The .make() factory method handles dispatching to the right constructor.
     curPod := m.curType?.pod?.name
     targetPod := e.method.parent.pod.name
     typeName := e.method.parent.name
     methodName := e.method.name
-
-    // Check if this is a non-make factory (like fromStr)
-    // In this case we need ClassName.factory(args) not ClassName(args)
-    isNonMakeFactory := methodName != "make" && methodName != "<ctor>"
 
     if (curPod != null && curPod != "sys" && curPod == targetPod)
     {
@@ -767,11 +764,10 @@ class PyExprPrinter : PyPrinter
       w(typeName)
     }
 
-    // For non-make factories, call the factory method explicitly
-    if (isNonMakeFactory)
-    {
-      w(".").w(escapeName(methodName))
-    }
+    // Always call the factory method: .make() or .fromStr() etc.
+    // This ensures correct construction even when __init__ has different signature
+    factoryName := methodName == "<ctor>" ? "make" : methodName
+    w(".").w(escapeName(factoryName))
 
     w("(")
     e.args.each |arg, i|
