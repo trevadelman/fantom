@@ -1378,16 +1378,13 @@ class List:
         return m
 
     @staticmethod
-    def with_(m, key, val):
-        """Create a copy of map with added key-value pair"""
-        from .Map import Map
-        if isinstance(m, Map):
-            result = Map(m)
-            result[key] = val
-            return result
-        result = dict(m)
-        result[key] = val
-        return result
+    def with_(lst, f):
+        """Apply it-block closure to list and return list.
+
+        This is the Fantom 'with' pattern: obj.with { ... }
+        """
+        f(lst)
+        return lst
 
     @staticmethod
     def isImmutable(lst):

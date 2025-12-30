@@ -18,7 +18,11 @@ class Env(Obj):
         return Env._instance
 
     def runtime(self):
-        return "py"
+        # Return "js" so that pods like haystack use the JavaScript loading path
+        # (pre-compiled constants files) rather than the Java path (pod resources).
+        # Python uses the same loading mechanism as JavaScript.
+        # See KNOWN_LIMITATIONS.md for details on this workaround.
+        return "js"
 
     def args(self):
         """Get command line arguments as immutable Str list.
