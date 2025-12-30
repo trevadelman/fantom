@@ -1875,13 +1875,14 @@ class PyTypePrinter : PyPrinter
     return flags
   }
 
-  ** Calculate type flags (Mixin, Facet, Internal, etc.)
+  ** Calculate type flags (Mixin, Facet, Internal, Const, etc.)
   private Int typeFlags(TypeDef t)
   {
     flags := 0
     if (t.isPublic) flags = flags.or(0x00000001)       // FConst.Public
     if (t.isInternal) flags = flags.or(0x00000008)     // FConst.Internal
     if (t.isAbstract) flags = flags.or(0x00000400)     // FConst.Abstract
+    if (t.isConst) flags = flags.or(0x00002000)        // FConst.Const
     if (t.isFinal) flags = flags.or(0x00010000)        // FConst.Final
     if (t.isMixin) flags = flags.or(0x00020000)        // FConst.Mixin
     if (t.isEnum) flags = flags.or(0x00040000)         // FConst.Enum

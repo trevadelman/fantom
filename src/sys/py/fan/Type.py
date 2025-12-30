@@ -579,11 +579,11 @@ class Type(Obj):
         """Check if this type is a const class (immutable).
 
         Const classes are always immutable. This checks:
-        1. Transpiler-provided flag (0x00000002 = Const per FConst.js)
+        1. Transpiler-provided flag (0x00002000 = FConst.Const)
         2. Known const types in sys (for hand-written runtime classes)
         """
-        # Check transpiler-provided flag (0x00000002 = Const per FConst.js)
-        if self._type_flags & 0x00000002:
+        # Check transpiler-provided flag (0x00002000 = FConst.Const)
+        if self._type_flags & 0x00002000:
             return True
         # For hand-written sys types, check known const types
         return self._qname in Type._CONST_TYPES
