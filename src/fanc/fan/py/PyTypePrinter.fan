@@ -571,7 +571,9 @@ class PyTypePrinter : PyPrinter
       "mult": "__mul__",
       "div": "__truediv__",
       "mod": "__mod__",
-      "negate": "__neg__"
+      "negate": "__neg__",
+      "get": "__getitem__",
+      "set": "__setitem__"
     ]
 
     t.methodDefs.each |m|
