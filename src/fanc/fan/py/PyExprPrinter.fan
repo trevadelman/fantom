@@ -417,7 +417,8 @@ class PyExprPrinter : PyPrinter
     // Check for private methods - they are non-virtual in Fantom
     // Use static dispatch: ClassName.method(self/target, args)
     // BUT: In static context, there's no self - use factory pattern without self
-    if (e.method.isPrivate && !e.method.isStatic)
+    // NOTE: Constructors (isCtor) become static factories in Python, so don't add self
+    if (e.method.isPrivate && !e.method.isStatic && !e.method.isCtor)
     {
       w(e.method.parent.name).w(".").w(escapeName(e.method.name)).w("(")
       if (e.target != null)
@@ -455,10 +456,11 @@ class PyExprPrinter : PyPrinter
       // In static context (like _static_init), use class name instead of self
       w(e.method.parent.name).w(".")
     }
-    else if (e.method.isPrivate)
+    else if (e.method.isPrivate && !e.method.isCtor)
     {
       // Private methods are non-virtual in Fantom - use static dispatch
       // Generate: ClassName.method(self, args) instead of self.method(args)
+      // NOTE: Constructors (isCtor) become static factories in Python, so don't add self
       w(e.method.parent.name).w(".").w(escapeName(e.method.name)).w("(self")
       if (!e.args.isEmpty) w(", ")
       e.args.each |arg, i|
