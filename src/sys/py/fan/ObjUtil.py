@@ -499,13 +499,11 @@ class ObjUtil:
         if hasattr(obj, "toImmutable") and callable(obj.toImmutable):
             return obj.toImmutable()
         # Check if it's a const type - const types are inherently immutable
-        # Look for @Serializable with const=true or const class marker
         from .Type import Type
         try:
             objType = Type.of(obj)
-            if objType is not None:
-                # Const types are immutable - check for const flag in type facets
-                # For now, if it has no mutable fields, treat as immutable
+            if objType is not None and objType.isConst():
+                # Const types are inherently immutable
                 return obj
         except Exception:
             pass

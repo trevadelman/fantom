@@ -31,16 +31,14 @@ class AtomicRef(Obj):
         return AtomicRef(val)
 
     def _checkImmutable(self, val):
-        """Check if value is immutable.
+        """Check if value is immutable, throw NotImmutableErr if not.
 
-        Note: In Python transpiler, we relax this check to allow mutable values.
-        This is pragmatic because haxall/haystack uses AtomicRef with mutable
-        builders like GridBuilder (GbG). The JS runtime also doesn't strictly
-        enforce this. If strict immutability is needed, use Unsafe wrapper.
+        This matches the JavaScript ES6 implementation which enforces
+        immutability on all AtomicRef values.
         """
-        # Allow all values - pragmatic approach for haxall compatibility
-        # The threading lock provides the atomic guarantees regardless
-        pass
+        if val is not None and not ObjUtil.isImmutable(val):
+            from fan.sys.Err import NotImmutableErr
+            raise NotImmutableErr.make("AtomicRef value is not immutable")
 
     def val(self, new_val=_UNSET):
         """Fantom-style getter/setter: obj.val() to get, obj.val(x) to set.

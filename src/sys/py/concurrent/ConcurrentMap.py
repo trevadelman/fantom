@@ -37,13 +37,22 @@ class ConcurrentMap(Obj):
         with self._lock:
             return self._map.get(key, None)
 
+    def _checkImmutable(self, val):
+        """Check that value is immutable, throw NotImmutableErr if not."""
+        from fan.sys.ObjUtil import ObjUtil
+        if not ObjUtil.isImmutable(val):
+            from fan.sys.Err import NotImmutableErr
+            raise NotImmutableErr.make("ConcurrentMap values must be immutable")
+
     def set(self, key, val):
         """Set a value by key."""
+        self._checkImmutable(val)
         with self._lock:
             self._map[key] = val
 
     def getAndSet(self, key, val):
         """Set a value by key and return old value."""
+        self._checkImmutable(val)
         with self._lock:
             old = self._map.get(key, None)
             self._map[key] = val
@@ -51,6 +60,7 @@ class ConcurrentMap(Obj):
 
     def add(self, key, val):
         """Add a value by key, raise exception if key was already mapped."""
+        self._checkImmutable(val)
         with self._lock:
             if key in self._map:
                 from fan.sys.Err import Err
@@ -59,6 +69,7 @@ class ConcurrentMap(Obj):
 
     def getOrAdd(self, key, defVal):
         """Get the value for key, or add with defVal if not present."""
+        self._checkImmutable(defVal)
         with self._lock:
             if key not in self._map:
                 self._map[key] = defVal

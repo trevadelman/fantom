@@ -152,10 +152,16 @@ class Map(dict, Obj):
 
     @def_.setter
     def def_(self, val):
-        """Set default value"""
+        """Set default value - must be immutable"""
         if self._ro:
             from .Err import ReadonlyErr
             raise ReadonlyErr("Map is read-only")
+        # Default value must be immutable
+        if val is not None:
+            from .ObjUtil import ObjUtil
+            if not ObjUtil.isImmutable(val):
+                from .Err import NotImmutableErr
+                raise NotImmutableErr.make("Map default value is not immutable")
         self._def = val
 
     @property
@@ -218,6 +224,13 @@ class Map(dict, Obj):
         if self._ro:
             from .Err import ReadonlyErr
             raise ReadonlyErr("Map is read-only")
+
+        # Check if key is immutable (required for Map keys)
+        from .ObjUtil import ObjUtil
+        if not ObjUtil.isImmutable(key):
+            from .Err import NotImmutableErr
+            from .Type import Type
+            raise NotImmutableErr.make(f"Map key is not immutable: {Type.of(key)}")
 
         # Invalidate ro cache when modified
         self._roView = None
