@@ -184,6 +184,12 @@ class PyPrinterState : CodePrinterState
   ** Get next closure ID and increment counter
   Int nextClosureId() { closureCount++ }
 
+  ** Counter for generating unique switch variable names
+  Int switchVarCount := 0
+
+  ** Get next switch variable ID and increment counter
+  Int nextSwitchVarId() { switchVarCount++ }
+
   //////////////////////////////////////////////////////////////////////////
   // Cvar Wrapper Tracking
   //////////////////////////////////////////////////////////////////////////

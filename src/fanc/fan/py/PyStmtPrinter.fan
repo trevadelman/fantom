@@ -1012,6 +1012,13 @@ class PyStmtPrinter : PyPrinter
   private Void switchStmt(SwitchStmt s)
   {
     // Python doesn't have switch, use if/elif/else
+    // IMPORTANT: Evaluate condition once to avoid side effects being repeated
+    // (e.g., switch(i++) must only increment i once)
+    switchVarId := m.nextSwitchVarId
+    w("_switch_${switchVarId} = ")
+    expr(s.condition)
+    eos
+
     first := true
     s.cases.each |c|
     {
@@ -1025,12 +1032,12 @@ class PyStmtPrinter : PyPrinter
         w("elif ")
       }
 
-      // Match any of the case values
+      // Match any of the case values against the cached condition
       c.cases.each |e, i|
       {
         if (i > 0) w(" or ")
         w("(")
-        expr(s.condition)
+        w("_switch_${switchVarId}")
         w(" == ")
         expr(e)
         w(")")
