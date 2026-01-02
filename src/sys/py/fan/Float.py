@@ -143,14 +143,23 @@ class Float(Obj):
 
     @staticmethod
     def floor(self):
+        # Handle special values - infinity and NaN floor to themselves
+        if math.isnan(self) or math.isinf(self):
+            return self
         return math.floor(self)
 
     @staticmethod
     def ceil(self):
+        # Handle special values - infinity and NaN ceil to themselves
+        if math.isnan(self) or math.isinf(self):
+            return self
         return math.ceil(self)
 
     @staticmethod
     def round(self):
+        # Handle special values - infinity and NaN round to themselves
+        if math.isnan(self) or math.isinf(self):
+            return self
         return round(self)
 
     @staticmethod

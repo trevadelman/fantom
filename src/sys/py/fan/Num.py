@@ -12,9 +12,18 @@ class Num(Obj):
     @staticmethod
     def toInt(val):
         """Convert to Int"""
+        import math
         if val is None:
             return None
         if isinstance(val, float):
+            # Handle special values - Fantom returns maxVal/minVal for infinity
+            if math.isnan(val):
+                return 0
+            if math.isinf(val):
+                if val > 0:
+                    return 9223372036854775807  # Int.maxVal
+                else:
+                    return -9223372036854775808  # Int.minVal
             return int(val)
         return int(val)
 
