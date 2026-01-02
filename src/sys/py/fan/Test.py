@@ -28,6 +28,21 @@ class Test(Obj):
         self._verifyCount = 0
         self._curTestMethod = None
         self._tempDir = None
+        self._verbose = False
+
+    def verbose(self, val=None):
+        """Get or set verbose mode for test output"""
+        if val is None:
+            return self._verbose
+        else:
+            self._verbose = val
+
+    def curTestMethod(self, val=None):
+        """Get or set current test method"""
+        if val is None:
+            return self._curTestMethod
+        else:
+            self._curTestMethod = val
 
     def make(self, val=None):
         """Create a cvar wrapper for closure-captured variables.
@@ -39,9 +54,6 @@ class Test(Obj):
 
     def verifyCount(self):
         return self._verifyCount
-
-    def curTestMethod(self):
-        return self._curTestMethod
 
     def verify(self, cond, msg=None):
         if not cond:

@@ -228,6 +228,16 @@ class Type(Obj):
         t = Type(qname)
         Type._cache[qname] = t
 
+        # Register type with its Pod so Pod.type(name) works
+        if "::" in qname:
+            parts = qname.split("::")
+            if len(parts) == 2:
+                pod_name, type_name = parts
+                from .Pod import Pod
+                pod = Pod.find(pod_name, False)
+                if pod is not None:
+                    pod._registerType(t)
+
         # Try to import the module to trigger tf_() metadata registration
         # This ensures that Type.find('pod::Name') has proper type flags
         if "::" in qname:

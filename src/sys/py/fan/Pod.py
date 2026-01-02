@@ -226,6 +226,11 @@ class Pod(Obj):
             raise UnknownTypeErr(f"Unknown type: {self._name}::{name}")
         return t
 
+    # Alias for transpiled code that escapes 'type' to 'type_'
+    def type_(self, name, checked=True):
+        """Alias for type() - transpiler escapes 'type' because it's a Python builtin"""
+        return self.type(name, checked)
+
     def doc(self):
         """Return fandoc for this pod (not supported in Python runtime)"""
         return None
