@@ -69,18 +69,18 @@ class TestCmd : FanPyCmd
     rb := "}"
     pods.each |pod|
     {
-      imports.add("# Import ${pod} pod types\n")
-      imports.add("import importlib.util\n")
+      imports.add("# Import ${pod} pod types and access class to trigger registration\n")
       imports.add("import os\n")
       imports.add("pod_dir = os.path.join(sys.path[0], 'fan', '${pod}')\n")
       imports.add("if os.path.isdir(pod_dir):\n")
       imports.add("    for filename in os.listdir(pod_dir):\n")
       imports.add("        if filename.endswith('.py') and not filename.startswith('_'):\n")
-      imports.add("            module_name = f'fan.${pod}.${lb}filename[:-3]${rb}'\n")
+      imports.add("            class_name = filename[:-3]\n")
       imports.add("            try:\n")
-      imports.add("                importlib.import_module(module_name)\n")
+      imports.add("                mod = __import__(f'fan.${pod}.${lb}class_name${rb}', fromlist=[class_name])\n")
+      imports.add("                getattr(mod, class_name)  # Access class to trigger Type registration\n")
       imports.add("            except Exception as e:\n")
-      imports.add("                pass  # Ignore import errors for test discovery\n")
+      imports.add("                pass  # Ignore import errors for non-test types\n")
       imports.add("\n")
     }
 
