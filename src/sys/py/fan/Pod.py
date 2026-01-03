@@ -306,11 +306,15 @@ class Pod(Obj):
         if name in Pod._pods:
             return Pod._pods[name]
 
-        # For known system pods, create and register
+        # For known system and haxall pods, create and register
         known_pods = {
+            # System pods
             "sys", "concurrent", "testSys", "graphics", "inet",
             "crypto", "web", "dom", "domkit", "util", "webmod",
-            "compiler", "build", "fansh", "fandoc"
+            "compiler", "build", "fansh", "fandoc",
+            # Haxall pods
+            "haystack", "xeto", "testHaystack", "def", "ph",
+            "phIoT", "phScience", "ashrae", "hx"
         }
 
         if name in known_pods:
