@@ -51,10 +51,16 @@ class ListImpl(list):
         # Convert string signature to Type object if needed
         if isinstance(elementType, str):
             elementType = Type.find(elementType)
+        elif not hasattr(elementType, 'signature'):
+            # elementType might be a Python class - get its Fantom Type
+            elementType = Type.of(elementType) if elementType is not None else Type.find("sys::Obj")
 
         result._elementType = elementType
         # Use Type.find() to get the cached ListType for identity checks
-        result._listType = Type.find(elementType.signature() + "[]")
+        try:
+            result._listType = Type.find(elementType.signature() + "[]")
+        except:
+            result._listType = Type.find("sys::Obj[]")
         return result
 
     def typeof(self):
@@ -162,6 +168,29 @@ class ListImpl(list):
 
 class List:
     """List utilities - extends Python list behavior with Fantom semantics"""
+
+    @staticmethod
+    def make(of, values=None, capacity=None):
+        """Create a typed list with element type.
+
+        Matches JavaScript List.make(of, values) signature.
+        JS: if values is undefined or a number (capacity hint), treat as empty.
+
+        Args:
+            of: The Fantom element type (Type object or string signature)
+            values: Optional list of initial values, OR a number (capacity hint),
+                    OR a Type (return type annotation - ignored)
+            capacity: Optional capacity hint (ignored, like JS)
+        """
+        from .Type import Type
+        if of is None:
+            from .Err import NullErr
+            raise NullErr("of not defined")
+        # JS pattern: if values is undefined, a number (capacity), or a Type
+        # (return type annotation), treat as empty array
+        if values is None or isinstance(values, (int, Type)):
+            values = []
+        return ListImpl.fromLiteral(values, of)
 
     @staticmethod
     def fromLiteral(values, elementType):
