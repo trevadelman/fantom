@@ -1350,8 +1350,9 @@ class PyTypePrinter : PyPrinter
   ** Follows the JavaScript transpiler pattern from JsType.writeStaticField()
   private Void staticFields(TypeDef t)
   {
-    // Find all static fields (excluding synthetic)
-    staticFieldDefs := t.fieldDefs.findAll |f| { f.isStatic && !f.isSynthetic }
+    // Find all static fields (excluding synthetic, but allow 'once' storage fields)
+    // The 'once' storage fields are synthetic but have the isOnce flag set
+    staticFieldDefs := t.fieldDefs.findAll |f| { f.isStatic && (!f.isSynthetic || f.isOnce) }
     if (staticFieldDefs.isEmpty) return
 
     // Check if there's a staticInit method
@@ -1361,7 +1362,11 @@ class PyTypePrinter : PyPrinter
     nl
     staticFieldDefs.each |f|
     {
-      w("_${escapeName(f.name)} = None").nl
+      // Once fields use "_once_" as sentinel value, regular fields use None
+      if (f.isOnce)
+        w("_${escapeName(f.name)} = \"_once_\"").nl
+      else
+        w("_${escapeName(f.name)} = None").nl
     }
 
     // Generate static getter for each static field
@@ -1388,21 +1393,43 @@ class PyTypePrinter : PyPrinter
     w("def ${name}()").colon
     indent
 
-    // Check if uninitialized, then initialize
-    w("if ${typeName}._${name} is None").colon
-    indent
-    if (hasStaticInit || f.init != null)
+    // Special handling for 'once' fields
+    // Once fields use "_once_" as sentinel and call the $Once helper method
+    if (f.isOnce)
     {
-      w("${typeName}._static_init()").eos
-    }
-    // If still None after static init, use type-specific default value
-    w("if ${typeName}._${name} is None").colon
-    indent
-    w("${typeName}._${name} = ${typeDefaultVal(f.type)}").eos
-    unindent
-    unindent
+      // The field name is like "specRef$Store", helper method is "specRef$Once"
+      // We need to extract the base name and generate the helper call
+      // Field name: specRef_Store (escaped from specRef$Store)
+      // Helper method: specRef_Once (escaped from specRef$Once)
+      baseName := f.name
+      if (baseName.endsWith("\$Store"))
+        baseName = baseName[0..<-6]  // Remove "$Store" suffix
+      helperName := escapeName(baseName + "\$Once")
 
-    w("return ${typeName}._${name}").eos
+      w("if ${typeName}._${name} == \"_once_\"").colon
+      indent
+      w("${typeName}._${name} = ${typeName}.${helperName}()").eos
+      unindent
+      w("return ${typeName}._${name}").eos
+    }
+    else
+    {
+      // Regular static field - check if uninitialized, then initialize
+      w("if ${typeName}._${name} is None").colon
+      indent
+      if (hasStaticInit || f.init != null)
+      {
+        w("${typeName}._static_init()").eos
+      }
+      // If still None after static init, use type-specific default value
+      w("if ${typeName}._${name} is None").colon
+      indent
+      w("${typeName}._${name} = ${typeDefaultVal(f.type)}").eos
+      unindent
+      unindent
+
+      w("return ${typeName}._${name}").eos
+    }
     unindent
   }
 
