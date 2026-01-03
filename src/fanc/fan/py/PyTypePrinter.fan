@@ -481,16 +481,40 @@ class PyTypePrinter : PyPrinter
 
     bases := Str[,]
 
-    // Add mixins first (most specific to least specific order)
-    // Filter out sys::Obj since it's always the root
+    // Collect all mixins that aren't inherited by other mixins
+    // This prevents Python MRO conflicts like class X(Dict, LibDepend)
+    // where LibDepend already extends Dict
+    mixinsToInclude := CType[,]
     t.mixins.each |m|
     {
-      if (m.qname != "sys::Obj")
-        bases.add(m.name)
+      if (m.qname == "sys::Obj") return  // Skip Obj
+
+      // Check if this mixin is inherited by another mixin in the list
+      alreadyInherited := t.mixins.any |other|
+      {
+        if (other.qname == m.qname) return false  // Skip self
+        // Check if 'other' mixin extends 'm'
+        return other.mixins.any |mm| { mm.qname == m.qname }
+      }
+
+      if (!alreadyInherited)
+        mixinsToInclude.add(m)
     }
 
-    // Add base class
-    if (t.base != null && !t.base.isObj)
+    // Add filtered mixins
+    mixinsToInclude.each |m|
+    {
+      bases.add(m.name)
+    }
+
+    // Add base class if it's not Obj and not already inherited via mixins
+    baseAlreadyInherited := t.base != null && !t.base.isObj &&
+      mixinsToInclude.any |m| {
+        if (m.base?.qname == t.base.qname) return true
+        return m.mixins.any |mm| { mm.qname == t.base.qname }
+      }
+
+    if (t.base != null && !t.base.isObj && !baseAlreadyInherited)
       bases.add(t.base.name)
     else if (bases.isEmpty)
       bases.add("Obj")

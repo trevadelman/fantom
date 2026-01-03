@@ -105,6 +105,10 @@ class Env(Obj):
         """Get platform string as os-arch."""
         return f"{self.os()}-{self.arch()}"
 
+    def isBrowser(self):
+        """Return if running in a browser environment. Always False for Python."""
+        return False
+
     def host(self):
         import socket
         return socket.gethostname()
