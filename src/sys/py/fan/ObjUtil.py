@@ -498,6 +498,10 @@ class ObjUtil:
         # Check if object has toImmutable method (List, Map, Func, etc.)
         if hasattr(obj, "toImmutable") and callable(obj.toImmutable):
             return obj.toImmutable()
+        # Handle plain Python lists (from List.map_, Str.split, etc.)
+        if isinstance(obj, list):
+            from .List import List
+            return List.toImmutable(obj)
         # Check if it's a const type - const types are inherently immutable
         from .Type import Type
         try:
