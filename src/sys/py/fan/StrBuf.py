@@ -70,26 +70,19 @@ class StrBuf(Obj):
 
     def getRange(self, r):
         """Get substring for range."""
+        from .Err import IndexErr
         n = len(self._buf)
-        start = r._start
-        end = r._end
-        exclusive = r._exclusive
 
-        # Convert negative indices
-        if start < 0:
-            start = n + start
-        if end < 0:
-            end = n + end
+        # Use Range's index resolution methods which handle negative indices
+        # and throw IndexErr for out of bounds
+        s = r.start_(n)
+        e = r.end_(n)
 
-        # Apply exclusive adjustment
-        if not exclusive:
-            end = end + 1
+        # Check for inverted range (e+1 < s means empty/invalid)
+        if e + 1 < s:
+            raise IndexErr.make(str(r))
 
-        if end < start:
-            from .Err import IndexErr
-            raise IndexErr.make(f"Range {r}")
-
-        return ''.join(self._buf[start:end])
+        return ''.join(self._buf[s:e+1])
 
     def set(self, index, ch):
         """Set character at index. Supports negative indexing."""

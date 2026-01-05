@@ -65,23 +65,19 @@ class Str(Obj):
     @staticmethod
     def getRange(self, r):
         """Get substring from range"""
-        from .Range import Range
-        start = r._start
-        end = r._end
-        exclusive = r._exclusive
+        from .Err import IndexErr
         n = len(self)
 
-        # Convert negative indices to positive
-        if start < 0:
-            start = n + start
-        if end < 0:
-            end = n + end
+        # Use Range's index resolution methods which handle negative indices
+        # and throw IndexErr for out of bounds
+        s = r.start_(n)
+        e = r.end_(n)
 
-        # Apply exclusive adjustment
-        if not exclusive:
-            end = end + 1
+        # Check for inverted range (e+1 < s means empty/invalid)
+        if e + 1 < s:
+            raise IndexErr(str(r))
 
-        return self[start:end]
+        return self[s:e+1]
 
     # Comparison
     @staticmethod
