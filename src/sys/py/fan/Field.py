@@ -86,16 +86,29 @@ class Field(Slot):
             # Static field - get from class
             py_cls = self._get_python_class()
             if py_cls is not None:
-                # Try class attribute
+                # Try private field FIRST to avoid circular init via getter methods
+                # This handles cases where static init iterates fields before getters work
+                field_name = f"_{self._name}"
+                if hasattr(py_cls, field_name):
+                    val = getattr(py_cls, field_name)
+                    if val is not None:
+                        return val
+                # Try with trailing underscore for Python reserved words (_fieldName_)
+                field_name2 = f"_{self._name}_"
+                if hasattr(py_cls, field_name2):
+                    val = getattr(py_cls, field_name2)
+                    if val is not None:
+                        return val
+                # Try static getter method (e.g., Kind.obj() for field 'obj')
                 if hasattr(py_cls, self._name):
                     attr = getattr(py_cls, self._name)
                     if callable(attr):
-                        return attr()  # Static getter method
-                    return attr
-                # Try private field
-                field_name = f"_{self._name}"
-                if hasattr(py_cls, field_name):
-                    return getattr(py_cls, field_name)
+                        try:
+                            return attr()  # Static getter method
+                        except Exception:
+                            pass  # Getter failed (possibly circular init), continue
+                    else:
+                        return attr
             return None
 
         if obj is None:
