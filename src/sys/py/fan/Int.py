@@ -126,9 +126,12 @@ class Int(Obj):
 
     @staticmethod
     def toCode(self, base=10):
+        if base == 10:
+            return str(self)
         if base == 16:
             return "0x" + hex(self)[2:]
-        return str(self)
+        from .Err import ArgErr
+        raise ArgErr(f"Invalid base {base}")
 
     @staticmethod
     def toHex(self, width=None):
@@ -158,6 +161,10 @@ class Int(Obj):
 
     @staticmethod
     def toChar(self):
+        # Valid Unicode range: 0 to 0x10FFFF (1,114,111)
+        if self < 0 or self > 0x10FFFF:
+            from .Err import Err
+            raise Err(f"Invalid unicode char: {self}")
         return chr(self)
 
     @staticmethod
@@ -179,6 +186,9 @@ class Int(Obj):
 
     @staticmethod
     def pow(self, exp):
+        if exp < 0:
+            from .Err import ArgErr
+            raise ArgErr("pow < 0")
         return self ** exp
 
     # Ranges
@@ -215,6 +225,9 @@ class Int(Obj):
     @staticmethod
     def fromStr(s, radix=10, checked=True):
         try:
+            # For non-decimal radixes, negative numbers are not supported
+            if radix != 10 and s.startswith('-'):
+                raise ValueError(f"Negative not allowed for radix {radix}")
             val = int(s, radix)
             # Convert to signed 64-bit if high bit is set
             if val >= 0x8000000000000000:
@@ -365,15 +378,20 @@ class Int(Obj):
         if r is None:
             return random.randint(Int.minVal(), Int.maxVal())
         # r should be a Range object
-        from .Range import Range as RangeClass
         start = r._start if hasattr(r, '_start') else 0
         end = r._end if hasattr(r, '_end') else 100
         exclusive = r._exclusive if hasattr(r, '_exclusive') else False
         if exclusive:
             # Exclusive range: [start, end)
+            if end <= start:
+                from .Err import ArgErr
+                raise ArgErr(f"Range end < start: {r}")
             return random.randint(start, end - 1)
         else:
             # Inclusive range: [start, end]
+            if end < start:
+                from .Err import ArgErr
+                raise ArgErr(f"Range end < start: {r}")
             return random.randint(start, end)
 
     @staticmethod
