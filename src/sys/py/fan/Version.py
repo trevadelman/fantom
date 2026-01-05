@@ -20,7 +20,19 @@ class Version(Obj):
             return Version._cache[s]
 
         try:
-            segments = [int(p) for p in s.split(".")]
+            # Must be non-empty and no whitespace
+            if not s or s != s.strip():
+                raise ValueError("Empty or whitespace")
+            parts = s.split(".")
+            # Must have at least one part, and all parts must be non-empty digits
+            if not parts:
+                raise ValueError("No parts")
+            segments = []
+            for p in parts:
+                # Each part must be non-empty and all digits
+                if not p or not p.isdigit():
+                    raise ValueError(f"Invalid segment: {p}")
+                segments.append(int(p))
             v = Version(segments)
             Version._cache[s] = v
             return v
@@ -33,7 +45,15 @@ class Version(Obj):
     @staticmethod
     def make(segments):
         """Create from list of Int segments"""
-        return Version(list(segments))
+        from fan.sys.Err import ArgErr
+        # Validate segments - must have at least one, none negative
+        seg_list = list(segments)
+        if len(seg_list) == 0:
+            raise ArgErr("Version segments cannot be empty")
+        for seg in seg_list:
+            if seg < 0:
+                raise ArgErr(f"Version segment cannot be negative: {seg}")
+        return Version(seg_list)
 
     @staticmethod
     def defVal():
