@@ -80,6 +80,112 @@ class ListImpl(list):
             return default
         return self[index]
 
+    #################################################################
+    # Instance Methods - delegate to static List methods
+    # These provide the natural OO style: nums.map(f) vs List.map_(nums, f)
+    #################################################################
+
+    # Iteration
+    def each(self, f): return List.each(self, f)
+    def eachr(self, f): return List.eachr(self, f)
+    def eachWhile(self, f): return List.eachWhile(self, f)
+    def eachrWhile(self, f): return List.eachrWhile(self, f)
+    def eachRange(self, r, f): return List.eachRange(self, r, f)
+    def eachNotNull(self, f): return List.eachNotNull(self, f)
+
+    # Transformation
+    def map(self, f): return List.map_(self, f)
+    def flatMap(self, f): return List.flatMap(self, f)
+    def mapNotNull(self, f): return List.mapNotNull(self, f)
+    def flatten(self): return List.flatten(self)
+
+    # Filter/Find
+    def find(self, f): return List.find(self, f)
+    def findAll(self, f): return List.findAll(self, f)
+    def findIndex(self, f): return List.findIndex(self, f)
+    def findType(self, type_): return List.findType(self, type_)
+    def findNotNull(self): return List.findNotNull(self)
+    def exclude(self, f): return List.exclude(self, f)
+    def any(self, f): return List.any(self, f)
+    def all(self, f): return List.all(self, f)
+
+    # Aggregation
+    def reduce(self, init, f): return List.reduce(self, init, f)
+    def min(self, f=None): return List.min(self, f)
+    def max(self, f=None): return List.max(self, f)
+    def join(self, sep="", f=None): return List.join(self, sep, f)
+
+    # Sort/Order - Note: sort() must support both Python's key= and Fantom's comparator
+    def sort(self, f=None, *, key=None, reverse=False):
+        if key is not None or reverse:
+            # Python-style call: sort(key=..., reverse=...)
+            return list.sort(self, key=key, reverse=reverse)
+        # Fantom-style call: sort(comparator)
+        return List.sort(self, f)
+    def sortr(self, f=None): return List.sortr(self, f)
+    def reverse(self): return List.reverse(self)
+    def shuffle(self): return List.shuffle(self)
+    def swap(self, a, b): return List.swap(self, a, b)
+    def moveTo(self, item, index): return List.moveTo(self, item, index)
+
+    # Set Operations
+    def unique(self): return List.unique(self)
+    def union(self, that): return List.union(self, that)
+    def intersection(self, that): return List.intersection(self, that)
+
+    # Accessors
+    def first(self): return List.first(self)
+    def last(self): return List.last(self)
+    def isEmpty(self): return List.isEmpty(self)
+    def contains(self, item): return List.contains(self, item)
+    def containsAll(self, items): return List.containsAll(self, items)
+    def containsAny(self, items): return List.containsAny(self, items)
+    def containsSame(self, item): return List.containsSame(self, item)
+    def index(self, item, off=0): return List.index(self, item, off)
+    def indexr(self, item, off=None): return List.indexr(self, item, off)
+    def indexSame(self, item, off=0): return List.indexSame(self, item, off)
+    def getSafe(self, index, default=None): return List.getSafe(self, index, default)
+    def getRange(self, r): return List.getRange(self, r)
+
+    # Modification
+    def add(self, item): return List.add(self, item)
+    def addAll(self, items): return List.addAll(self, items)
+    def addNotNull(self, item): return List.addNotNull(self, item)
+    def insert(self, index, item): return List.insert(self, index, item)
+    def insertAll(self, index, items): return List.insertAll(self, index, items)
+    def set(self, index, val): return List.set(self, index, val)
+    def setNotNull(self, index, val): return List.setNotNull(self, index, val)
+    def remove(self, item): return List.remove(self, item)
+    def removeSame(self, item): return List.removeSame(self, item)
+    def removeAt(self, index): return List.removeAt(self, index)
+    def removeRange(self, r): return List.removeRange(self, r)
+    def removeAll(self, items): return List.removeAll(self, items)
+    def fill(self, val, times): return List.fill(self, val, times)
+
+    # Stack - Note: pop() must support both Python's index arg and Fantom's no-arg
+    def push(self, item): return List.push(self, item)
+    def pop(self, index=None):
+        if index is not None:
+            # Python-style call: pop(index)
+            return list.pop(self, index)
+        # Fantom-style call: pop() - remove and return last element
+        return List.pop(self)
+    def peek(self): return List.peek(self)
+
+    # Misc
+    def dup(self): return List.dup(self)
+    def groupBy(self, f): return List.groupBy(self, f)
+    def groupByInto(self, map_, f): return List.groupByInto(self, map_, f)
+    def binarySearch(self, key, f=None): return List.binarySearch(self, key, f)
+    def binaryFind(self, f): return List.binaryFind(self, f)
+    def random(self): return List.random(self)
+    def toStr(self): return List.toStr(self)
+    def toCode(self): return List.toCode(self)
+    def hash_(self): return List.hash_(self)
+    def ro(self): return List.ro(self)
+    def rw(self): return List.rw(self)
+    def trim(self): return List.trim(self)
+
     # Note: size is a property to support both read (x.size) and write (x.size = N)
     @property
     def size(self):
@@ -603,8 +709,10 @@ class List:
         from .Err import IndexErr
 
         # If object has its own getRange method, use it (Uri, Str, etc.)
-        if hasattr(lst, 'getRange') and callable(getattr(lst, 'getRange')):
-            return lst.getRange(r)
+        # But NOT for ListImpl/ImmutableList/ReadOnlyList which delegate back here
+        if not isinstance(lst, (list, ListImpl, ImmutableList, ReadOnlyList)):
+            if hasattr(lst, 'getRange') and callable(getattr(lst, 'getRange')):
+                return lst.getRange(r)
 
         start = r._start
         end = r._end
@@ -737,7 +845,7 @@ class List:
     @staticmethod
     def insert(lst, index, item):
         """Insert item at index"""
-        lst.insert(index, item)
+        list.insert(lst, index, item)
         return lst
 
     @staticmethod
@@ -759,7 +867,7 @@ class List:
             raise IndexErr(f"{orig_index}")
 
         for i, item in enumerate(items_copy):
-            lst.insert(index + i, item)
+            list.insert(lst, index + i, item)
         return lst
 
     @staticmethod
@@ -773,7 +881,7 @@ class List:
         from .ObjUtil import ObjUtil
         for i, x in enumerate(lst):
             if ObjUtil.equals(x, item):
-                return lst.pop(i)
+                return list.pop(lst, i)
         return None
 
     @staticmethod
@@ -781,13 +889,13 @@ class List:
         """Remove first occurrence using identity"""
         for i, x in enumerate(lst):
             if x is item:
-                return lst.pop(i)
+                return list.pop(lst, i)
         return None
 
     @staticmethod
     def removeAt(lst, index):
         """Remove and return item at index"""
-        return lst.pop(index)
+        return list.pop(lst, index)
 
     @staticmethod
     def removeRange(lst, r):
@@ -820,7 +928,7 @@ class List:
             i = 0
             while i < len(lst):
                 if ObjUtil.equals(lst[i], item):
-                    lst.pop(i)
+                    list.pop(lst, i)
                 else:
                     i += 1
         return lst
@@ -846,7 +954,7 @@ class List:
         """Pop item from stack, return null if empty"""
         if len(lst) == 0:
             return None
-        return lst.pop()
+        return list.pop(lst)
 
     @staticmethod
     def peek(lst):
@@ -946,13 +1054,13 @@ class List:
     def sortr(lst, f=None):
         """Sort list in reverse order"""
         List.sort(lst, f)
-        lst.reverse()
+        list.reverse(lst)
         return lst
 
     @staticmethod
     def reverse(lst):
         """Reverse list in place"""
-        lst.reverse()
+        list.reverse(lst)
         return lst
 
     @staticmethod
@@ -987,11 +1095,11 @@ class List:
         if index < 0:
             index = n + index
 
-        # Remove from old position
-        lst.pop(old_index)
+        # Remove from old position (use list.pop to avoid recursion)
+        list.pop(lst, old_index)
 
-        # Insert at target position (no adjustment needed - index is final position)
-        lst.insert(index, item)
+        # Insert at target position (use list.insert to avoid recursion)
+        list.insert(lst, index, item)
         return lst
 
     #################################################################
