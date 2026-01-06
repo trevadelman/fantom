@@ -805,6 +805,36 @@ class File(Obj):
                     props.set(key, val)
         return props
 
+    def readObj(self, options=None):
+        """Read a serialized object from this file.
+
+        Args:
+            options: Optional decode options map
+
+        Returns:
+            Deserialized object
+        """
+        from fanx.ObjDecoder import ObjDecoder
+        return ObjDecoder(self.in_(), options).readObj()
+
+    def writeObj(self, obj, options=None):
+        """Write a serialized object to this file.
+
+        Args:
+            obj: Object to serialize
+            options: Optional Map with encoding options
+
+        Returns:
+            This File for chaining
+        """
+        out = self.out()
+        try:
+            from fanx.ObjEncoder import ObjEncoder
+            ObjEncoder(out, options).writeObj(obj)
+        finally:
+            out.close()
+        return self
+
     def withOut(self, callback, append=False, bufSize=None):
         """Open file for writing, call callback with OutStream, then close.
 
@@ -1025,6 +1055,11 @@ class SysInStream(Obj):
 
     def readChar(self):
         return self._buf.readChar()
+
+    def rChar(self):
+        """Read character as int code point for Tokenizer compatibility."""
+        c = self.readChar()
+        return c if c is not None else None
 
     def unreadChar(self, c):
         self._buf.unreadChar(c)
