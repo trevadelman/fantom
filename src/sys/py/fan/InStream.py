@@ -373,6 +373,26 @@ class StrInStream:
         """Close the stream"""
         return True
 
+    def rChar(self):
+        """Read character as int code point for Tokenizer compatibility.
+
+        Returns: int code point or None at end of stream
+        """
+        c = self.readChar()
+        return c if c is not None else None
+
+    def readObj(self, options=None):
+        """Read a serialized object from this stream.
+
+        Args:
+            options: Optional decode options map
+
+        Returns:
+            Deserialized object
+        """
+        from fanx.ObjDecoder import ObjDecoder
+        return ObjDecoder(self, options).readObj()
+
     def typeof(self):
         """Return Type for InStream"""
         from fan.sys.Type import Type
@@ -552,6 +572,26 @@ class InStream(Obj):
         if hasattr(self, '_stream') and hasattr(self._stream, 'close'):
             self._stream.close()
         return True
+
+    def rChar(self):
+        """Read character as int code point for Tokenizer compatibility.
+
+        Returns: int code point or None at end of stream
+        """
+        c = self.readChar()
+        return c if c is not None else None
+
+    def readObj(self, options=None):
+        """Read a serialized object from this stream.
+
+        Args:
+            options: Optional decode options map
+
+        Returns:
+            Deserialized object
+        """
+        from fanx.ObjDecoder import ObjDecoder
+        return ObjDecoder(self, options).readObj()
 
     def typeof(self):
         """Return Type for InStream"""

@@ -542,6 +542,18 @@ class Buf(Obj):
         ObjEncoder(self.out(), options).writeObj(obj)
         return self
 
+    def readObj(self, options=None):
+        """Read a serialized object from this buffer.
+
+        Args:
+            options: Optional decode options map
+
+        Returns:
+            Deserialized object
+        """
+        from fanx.ObjDecoder import ObjDecoder
+        return ObjDecoder(self.in_(), options).readObj()
+
     #################################################################
     # InStream Operations (read)
     #################################################################
@@ -1324,6 +1336,11 @@ class BufInStream:
 
     def readChar(self):
         return self._buf.readChar()
+
+    def rChar(self):
+        """Read character as int code point for Tokenizer compatibility."""
+        c = self.readChar()
+        return c if c is not None else None
 
     def unreadChar(self, c):
         self._buf.unreadChar(c)
