@@ -164,6 +164,21 @@ class ObjDecoder:
         # Read fields/collection
         self._readComplexFields(t, to_set, to_add)
 
+        # Handle special case of sys::Map
+        if t.qname() == "sys::Map":
+            # Return empty map since we don't have type params here
+            m = Map()
+            for field, val in to_set.items():
+                self._complexSet(m, field, val, line)
+            return m
+
+        # Handle special case of sys::List
+        if t.qname() == "sys::List":
+            lst = List.make(Type.find("sys::Obj?"))
+            for field, val in to_set.items():
+                self._complexSet(lst, field, val, line)
+            return lst
+
         # Get make constructor
         make_ctor = t.method("make", False)
         if make_ctor is None:
@@ -238,9 +253,9 @@ class ObjDecoder:
 
         # Make const if needed
         if field.isConst():
-            from fan.sys.OpUtil import OpUtil
+            from fan.sys.ObjUtil import ObjUtil
             try:
-                val = OpUtil.toImmutable(val)
+                val = ObjUtil.toImmutable(val)
             except Exception as e:
                 raise self._err(f"Cannot make object const for {field.qname()}: {e}", line)
 

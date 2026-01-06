@@ -107,16 +107,20 @@ class ObjEncoder:
             obj_type = obj.typeof()
             if hasattr(obj_type, 'facet'):
                 from fan.sys.Type import Type
-                from fan.Facet import Serializable
                 try:
-                    ser = obj_type.facet(Type.find("sys::Serializable"), False)
+                    ser_type = Type.find("sys::Serializable")
+                    ser = obj_type.facet(ser_type, False)
                     if ser is not None:
-                        if hasattr(ser, 'simple') and ser.simple():
+                        # Check if simple serialization
+                        is_simple = False
+                        if hasattr(ser, 'simple'):
+                            is_simple = ser.simple() if callable(ser.simple) else ser.simple
+                        if is_simple:
                             self._writeSimple(obj_type, obj)
                         else:
                             self._writeComplex(obj_type, obj, ser)
                         return
-                except:
+                except Exception:
                     pass
 
         # Not serializable
@@ -154,10 +158,13 @@ class ObjEncoder:
 
         Simple types serialize as: Type("toStrValue")
         """
-        from fan.ObjUtil import ObjUtil
         self.wType(obj_type)
         self.w('(')
-        self.wStrLiteral(ObjUtil.toStr(obj), '"')
+        # Get string value via toStr
+        s = str(obj)
+        if hasattr(obj, 'toStr'):
+            s = obj.toStr()
+        self.wStrLiteral(s, '"')
         self.w(')')
 
     def _writeComplex(self, obj_type, obj, ser):
@@ -171,13 +178,14 @@ class ObjEncoder:
             # Try to create default instance for comparison
             try:
                 defObj = obj_type.make()
-            except:
+            except Exception:
                 pass
 
         # Get fields
         fields = obj_type.fields()
-        for i in range(fields.size()):
-            f = fields.get(i)
+        field_count = fields.size() if callable(getattr(fields, 'size', None)) else len(fields)
+        for i in range(field_count):
+            f = fields.get(i) if callable(getattr(fields, 'get', None)) else fields[i]
 
             # Skip static, transient, and synthetic fields
             if f.isStatic() or f.isSynthetic():
@@ -185,11 +193,11 @@ class ObjEncoder:
 
             # Check for @Transient facet
             if hasattr(f, 'hasFacet'):
-                from fan.Type import Type
+                from fan.sys.Type import Type
                 try:
                     if f.hasFacet(Type.find("sys::Transient")):
                         continue
-                except:
+                except Exception:
                     pass
 
             # Get field value
@@ -198,9 +206,13 @@ class ObjEncoder:
             # Skip if matches default
             if defObj is not None:
                 defVal = f.get(defObj)
-                from fan.ObjUtil import ObjUtil
-                if ObjUtil.equals(val, defVal):
-                    continue
+                try:
+                    from fan.sys.ObjUtil import ObjUtil
+                    if ObjUtil.equals(val, defVal):
+                        continue
+                except Exception:
+                    if val == defVal:
+                        continue
 
             # Open braces on first field
             if first:
@@ -215,14 +227,25 @@ class ObjEncoder:
             self.w(f.name())
             self.w('=')
 
-            self.curFieldType = f.type_().toNonNullable() if hasattr(f.type_(), 'toNonNullable') else f.type_()
+            # Get field type, handle type_() method name
+            ft = None
+            if hasattr(f, 'type_'):
+                ft = f.type_()
+            elif hasattr(f, 'type'):
+                ft = f.type() if callable(f.type) else f.type
+            if ft is not None and hasattr(ft, 'toNonNullable'):
+                ft = ft.toNonNullable()
+            self.curFieldType = ft
             self.writeObj(val)
             self.curFieldType = None
 
             self.w('\n')
 
         # Handle @collection
-        if hasattr(ser, 'collection') and ser.collection():
+        is_collection = False
+        if hasattr(ser, 'collection'):
+            is_collection = ser.collection() if callable(ser.collection) else ser.collection
+        if is_collection:
             first = self._writeCollectionItems(obj_type, obj, first)
 
         # Close braces if we opened them
@@ -236,7 +259,7 @@ class ObjEncoder:
         # Look up each method
         m = obj_type.method("each", False)
         if m is None:
-            from fan.Err import IOErr
+            from fan.sys.Err import IOErr
             raise IOErr.make(f"Missing {obj_type.qname()}.each")
 
         enc = self
@@ -254,7 +277,6 @@ class ObjEncoder:
             enc.w(',\n')
             return None
 
-        from fan.Func import Func
         m.invoke(obj, [write_item])
         return first
 
