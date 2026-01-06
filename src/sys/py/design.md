@@ -270,8 +270,37 @@ Int.toStr(x)
 Str.size(s)
 ```
 
+**Important:** `List` and `Map` are **NOT** primitives. They use normal instance method
+dispatch like any other Fantom class. This matches the JavaScript transpiler's design.
+
 The `ObjUtil` class provides dispatch for methods that may be called on any type (`equals`,
 `compare`, `hash`, `typeof`, etc.).
+
+## List and Map Architecture
+
+**List** extends `Obj` and implements Python's `MutableSequence` ABC:
+- Uses `self._values` for internal storage (not inheriting from Python list)
+- All methods are instance methods: `list.each(f)`, `list.map_(f)`, etc.
+- `isinstance(fantom_list, list)` returns `False`
+- Supports Python protocols: `len()`, `[]`, `in`, iteration
+
+**Map** extends `Obj` and implements Python's `MutableMapping` ABC:
+- Uses `self._map` for internal storage (not inheriting from Python dict)
+- All methods are instance methods: `map.get(k)`, `map.each(f)`, etc.
+- `isinstance(fantom_map, dict)` returns `False`
+- Supports Python protocols: `len()`, `[]`, `in`, iteration
+
+Fantom:
+```fantom
+list.each |item| { echo(item) }
+map.get("key")
+```
+
+Python:
+```python
+list.each(lambda item: print(item))
+map.get("key")
+```
 
 ## Circular Imports
 

@@ -17,13 +17,15 @@ from fan.sys.Map import Map
 # Create a Fantom list
 nums = List.fromLiteral([1, 2, 3], "sys::Int")
 
-# Use instance methods (preferred - natural OO style)
-doubled = nums.map(lambda it: it * 2)
+# Use instance methods (natural OO style)
+doubled = nums.map_(lambda it: it * 2)
 # Result: [2, 4, 6]
 
-# Or static methods (also supported)
-doubled = List.map_(nums, lambda it: it * 2)
-# Result: [2, 4, 6]
+# Python protocols work
+len(nums)           # 3
+nums[0]             # 1
+for x in nums:      # iteration
+    print(x)
 ```
 
 ## Using Lambdas and Functions
@@ -61,45 +63,53 @@ List.findAll(nums, complex_filter)
 
 ### List
 
-Fantom's `List` extends Python's native `list`. You can use either API:
+Fantom's `List` extends `Obj` and implements Python's `MutableSequence` protocol.
+It wraps an internal Python list but is **not** a subclass of Python's `list`.
 
 ```python
 nums = List.fromLiteral([1, 2, 3], "sys::Int")
 
-# Fantom API
-List.map_(nums, lambda it: it * 2)
-List.findAll(nums, lambda it: it > 1)
-List.reduce(nums, 0, lambda acc, it: acc + it)
+# Instance methods (preferred - natural OO style)
+nums.map_(lambda it: it * 2)           # [2, 4, 6]
+nums.findAll(lambda it: it > 1)        # [2, 3]
+nums.reduce(0, lambda acc, it: acc + it)  # 6
 
-# Python API (also works!)
-[x * 2 for x in nums]
-[x for x in nums if x > 1]
-sum(nums)
-
-# Native Python operations
+# Python protocols work
 len(nums)           # 3
 nums[0]             # 1
 nums[-1]            # 3
 3 in nums           # True
 for x in nums:      # iteration works
     print(x)
+
+# Note: List is NOT a Python list
+isinstance(nums, list)  # False
+isinstance(nums, List)  # True
 ```
 
 ### Map
 
-Fantom's `Map` provides a dictionary-like container:
+Fantom's `Map` extends `Obj` and implements Python's `MutableMapping` protocol.
+It wraps an internal Python dict but is **not** a subclass of Python's `dict`.
 
 ```python
 from fan.sys.Map import Map
 
 m = Map.fromLiteral(["a", "b"], [1, 2], "sys::Str", "sys::Int")
 
-# Iteration with closure
+# Instance methods
 m.each(lambda v, k: print(f"{k}={v}"))
-
-# Access
 m.get("a")          # 1
 m.containsKey("a")  # True
+
+# Python protocols work
+len(m)              # 2
+m["a"]              # 1
+"a" in m            # True
+
+# Note: Map is NOT a Python dict
+isinstance(m, dict)  # False
+isinstance(m, Map)   # True
 ```
 
 ### Primitives
