@@ -190,6 +190,28 @@ class Map(Obj, MutableMapping):
         return result
 
     @staticmethod
+    def makeWithType(keyType, valType):
+        """Create a Map with explicit key and value types.
+
+        Args:
+            keyType: Key type as string qname or Type
+            valType: Value type as string qname or Type
+
+        Returns:
+            New Map with the specified types
+        """
+        from .Type import Type, MapType
+        result = Map()
+        if isinstance(keyType, str):
+            keyType = Type.find(keyType)
+        if isinstance(valType, str):
+            valType = Type.find(valType)
+        result._keyType = keyType
+        result._valueType = valType
+        result._mapType = MapType(keyType, valType)
+        return result
+
+    @staticmethod
     def fromLiteral(keys, vals, keyType, valueType):
         """Create map from parallel key/value arrays."""
         from .Type import Type, MapType
