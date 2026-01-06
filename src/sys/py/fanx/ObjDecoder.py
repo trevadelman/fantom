@@ -491,14 +491,10 @@ class ObjDecoder:
         self._consume(Token.DOUBLE_COLON, "Expected ::")
         type_name = self._consumeId("Expected type name")
 
-        from fan.sys.Pod import Pod
         from fan.sys.Type import Type
 
-        pod = Pod.find(n, False)
-        if pod is None:
-            raise self._err(f"Pod not found: {n}", line)
-
-        t = pod.type(type_name, False)
+        # Use Type.find() directly - it handles all type lookup including sys types
+        t = Type.find(f"{n}::{type_name}", False)
         if t is None:
             raise self._err(f"Type not found: {n}::{type_name}", line)
 

@@ -802,7 +802,7 @@ class Type(Obj):
         "sys::OutStream", "sys::File", "sys::Locale", "sys::Env", "sys::Depend",
         "sys::MimeType", "sys::Unit", "sys::Log", "sys::Err", "sys::Func",
         "sys::Type", "sys::Pod", "sys::Slot", "sys::Field", "sys::Method", "sys::Param",
-        "sys::Test", "sys::Enum",
+        "sys::Test", "sys::Enum", "sys::Charset", "sys::Depend",
     }
 
     # Known static const fields in sys types - these are NOT methods
