@@ -882,6 +882,13 @@ class Uri(Obj):
             result.append(c)
         return "`" + ''.join(result) + "`"
 
+    def literalEncode(self, out):
+        """Encode for serialization.
+
+        URI literals are written as backtick-quoted strings: `http://example.com`
+        """
+        out.wStrLiteral(self.toStr(), '`')
+
     def mimeType(self):
         """Get MIME type based on file extension or directory type"""
         from fan.sys.MimeType import MimeType

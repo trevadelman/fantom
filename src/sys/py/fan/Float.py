@@ -535,3 +535,29 @@ class Float(Obj):
             result.append(char)
 
         return ''.join(reversed(result))
+
+    @staticmethod
+    def encode(self, out):
+        """Encode float for serialization.
+
+        Args:
+            self: The float value to encode
+            out: ObjEncoder to write to
+
+        Special values (NaN, INF, -INF) are written as sys::Float("NaN") etc.
+        Normal values are written with an 'f' suffix.
+        """
+        if math.isnan(self):
+            out.w('sys::Float("NaN")')
+        elif math.isinf(self):
+            if self > 0:
+                out.w('sys::Float("INF")')
+            else:
+                out.w('sys::Float("-INF")')
+        else:
+            s = str(self)
+            # Ensure there's a decimal point
+            if '.' not in s and 'e' not in s and 'E' not in s:
+                s += '.0'
+            out.w(s)
+            out.w("f")

@@ -121,6 +121,16 @@ class Slot(Obj):
     def toStr(self):
         return self.qname()
 
+    def literalEncode(self, out):
+        """Encode for serialization.
+
+        Slot literals are written as: ParentType#slotName
+        For example: sys::Float#nan
+        """
+        out.w(self._parent.qname())
+        out.w("#")
+        out.w(self._name)
+
     def __repr__(self):
         return self.toStr()
 

@@ -528,6 +528,20 @@ class Buf(Obj):
         self.writeChar(ord(hex_chars[ch & 0xf]))
         self.writeChars(";")
 
+    def writeObj(self, obj, options=None):
+        """Write serialized object representation using Fantom serialization format.
+
+        Args:
+            obj: Object to serialize
+            options: Optional Map with encoding options
+
+        Returns:
+            self for chaining
+        """
+        from fanx.ObjEncoder import ObjEncoder
+        ObjEncoder(self.out(), options).writeObj(obj)
+        return self
+
     #################################################################
     # InStream Operations (read)
     #################################################################

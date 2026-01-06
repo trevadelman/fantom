@@ -478,6 +478,14 @@ class Duration(Obj):
     def __ge__(self, other):
         return self.compare(other) >= 0
 
+    def literalEncode(self, out):
+        """Encode for serialization.
+
+        Duration literals are written directly as their string representation.
+        For example: 5sec, 3min, 100ms
+        """
+        out.w(self.toStr())
+
     def typeof(self):
         """Return Fantom Type for Duration"""
         from .Type import Type

@@ -756,6 +756,10 @@ class Map(dict, Obj):
         f(m)
         return m
 
+    def literalEncode(self, out):
+        """Encode for serialization - routes to ObjEncoder.writeMap"""
+        out.writeMap(self)
+
     def toCode(self):
         """Return code representation with type signature prefix"""
         from .ObjUtil import ObjUtil

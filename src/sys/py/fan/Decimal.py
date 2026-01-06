@@ -195,3 +195,27 @@ class Decimal(Obj):
 
     def __int__(self):
         return int(self._val)
+
+    def literalEncode(self, out):
+        """Encode for serialization.
+
+        Decimal literals are written with 'd' suffix: 123.456d
+        """
+        out.w(str(self._val))
+        out.w("d")
+
+    @staticmethod
+    def encode(self, out):
+        """Static method to encode decimal for serialization.
+
+        Args:
+            self: The Decimal value to encode
+            out: ObjEncoder to write to
+
+        Decimals are written with a 'd' suffix.
+        """
+        if isinstance(self, Decimal):
+            out.w(str(self._val))
+        else:
+            out.w(str(self))
+        out.w("d")

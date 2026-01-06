@@ -340,10 +340,17 @@ class StrBufOutStream:
         return self
 
     def writeObj(self, obj, options=None):
-        """Write serialized object representation."""
-        # Simplified implementation - just convert to string
-        from .ObjUtil import ObjUtil
-        self._buf.add(ObjUtil.toStr(obj))
+        """Write serialized object representation using Fantom serialization format.
+
+        Args:
+            obj: Object to serialize
+            options: Optional Map with encoding options
+
+        Returns:
+            self for chaining
+        """
+        from fanx.ObjEncoder import ObjEncoder
+        ObjEncoder(self, options).writeObj(obj)
         return self
 
     def flush(self):

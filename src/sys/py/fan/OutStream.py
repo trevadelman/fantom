@@ -158,6 +158,20 @@ class OutStream(Obj):
         self._endian = val
         return self
 
+    def writeObj(self, obj, options=None):
+        """Write serialized object representation using Fantom serialization format.
+
+        Args:
+            obj: Object to serialize
+            options: Optional Map with encoding options
+
+        Returns:
+            self for chaining
+        """
+        from fanx.ObjEncoder import ObjEncoder
+        ObjEncoder(self, options).writeObj(obj)
+        return self
+
     def typeof(self):
         from .Type import Type
         return Type.find("sys::OutStream")

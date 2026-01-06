@@ -181,6 +181,9 @@ class ListImpl(list):
     def random(self): return List.random(self)
     def toStr(self): return List.toStr(self)
     def toCode(self): return List.toCode(self)
+    def literalEncode(self, out):
+        """Encode for serialization - routes to ObjEncoder.writeList"""
+        out.writeList(self)
     def hash_(self): return List.hash_(self)
     def ro(self): return List.ro(self)
     def rw(self): return List.rw(self)

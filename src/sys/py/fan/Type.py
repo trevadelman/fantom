@@ -535,6 +535,14 @@ class Type(Obj):
 
     def isImmutable(self):
         """Types are always immutable"""
+
+    def literalEncode(self, out):
+        """Encode for serialization.
+
+        Type literals are written as: sys::Str#
+        """
+        out.w(self.signature())
+        out.w("#")
         return True
 
     def toImmutable(self):
