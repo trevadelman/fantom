@@ -825,19 +825,29 @@ class List:
     #################################################################
 
     @staticmethod
+    def _checkReadonly(lst):
+        """Check if list is readonly and throw ReadonlyErr if so"""
+        if isinstance(lst, (ImmutableList, ReadOnlyList)):
+            from .Err import ReadonlyErr
+            raise ReadonlyErr("List is read-only")
+
+    @staticmethod
     def add(lst, item):
+        List._checkReadonly(lst)
         lst.append(item)
         return lst
 
     @staticmethod
     def addAll(lst, items):
         """Add all items from another list"""
+        List._checkReadonly(lst)
         lst.extend(items)
         return lst
 
     @staticmethod
     def addNotNull(lst, item):
         """Add item if not null"""
+        List._checkReadonly(lst)
         if item is not None:
             lst.append(item)
         return lst
@@ -845,6 +855,7 @@ class List:
     @staticmethod
     def insert(lst, index, item):
         """Insert item at index"""
+        List._checkReadonly(lst)
         list.insert(lst, index, item)
         return lst
 
@@ -852,6 +863,7 @@ class List:
     def insertAll(lst, index, items):
         """Insert all items at index"""
         from .Err import IndexErr
+        List._checkReadonly(lst)
 
         # Copy items to avoid infinite loop when inserting list into itself
         items_copy = list(items)
@@ -872,11 +884,13 @@ class List:
 
     @staticmethod
     def set(lst, index, val):
+        List._checkReadonly(lst)
         lst[index] = val
         return lst
 
     @staticmethod
     def remove(lst, item):
+        List._checkReadonly(lst)
         """Remove first occurrence of item, return removed item or null"""
         from .ObjUtil import ObjUtil
         for i, x in enumerate(lst):
@@ -887,6 +901,7 @@ class List:
     @staticmethod
     def removeSame(lst, item):
         """Remove first occurrence using identity"""
+        List._checkReadonly(lst)
         for i, x in enumerate(lst):
             if x is item:
                 return list.pop(lst, i)
@@ -895,11 +910,13 @@ class List:
     @staticmethod
     def removeAt(lst, index):
         """Remove and return item at index"""
+        List._checkReadonly(lst)
         return list.pop(lst, index)
 
     @staticmethod
     def removeRange(lst, r):
         """Remove items in range"""
+        List._checkReadonly(lst)
         from .Range import Range
         start = r._start
         end = r._end
@@ -922,6 +939,7 @@ class List:
     @staticmethod
     def removeAll(lst, items):
         """Remove all occurrences of items"""
+        List._checkReadonly(lst)
         from .ObjUtil import ObjUtil
         for item in items:
             # Remove all occurrences
@@ -936,6 +954,7 @@ class List:
     @staticmethod
     def clear(lst):
         """Remove all items from the list"""
+        List._checkReadonly(lst)
         lst.clear()
         return lst
 
@@ -946,12 +965,14 @@ class List:
     @staticmethod
     def push(lst, item):
         """Push item onto stack (same as add)"""
+        List._checkReadonly(lst)
         lst.append(item)
         return lst
 
     @staticmethod
     def pop(lst):
         """Pop item from stack, return null if empty"""
+        List._checkReadonly(lst)
         if len(lst) == 0:
             return None
         return list.pop(lst)
@@ -1027,6 +1048,7 @@ class List:
     @staticmethod
     def sort(lst, f=None):
         """Sort list in place. Nulls sort first in Fantom."""
+        List._checkReadonly(lst)
         from .ObjUtil import ObjUtil
         if f is not None:
             # Use function as comparator (Fantom style: return -1, 0, 1)
@@ -1060,12 +1082,14 @@ class List:
     @staticmethod
     def reverse(lst):
         """Reverse list in place"""
+        List._checkReadonly(lst)
         list.reverse(lst)
         return lst
 
     @staticmethod
     def shuffle(lst):
         """Randomly shuffle list in place"""
+        List._checkReadonly(lst)
         import random
         random.shuffle(lst)
         return lst
@@ -1073,12 +1097,14 @@ class List:
     @staticmethod
     def swap(lst, a, b):
         """Swap elements at indices a and b"""
+        List._checkReadonly(lst)
         lst[a], lst[b] = lst[b], lst[a]
         return lst
 
     @staticmethod
     def moveTo(lst, item, index):
         """Move item to target index in the resulting list"""
+        List._checkReadonly(lst)
         from .ObjUtil import ObjUtil
         # Find the item
         old_index = None
@@ -1731,4 +1757,53 @@ class ReadOnlyList(list):
         self._checkModify()
 
     def trim(self):
+        self._checkModify()
+
+    # Fantom-style mutation methods that should also throw ReadonlyErr
+    def add(self, item):
+        self._checkModify()
+
+    def addAll(self, items):
+        self._checkModify()
+
+    def addNotNull(self, item):
+        self._checkModify()
+
+    def insertAll(self, index, items):
+        self._checkModify()
+
+    def removeSame(self, item):
+        self._checkModify()
+
+    def removeAt(self, index):
+        self._checkModify()
+
+    def removeAll(self, items):
+        self._checkModify()
+
+    def removeRange(self, r):
+        self._checkModify()
+
+    def fill(self, val, times):
+        self._checkModify()
+
+    def push(self, item):
+        self._checkModify()
+
+    def sortr(self, f=None):
+        self._checkModify()
+
+    def swap(self, a, b):
+        self._checkModify()
+
+    def shuffle(self):
+        self._checkModify()
+
+    def set(self, index, val):
+        self._checkModify()
+
+    def setNotNull(self, index, val):
+        self._checkModify()
+
+    def moveTo(self, item, index):
         self._checkModify()
