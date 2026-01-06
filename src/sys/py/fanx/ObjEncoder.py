@@ -301,7 +301,7 @@ class ObjEncoder:
         # Check if we can use inferred type
         inferred = False
         if self.curFieldType is not None:
-            from fan.Type import Type
+            from fan.sys.Type import Type
             if hasattr(self.curFieldType, 'fits'):
                 try:
                     if self.curFieldType.fits(Type.find("sys::List")):
@@ -312,8 +312,8 @@ class ObjEncoder:
         # Clear field type
         self.curFieldType = None
 
-        # Write type prefix if not inferred
-        if not inferred:
+        # Write type prefix if not inferred (like JS does)
+        if not inferred and of is not None:
             self.wType(of)
 
         # Handle empty list - size may be method or property
@@ -360,7 +360,7 @@ class ObjEncoder:
         # Check if we can use inferred type
         inferred = False
         if self.curFieldType is not None:
-            from fan.Type import Type
+            from fan.sys.Type import Type
             if hasattr(self.curFieldType, 'fits'):
                 try:
                     if self.curFieldType.fits(Type.find("sys::Map")):
@@ -371,9 +371,10 @@ class ObjEncoder:
         # Clear field type
         self.curFieldType = None
 
-        # Write type prefix if not inferred
-        if not inferred:
-            self.wType(t)
+        # For maps, we generally DON'T write type prefixes
+        # The decoder infers types from the key/value content
+        # Only write prefix if explicitly needed (e.g., empty map with non-default type)
+        # For non-empty maps, content provides enough type information
 
         # Handle empty map
         if m.isEmpty():
@@ -387,6 +388,14 @@ class ObjEncoder:
         keys = m.keys()
         # Handle both Fantom List and Python list
         key_count = keys.size() if callable(getattr(keys, 'size', None)) else len(keys)
+
+        # Get value type for inference (if MapType with v attribute)
+        val_type = None
+        if hasattr(t, 'v'):
+            val_type = t.v
+            if val_type is not None and hasattr(val_type, 'toNonNullable'):
+                val_type = val_type.toNonNullable()
+
         for i in range(key_count):
             if first:
                 first = False
@@ -400,7 +409,10 @@ class ObjEncoder:
             val = m.get(key)
             self.writeObj(key)
             self.w(':')
+            # Set curFieldType for value type inference
+            self.curFieldType = val_type
             self.writeObj(val)
+            self.curFieldType = None
         self.w(']')
         self.level -= 1
 

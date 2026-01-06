@@ -291,8 +291,8 @@ class ObjDecoder:
 
             # [mapType] is explicit map signature
             if self.curt == Token.RBRACKET and peek_type is not None:
-                from fan.sys.Type import Type
-                if hasattr(peek_type, 'isMap') and peek_type.isMap():
+                from fan.sys.Type import Type, MapType
+                if isinstance(peek_type, MapType):
                     t = peek_type
                     peek_type = None
                     self._consume()
@@ -400,17 +400,17 @@ class ObjDecoder:
 
     def _toMapType(self, t, cur_field, infer):
         """Determine map type."""
-        if t is not None and hasattr(t, 'isMap') and t.isMap():
+        from fan.sys.Type import Type, MapType
+        if t is not None and isinstance(t, MapType):
             return t
         if cur_field is not None:
             ft = cur_field.type()
             if hasattr(ft, 'toNonNullable'):
                 ft = ft.toNonNullable()
-            if hasattr(ft, 'isMap') and ft.isMap():
+            if isinstance(ft, MapType):
                 return ft
         if infer:
             return None
-        from fan.sys.Type import Type
         return Type.find("[sys::Obj:sys::Obj?]")
 
     def _inferType(self, items):

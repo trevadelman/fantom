@@ -518,23 +518,16 @@ class Map(dict, Obj):
     def equals(self, that):
         """Check equality with another map.
 
-        Maps must have matching types and equal contents to be equal.
-        Empty maps with different declared types are NOT equal.
+        Maps are equal if they have equal contents. Type declarations
+        are not compared - only actual key-value pairs matter.
         """
         if that is None:
             return False
         if not isinstance(that, dict):
             return False
 
-        # Check type signatures - maps with different declared types are NOT equal
-        selfType = self.typeof()
-        thatType = that.typeof() if hasattr(that, 'typeof') else None
-        if selfType and thatType:
-            selfSig = selfType.signature() if hasattr(selfType, 'signature') else str(selfType)
-            thatSig = thatType.signature() if hasattr(thatType, 'signature') else str(thatType)
-            if selfSig != thatSig:
-                return False
-
+        # Content-based equality only - don't compare type signatures
+        # This matches Fantom semantics where [:]  ==  Obj:Obj?[:]
         if len(self) != len(that):
             return False
         for k, v in self.items():
