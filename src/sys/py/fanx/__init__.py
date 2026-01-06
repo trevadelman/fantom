@@ -4,7 +4,9 @@
 #
 
 """
-Fantom serialization support for Python runtime.
+fanx - Fantom extended utilities including serialization support.
 """
 
+from .Token import Token
+from .Tokenizer import Tokenizer
 from .ObjEncoder import ObjEncoder
