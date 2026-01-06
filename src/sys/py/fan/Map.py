@@ -170,10 +170,20 @@ class Map(Obj, MutableMapping):
         # Extract key/value types from MapType
         if type_param is not None:
             if isinstance(type_param, MapType):
+                # Validate key type is not nullable (Fantom requirement)
+                keyTypeSig = type_param.k.signature() if hasattr(type_param.k, 'signature') else str(type_param.k)
+                if keyTypeSig.endswith("?"):
+                    from .Err import ArgErr
+                    raise ArgErr(f"Map key type cannot be nullable: {keyTypeSig}")
                 result._mapType = type_param
                 result._keyType = type_param.k
                 result._valueType = type_param.v
             elif isinstance(type_param, Type) and hasattr(type_param, 'k'):
+                # Validate key type is not nullable
+                keyTypeSig = type_param.k.signature() if hasattr(type_param.k, 'signature') else str(type_param.k)
+                if keyTypeSig.endswith("?"):
+                    from .Err import ArgErr
+                    raise ArgErr(f"Map key type cannot be nullable: {keyTypeSig}")
                 result._mapType = type_param
                 result._keyType = type_param.k
                 result._valueType = type_param.v
