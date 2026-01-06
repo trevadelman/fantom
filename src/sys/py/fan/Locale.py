@@ -160,3 +160,19 @@ class Locale(Obj):
         if not isinstance(other, Locale):
             return False
         return self._str == other._str
+
+    def typeof(self):
+        """Return the Fantom type of this object."""
+        from fan.sys.Type import Type
+        return Type.find("sys::Locale")
+
+    def literalEncode(self, encoder):
+        """Encode for serialization.
+
+        Simple types serialize as: Type("toStr")
+        Example: sys::Locale("en-US")
+        """
+        encoder.wType(self.typeof())
+        encoder.w('(')
+        encoder.wStrLiteral(self.toStr(), '"')
+        encoder.w(')')

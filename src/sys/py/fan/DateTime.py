@@ -1589,6 +1589,22 @@ class DateTime(Obj):
         wd = utc.weekday().ordinal()
         return f"{weekday_abbr[wd]}, {utc._day:02d} {month_abbr[utc._month.ordinal()]} {utc._year} {utc._hour:02d}:{utc._min:02d}:{utc._sec:02d} GMT"
 
+    def typeof(self):
+        """Return the Fantom type of this object."""
+        from fan.sys.Type import Type
+        return Type.find("sys::DateTime")
+
+    def literalEncode(self, encoder):
+        """Encode for serialization.
+
+        Simple types serialize as: Type("toStr")
+        Example: sys::DateTime("2023-06-15T10:30:00-05:00 New_York")
+        """
+        encoder.wType(self.typeof())
+        encoder.w('(')
+        encoder.wStrLiteral(self.toStr(), '"')
+        encoder.w(')')
+
 
 class Date(Obj):
     """Date represents a day in time without time-of-day or timezone."""

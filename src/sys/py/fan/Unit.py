@@ -587,3 +587,14 @@ class Unit(Obj):
     def typeof(self):
         from fan.sys.Type import Type
         return Type.find("sys::Unit")
+
+    def literalEncode(self, encoder):
+        """Encode for serialization.
+
+        Simple types serialize as: Type("toStr")
+        Example: sys::Unit("meter")
+        """
+        encoder.wType(self.typeof())
+        encoder.w('(')
+        encoder.wStrLiteral(self.toStr(), '"')
+        encoder.w(')')

@@ -96,3 +96,19 @@ class Uuid(Obj):
 
     def __ge__(self, other):
         return self.compare(other) >= 0
+
+    def typeof(self):
+        """Return the Fantom type of this object."""
+        from fan.sys.Type import Type
+        return Type.find("sys::Uuid")
+
+    def literalEncode(self, encoder):
+        """Encode for serialization.
+
+        Simple types serialize as: Type("toStr")
+        Example: sys::Uuid("550e8400-e29b-41d4-a716-446655440000")
+        """
+        encoder.wType(self.typeof())
+        encoder.w('(')
+        encoder.wStrLiteral(self.toStr(), '"')
+        encoder.w(')')

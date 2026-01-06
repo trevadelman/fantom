@@ -812,3 +812,19 @@ class TimeZone(Obj):
         except:
             # Fall back to UTC if we can't find the timezone
             return TimeZone.utc()
+
+    def typeof(self):
+        """Return the Fantom type of this object."""
+        from fan.sys.Type import Type
+        return Type.find("sys::TimeZone")
+
+    def literalEncode(self, encoder):
+        """Encode for serialization.
+
+        Simple types serialize as: Type("toStr")
+        Example: sys::TimeZone("New_York")
+        """
+        encoder.wType(self.typeof())
+        encoder.w('(')
+        encoder.wStrLiteral(self.toStr(), '"')
+        encoder.w(')')

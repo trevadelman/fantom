@@ -310,3 +310,19 @@ class Depend(Obj):
     def __hash__(self):
         """Python hash"""
         return hash(self.toStr())
+
+    def typeof(self):
+        """Return the Fantom type of this object."""
+        from fan.sys.Type import Type
+        return Type.find("sys::Depend")
+
+    def literalEncode(self, encoder):
+        """Encode for serialization.
+
+        Simple types serialize as: Type("toStr")
+        Example: sys::Depend("foo 1.2-3.4")
+        """
+        encoder.wType(self.typeof())
+        encoder.w('(')
+        encoder.wStrLiteral(self.toStr(), '"')
+        encoder.w(')')

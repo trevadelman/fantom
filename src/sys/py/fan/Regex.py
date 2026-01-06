@@ -134,6 +134,22 @@ class Regex(Obj):
         """Hash code"""
         return hash(self._pattern)
 
+    def typeof(self):
+        """Return the Fantom type of this object."""
+        from fan.sys.Type import Type
+        return Type.find("sys::Regex")
+
+    def literalEncode(self, encoder):
+        """Encode for serialization.
+
+        Simple types serialize as: Type("toStr")
+        Example: sys::Regex("foo")
+        """
+        encoder.wType(self.typeof())
+        encoder.w('(')
+        encoder.wStrLiteral(self.toStr(), '"')
+        encoder.w(')')
+
 
 class RegexMatcher(Obj):
     """

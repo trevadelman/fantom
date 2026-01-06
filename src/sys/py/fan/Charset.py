@@ -174,3 +174,14 @@ class Charset(Obj):
         """Return Type for Charset"""
         from fan.sys.Type import Type
         return Type.find("sys::Charset")
+
+    def literalEncode(self, encoder):
+        """Encode for serialization.
+
+        Simple types serialize as: Type("toStr")
+        Example: sys::Charset("UTF-8")
+        """
+        encoder.wType(self.typeof())
+        encoder.w('(')
+        encoder.wStrLiteral(self.toStr(), '"')
+        encoder.w(')')
