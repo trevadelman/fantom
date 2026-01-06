@@ -436,7 +436,9 @@ class List:
         else:
             for item in lst:
                 result.append(f(item))
-        return result
+        # Preserve type info - return ListImpl for chaining
+        elemType = getattr(lst, '_elementType', None)
+        return ListImpl.fromLiteral(result, elemType if elemType else "sys::Obj")
 
     @staticmethod
     def flatMap(lst, f):
@@ -602,7 +604,9 @@ class List:
             for item in lst:
                 if f(item):
                     result.append(item)
-        return result
+        # Preserve type info - return ListImpl for chaining
+        elemType = getattr(lst, '_elementType', None)
+        return ListImpl.fromLiteral(result, elemType if elemType else "sys::Obj")
 
     @staticmethod
     def exclude(lst, f):
