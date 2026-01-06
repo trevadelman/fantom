@@ -320,8 +320,65 @@ class List(Obj, MutableSequence):
         """Get last element or null"""
         return self._values[-1] if self._values else None
 
-    def getRange(self, r):
-        """Get a slice using a Range"""
+    def getRange(self, r_or_target=None, r=None):
+        """Get a slice using a Range.
+
+        Can be called as:
+        - List.getRange(target, range) - static dispatch from transpiler
+        - list.getRange(range) - instance method call
+
+        Delegates to target's getRange method if target is not a List.
+        """
+        from .Range import Range
+
+        # When transpiler generates List.getRange(target, range):
+        # Python binds: self=target, r_or_target=range, r=None
+
+        # When called as instance method list.getRange(range):
+        # Python binds: self=list, r_or_target=range, r=None
+
+        # Both cases have r=None and r_or_target=Range
+
+        if isinstance(r_or_target, Range) and r is None:
+            # Check if self is a List instance (or subclass that uses _values)
+            if isinstance(self, List) and hasattr(self, '_values'):
+                return self._getRange(r_or_target)
+
+            # self is not a List with _values (could be Uri, StrBuf, Buf, GbGrid, etc.)
+            # Check if type has its own getRange method (not inherited from List)
+            own_class_getRange = type(self).__dict__.get('getRange', None)
+            if own_class_getRange is not None and own_class_getRange is not List.getRange:
+                # Type has its own getRange - call it directly
+                # Use object.__getattribute__ to bypass our own getRange
+                return own_class_getRange(self, r_or_target)
+
+            # Check parent classes for getRange (but not List)
+            for cls in type(self).__mro__:
+                if cls is List:
+                    continue
+                cls_getRange = cls.__dict__.get('getRange', None)
+                if cls_getRange is not None:
+                    return cls_getRange(self, r_or_target)
+
+            # Fallback: check for _getRange
+            if hasattr(self, '_getRange'):
+                return self._getRange(r_or_target)
+
+            raise TypeError(f"{type(self).__name__} does not support getRange")
+
+        # Two explicit arguments - shouldn't happen with current transpiler
+        if r is not None:
+            target = r_or_target
+            if isinstance(target, List) and hasattr(target, '_values'):
+                return target._getRange(r)
+            if hasattr(target, 'getRange'):
+                return target.getRange(r)
+            raise TypeError(f"{type(target).__name__} does not support getRange")
+
+        raise ValueError("getRange requires a Range argument")
+
+    def _getRange(self, r):
+        """Internal getRange implementation for List instances."""
         from .Err import IndexErr
         start = r._start
         end = r._end
