@@ -22,6 +22,11 @@ class Unsafe:
     def __init__(self, val=None):
         self._val = val
 
+    @staticmethod
+    def make(val=None):
+        """Factory method for creating Unsafe wrapper (called by transpiled code)."""
+        return Unsafe(val)
+
     def val(self):
         """Get current value"""
         return self._val
