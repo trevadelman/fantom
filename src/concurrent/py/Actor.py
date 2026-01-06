@@ -218,7 +218,7 @@ class Actor(Obj):
         Return the map of actor-local variables visible only to the current actor.
         """
         if not hasattr(Actor._thread_locals, 'actor_locals') or Actor._thread_locals.actor_locals is None:
-            Actor._thread_locals.actor_locals = Map({})
+            Actor._thread_locals.actor_locals = Map()
         return Actor._thread_locals.actor_locals
 
     # Internal implementation
@@ -395,7 +395,7 @@ class Actor(Obj):
 
         def __init__(self, actor):
             self.actor = actor
-            self.locals = Map({})
+            self.locals = Map()
             from fan.sys.Locale import Locale
             self.locale = Locale.cur()
 
