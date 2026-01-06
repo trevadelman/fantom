@@ -352,9 +352,9 @@ class Uri(Obj):
     def name(self):
         """Get the last segment of the path"""
         path = self.path()
-        if path.size() == 0:
+        if path.size == 0:
             return ""
-        return path.get(path.size() - 1)
+        return path.get(path.size - 1)
 
     def basename(self):
         """Get name without extension"""
@@ -405,7 +405,7 @@ class Uri(Obj):
     def parent(self):
         """Get parent URI"""
         path = self.path()
-        pathSize = path.size()
+        pathSize = path.size
 
         # If no path, no parent
         if pathSize == 0:
@@ -490,7 +490,7 @@ class Uri(Obj):
         rPath = r.path()
 
         # Compute the target path
-        if base._pathStr is None or len(base._pathStr) == 0 or base.path().size() == 0:
+        if base._pathStr is None or len(base._pathStr) == 0 or base.path().size == 0:
             tPath = list(rPath)
         else:
             tPath = list(base.path())
@@ -501,7 +501,7 @@ class Uri(Obj):
 
             # Process each segment from r
             dotLast = False
-            for i in range(rPath.size()):
+            for i in range(rPath.size):
                 rSeg = rPath.get(i)
                 if rSeg == ".":
                     dotLast = True
@@ -710,7 +710,7 @@ class Uri(Obj):
 
         # Find divergence point
         d = 0
-        minLen = min(selfPath.size(), basePath.size())
+        minLen = min(selfPath.size, basePath.size)
         while d < minLen:
             if selfPath.get(d) != basePath.get(d):
                 break
@@ -719,27 +719,27 @@ class Uri(Obj):
         # If divergence is at root (no commonality)
         if d == 0:
             # `/a/b/c`.relTo(`/`) should be `a/b/c`
-            if basePath.size() == 0 and self._pathStr.startswith("/"):
+            if basePath.size == 0 and self._pathStr.startswith("/"):
                 return Uri(pathStr=self._pathStr[1:], queryStr=self._queryStr, frag=self._frag)
             else:
                 return Uri(pathStr=self._pathStr, queryStr=self._queryStr, frag=self._frag)
 
         # If paths are exactly the same
-        if d == selfPath.size() and d == basePath.size():
+        if d == selfPath.size and d == basePath.size:
             return Uri(pathStr="", queryStr=self._queryStr, frag=self._frag)
 
         # Create sub-path at divergence point
         tPath = []
 
         # Insert .. backups if needed
-        backup = basePath.size() - d
+        backup = basePath.size - d
         if not base.isDir():
             backup -= 1
         for _ in range(backup):
             tPath.append("..")
 
         # Add remaining segments from self
-        for i in range(d, selfPath.size()):
+        for i in range(d, selfPath.size):
             tPath.append(selfPath.get(i))
 
         # Build path string
@@ -1020,7 +1020,7 @@ class Uri(Obj):
         try:
             segs_size = len(segs)
         except:
-            segs_size = segs.size()
+            segs_size = segs.size
 
         # Handle negative indices using Fantom Range semantics (like JS __start/__end)
         start_val = r.start()
