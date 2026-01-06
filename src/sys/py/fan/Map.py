@@ -653,13 +653,11 @@ class Map(Obj, MutableMapping):
         return not self._ro
 
     def ro(self):
-        """Return read-only view of this map"""
+        """Return read-only snapshot of this map"""
         if self._ro:
             return self
-        if self._roView is not None:
-            return self._roView
-        self._roView = ReadOnlyMap(self)
-        return self._roView
+        # Create a new immutable snapshot (not cached since original can change)
+        return ReadOnlyMap(self)
 
     def rw(self):
         """Return read-write view (creates a copy if this is RO)"""
@@ -772,13 +770,13 @@ class Map(Obj, MutableMapping):
 #################################################################
 
 class ReadOnlyMap(Map):
-    """Read-only view of a Map - throws ReadonlyErr on modification"""
+    """Read-only snapshot of a Map - throws ReadonlyErr on modification"""
 
     def __init__(self, source):
-        """Create read-only view of source map"""
+        """Create read-only snapshot of source map"""
         super().__init__()
         self._source = source
-        self._map = source._map  # Share the internal dict
+        self._map = dict(source._map)  # COPY the dict for snapshot semantics
         self._ro = True
         self._keyType = source._keyType
         self._valueType = source._valueType

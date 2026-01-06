@@ -284,28 +284,29 @@ class Str(Obj):
     @staticmethod
     def split(self, sep=None, trimmed=True):
         """Split string on whitespace or separator (int for char code)"""
+        from .List import List
         if sep is None:
             # Split on whitespace
             if len(self) == 0:
-                return [""]
+                return List.fromLiteral([""], "sys::Str")
             result = self.split()
             if trimmed:
                 result = [s.strip() for s in result if s.strip()]
             if len(result) == 0:
-                return [""]  # All whitespace returns empty string
-            return result
+                return List.fromLiteral([""], "sys::Str")  # All whitespace returns empty string
+            return List.fromLiteral(result, "sys::Str")
         else:
             # Convert int separator to char
             if isinstance(sep, int):
                 sep = chr(sep)
             # Handle empty string case
             if len(self) == 0:
-                return [""]
+                return List.fromLiteral([""], "sys::Str")
             result = self.split(sep)
             if trimmed:
                 # Trim each part but keep empty strings
                 result = [s.strip() for s in result]
-            return result
+            return List.fromLiteral(result, "sys::Str")
 
     @staticmethod
     def splitLines(self):
