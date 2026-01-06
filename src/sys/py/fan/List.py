@@ -2,7 +2,7 @@
 # Copyright (c) 2025, Brian Frank and Andy Frank
 # Licensed under the Academic Free License version 3.0
 #
-# Refactored to extend Obj + MutableSequence per Brian's architecture guidance
+# Refactored to extend Obj + MutableSequence
 #
 
 from collections.abc import MutableSequence
@@ -12,7 +12,7 @@ from .Obj import Obj
 class List(Obj, MutableSequence):
     """Fantom List - extends Obj, implements Python's MutableSequence ABC.
 
-    This follows Brian's architecture where List is a pure Fantom class that
+    This follows tjhe architecture where List is a pure Fantom class that
     extends sys::Obj and wraps an internal Python list rather than inheriting
     from Python's list directly.
     """
