@@ -118,6 +118,8 @@ class Type(Obj):
     @staticmethod
     def find(qname, checked=True):
         """Find type by qname - returns cached singleton"""
+        from .Err import ArgErr, UnknownTypeErr, UnknownPodErr
+
         if qname in Type._cache:
             return Type._cache[qname]
 
@@ -132,6 +134,9 @@ class Type(Obj):
         # Parse list types like "sys::Int[]"
         if qname.endswith("[]"):
             elem_qname = qname[:-2]
+            # "[]" alone is invalid - empty element type
+            if not elem_qname:
+                raise ArgErr.make(f"Invalid type signature '{qname}', use <pod>::<type>")
             elem_type = Type.find(elem_qname, checked)
             if elem_type is None:
                 return None
@@ -216,14 +221,45 @@ class Type(Obj):
                 Type._cache[qname] = map_type
                 return map_type
 
-        # For checked=false, return None for unknown sys types
+        # Validate basic type signature format: must have pod::type
+        if "::" not in qname:
+            raise ArgErr.make(f"Invalid type signature '{qname}', use <pod>::<type>")
+
+        colon_idx = qname.find("::")
+        pod_name = qname[:colon_idx]
+        type_name_part = qname[colon_idx+2:]
+
+        # Validate: "sys::" (empty type name) or "::sys" (empty pod name)
+        if not pod_name or not type_name_part:
+            raise ArgErr.make(f"Invalid type signature '{qname}', use <pod>::<type>")
+
+        # For checked=false, return None for unknown types
         if not checked:
-            pod = qname.split("::")[0] if "::" in qname else None
-            if pod == "sys" and qname not in Type._KNOWN_TYPES:
+            if pod_name == "sys" and qname not in Type._KNOWN_TYPES:
                 return None
             # For non-sys pods, we don't know them - return None
-            if pod and pod != "sys" and not qname.startswith("testSys::"):
+            if pod_name != "sys" and not qname.startswith("testSys::"):
                 return None
+
+        # For checked=true with sys pod and unknown type, throw UnknownTypeErr
+        # Exception: internal implementation types (NullableType, ListType, etc.)
+        # Also allow 'type' - Python's builtin that sometimes gets passed through
+        _INTERNAL_TYPES = {"NullableType", "ListType", "MapType", "FuncType", "GenericParamType", "type"}
+        if pod_name == "sys" and qname not in Type._KNOWN_TYPES and type_name_part not in _INTERNAL_TYPES:
+            # Check if module can be imported
+            try:
+                __import__(f'fan.sys.{type_name_part}', fromlist=[type_name_part])
+            except ImportError:
+                raise UnknownTypeErr.make(f"Unknown type: {qname}")
+
+        # For unknown pods, throw UnknownPodErr
+        from .Pod import Pod
+        known_pods = {"sys", "concurrent", "testSys", "graphics", "inet", "crypto", "web",
+                      "dom", "domkit", "util", "webmod", "compiler", "build", "fansh", "fandoc",
+                      "haystack", "xeto", "xetom", "xetoc", "testHaystack", "def", "ph",
+                      "phIoT", "phScience", "ashrae", "hx", "defc"}
+        if pod_name not in known_pods:
+            raise UnknownPodErr.make(f"Unknown pod: {pod_name}")
 
         t = Type(qname)
         Type._cache[qname] = t
