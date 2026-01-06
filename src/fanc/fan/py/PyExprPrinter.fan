@@ -400,39 +400,8 @@ class PyExprPrinter : PyPrinter
       return
     }
 
-    // Check if method parent is Map/List - use target type to determine dispatch
-    // The Fantom compiler may resolve method to List even when target is a Map
-    methodParent := e.method.parent.qname
-    if ((methodParent == "sys::Map" || methodParent == "sys::List") && e.target != null)
-    {
-      // Use target type for dispatch, not method parent
-      // A List type ends with [] (e.g., Int[], [Int:Str][])
-      // A Map type has [K:V] syntax but does NOT end with []
-      targetSig := e.target.ctype?.toNonNullable?.signature ?: ""
-      className := "List"
-      // Check for List first: signature ends with [] (but not just a map ending with ])
-      // List: Int[], Str?[], [Int:Str]?[], [Int:Str][]
-      // Map: [Int:Str], [Str:Obj?]
-      isListType := targetSig == "sys::List" || targetSig.endsWith("[]")
-      isMapType := targetSig == "sys::Map" || (targetSig.startsWith("[") && targetSig.contains(":") && !targetSig.endsWith("[]"))
-      if (isMapType && !isListType)
-        className = "Map"
-      else if (methodParent == "sys::Map" && !isListType)
-        className = "Map"
-
-      w(className).w(".").w(escapeName(e.method.name)).w("(")
-      expr(e.target)
-      if (!e.args.isEmpty)
-      {
-        e.args.each |arg|
-        {
-          w(", ")
-          expr(arg)
-        }
-      }
-      w(")")
-      return
-    }
+    // NOTE: List and Map use instance method dispatch (like JS transpiler)
+    // No special static dispatch block needed - they fall through to normal method calls
 
     // Method call
     // Check for private methods - they are non-virtual in Fantom
@@ -574,20 +543,13 @@ class PyExprPrinter : PyPrinter
   }
 
   ** Check if type is a primitive that needs static method calls
+  ** NOTE: List and Map are NOT primitives - they use instance method dispatch like JS
   private Bool isPrimitiveType(CType? t)
   {
     if (t == null) return false
     sig := t.toNonNullable.signature
-    // Check base signature (handle generic lists)
-    // Include Decimal - it maps to Python float and uses Float methods
+    // Only Bool, Int, Float, Str, Decimal are primitives (matches JS transpiler)
     if (sig == "sys::Bool" || sig == "sys::Int" || sig == "sys::Float" || sig == "sys::Str" || sig == "sys::Decimal")
-      return true
-    // List types end with [] (e.g., Int[], [Int:Str]?[], [Int:Str][])
-    // Check List BEFORE Map because [Int:Str]?[] is a List of Maps
-    if (sig == "sys::List" || sig.endsWith("[]"))
-      return true
-    // Map types have [K:V] syntax but do NOT end with []
-    if (sig == "sys::Map" || (sig.startsWith("[") && sig.contains(":") && !sig.endsWith("[]")))
       return true
     return false
   }
@@ -613,6 +575,7 @@ class PyExprPrinter : PyPrinter
   }
 
   ** Get Python wrapper class name for primitive
+  ** NOTE: List and Map are NOT primitives - they use instance method dispatch
   private Str primitiveClassName(CType t)
   {
     sig := t.toNonNullable.signature
@@ -621,11 +584,6 @@ class PyExprPrinter : PyPrinter
     if (sig == "sys::Float") return "Float"
     if (sig == "sys::Decimal") return "Float"  // Decimal uses Float methods in Python
     if (sig == "sys::Str") return "Str"
-    // List types end with [] (e.g., Int[], [Int:Str]?[], [Int:Str][])
-    // Check List BEFORE Map because [Int:Str]?[] is a List of Maps
-    if (sig == "sys::List" || sig.endsWith("[]")) return "List"
-    // Map types have [K:V] syntax but do NOT end with []
-    if (sig == "sys::Map" || (sig.startsWith("[") && sig.contains(":") && !sig.endsWith("[]"))) return "Map"
     return t.name
   }
 
@@ -708,31 +666,8 @@ class PyExprPrinter : PyPrinter
       return
     }
 
-    // Map/List method call with safe nav
-    methodParent := e.method.parent.qname
-    if ((methodParent == "sys::Map" || methodParent == "sys::List") && e.target != null)
-    {
-      targetSig := e.target.ctype?.toNonNullable?.signature ?: ""
-      className := "List"
-      if (targetSig == "sys::Map" || (targetSig.startsWith("[") && targetSig.contains(":")))
-        className = "Map"
-      else if (methodParent == "sys::Map")
-        className = "Map"
-
-      w(className).w(".").w(escapeName(e.method.name)).w("(_safe_")
-      if (!e.args.isEmpty)
-      {
-        e.args.each |arg|
-        {
-          w(", ")
-          expr(arg)
-        }
-      }
-      w(")")
-      return
-    }
-
     // Regular instance method call with safe nav: _safe_.method(args)
+    // NOTE: List and Map use instance methods (like JS) - no special static dispatch needed
     w("_safe_.").w(escapeName(e.method.name)).w("(")
     e.args.each |arg, i|
     {

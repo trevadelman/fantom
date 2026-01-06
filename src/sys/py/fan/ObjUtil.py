@@ -252,6 +252,18 @@ class ObjUtil:
         return Type.find(f"{sig}[]")
 
     @staticmethod
+    def _isList(obj):
+        """Check if obj is a Fantom List (our List class or Python list)"""
+        from .List import List
+        return isinstance(obj, (list, List))
+
+    @staticmethod
+    def _isMap(obj):
+        """Check if obj is a Fantom Map"""
+        from .Map import Map
+        return isinstance(obj, (dict, Map))
+
+    @staticmethod
     def is_(obj, type_):
         """Runtime type check (Fantom 'is' operator)"""
         if obj is None:
@@ -277,10 +289,10 @@ class ObjUtil:
         if qname == "sys::Str":
             return isinstance(obj, str)
         if qname == "sys::List":
-            return isinstance(obj, list)
+            return ObjUtil._isList(obj)
         # Parameterized list types like Obj[], Str[], etc.
         if qname.endswith("[]"):
-            if not isinstance(obj, list):
+            if not ObjUtil._isList(obj):
                 return False
             # For explicit type-aware lists, check element type compatibility
             # Otherwise be permissive (like Fantom 'as' behavior)
@@ -380,7 +392,7 @@ class ObjUtil:
 
         # For parameterized list types, be permissive (just check if it's a list)
         if qname.endswith("[]"):
-            if isinstance(obj, list):
+            if ObjUtil._isList(obj):
                 return obj
             return None
 
@@ -439,7 +451,7 @@ class ObjUtil:
             if isinstance(obj, (int, float)) and not isinstance(obj, bool):
                 return obj
         elif base_qname == "sys::List" or base_qname.endswith("[]"):
-            if isinstance(obj, list):
+            if ObjUtil._isList(obj):
                 return obj
         elif base_qname == "sys::Map" or (base_qname.startswith("[") and ":" in base_qname):
             if isinstance(obj, dict):

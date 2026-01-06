@@ -176,9 +176,10 @@ class Range(Obj):
         return None
 
     def toList(self):
+        from .List import List
         result = []
         self.each(lambda i: result.append(i))
-        return result
+        return List.fromLiteral(result, "sys::Int")
 
     def random(self):
         """Return a random integer within this range."""
