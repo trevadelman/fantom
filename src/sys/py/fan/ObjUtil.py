@@ -330,23 +330,23 @@ class ObjUtil:
             # Check if objElemType extends targetElemType
             return objElemTypeBase.fits(targetElemType)
         if qname == "sys::Map":
-            return isinstance(obj, dict)
+            return ObjUtil._isMap(obj)
         # Parameterized map types like [Int:Str]
         if qname.startswith("[") and ":" in qname:
-            if not isinstance(obj, dict):
+            if not ObjUtil._isMap(obj):
                 return False
             # Check type parameters for covariance
             # Map<K1,V1> is Map<K2,V2> if K1 extends K2 AND V1 extends V2
             from .Type import Type, MapType
             targetType = Type.find(qname, False)
             if targetType is None or not isinstance(targetType, MapType):
-                return isinstance(obj, dict)
+                return ObjUtil._isMap(obj)
             # Get object's map type
             objType = None
             if hasattr(obj, 'typeof'):
                 objType = obj.typeof()
             if objType is None or not isinstance(objType, MapType):
-                return isinstance(obj, dict)  # Can't verify types, assume ok
+                return ObjUtil._isMap(obj)  # Can't verify types, assume ok
             # Check K1 extends K2 (object key type must extend target key type)
             if not objType.k.fits(targetType.k):
                 return False
@@ -386,7 +386,7 @@ class ObjUtil:
         # For parameterized map types, be permissive (just check if it's a map)
         # Fantom's 'as' allows casting maps to more specific map types
         if qname.startswith("[") and ":" in qname:
-            if isinstance(obj, dict):
+            if ObjUtil._isMap(obj):
                 return obj
             return None
 
