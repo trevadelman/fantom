@@ -8,7 +8,7 @@ Tokenizer inputs a stream of Unicode characters and outputs tokens
 for the Fantom serialization grammar.
 """
 
-from decimal import Decimal
+from decimal import Decimal as PyDecimal
 from .Token import Token
 
 
@@ -366,22 +366,24 @@ class Tokenizer:
             # Decimal literal (or duration)
             if decimal_suffix or floating:
                 if s is None:
-                    num = Decimal(whole)
+                    num = PyDecimal(whole)
                 else:
-                    num = Decimal(''.join(s))
+                    num = PyDecimal(''.join(s))
                 if dur > 0:
                     from fan.sys.Duration import Duration
                     self.val = Duration.make(int(num * dur))
                     return Token.DURATION_LITERAL
                 else:
-                    self.val = num
+                    # Wrap with Fantom Decimal
+                    from fan.sys.Decimal import Decimal as FanDecimal
+                    self.val = FanDecimal.make(num)
                     return Token.DECIMAL_LITERAL
 
             # Int literal (or duration)
             if s is None:
                 num = whole
             else:
-                num = int(Decimal(''.join(s)))
+                num = int(PyDecimal(''.join(s)))
             if dur > 0:
                 from fan.sys.Duration import Duration
                 self.val = Duration.make(num * dur)

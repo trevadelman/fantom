@@ -11,6 +11,7 @@ class Version(Obj):
     _cache = {}
 
     def __init__(self, segments):
+        super().__init__()
         self._segments = list(segments)
 
     @staticmethod
