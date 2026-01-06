@@ -201,6 +201,16 @@ class Method(Slot):
             from .Err import Err
             raise Err.make(f"Method {self._name} has no parent type")
 
+        # Special handling: when calling Obj methods on primitive types,
+        # dispatch to the wrapper class's static method instead
+        parent_qname = parent_type.qname() if hasattr(parent_type, 'qname') else str(parent_type)
+        if parent_qname == "sys::Obj" and actual_target is not None:
+            wrapper_cls = self._get_primitive_wrapper_class(actual_target)
+            if wrapper_cls is not None:
+                method_attr = getattr(wrapper_cls, self._name, None)
+                if method_attr is not None and callable(method_attr):
+                    return method_attr(actual_target, *method_args)
+
         # Get the Python class for this type
         py_cls = self._get_python_class(parent_type)
 
@@ -236,6 +246,30 @@ class Method(Slot):
 
             # Fallback: try calling class method with target
             return method_attr(actual_target, *method_args)
+
+    def _get_primitive_wrapper_class(self, obj):
+        """Get the wrapper class for a Python primitive type.
+
+        When calling Obj methods on native Python primitives (int, str, float, bool),
+        we need to dispatch to the appropriate wrapper class's static methods.
+
+        Returns:
+            Wrapper class (Int, Str, Float, Bool) or None if not a primitive
+        """
+        if isinstance(obj, bool):
+            # Check bool before int since bool is a subclass of int
+            from .Bool import Bool
+            return Bool
+        if isinstance(obj, int):
+            from .Int import Int
+            return Int
+        if isinstance(obj, float):
+            from .Float import Float
+            return Float
+        if isinstance(obj, str):
+            from .Str import Str
+            return Str
+        return None
 
     def _get_python_class(self, type_obj):
         """Get the Python class for a Fantom type."""
