@@ -196,6 +196,80 @@ class Decimal(Obj):
     def __int__(self):
         return int(self._val)
 
+    def __neg__(self):
+        """Unary negation: -x"""
+        return Decimal(-self._val)
+
+    def __pos__(self):
+        """Unary positive: +x"""
+        return self
+
+    def __abs__(self):
+        """Absolute value: abs(x)"""
+        return Decimal(abs(self._val))
+
+    def __add__(self, other):
+        """Addition: x + y"""
+        if isinstance(other, Decimal):
+            return Decimal(self._val + other._val)
+        return Decimal(self._val + PyDecimal(str(other)))
+
+    def __radd__(self, other):
+        """Reverse addition: y + x"""
+        return Decimal(PyDecimal(str(other)) + self._val)
+
+    def __sub__(self, other):
+        """Subtraction: x - y"""
+        if isinstance(other, Decimal):
+            return Decimal(self._val - other._val)
+        return Decimal(self._val - PyDecimal(str(other)))
+
+    def __rsub__(self, other):
+        """Reverse subtraction: y - x"""
+        return Decimal(PyDecimal(str(other)) - self._val)
+
+    def __mul__(self, other):
+        """Multiplication: x * y"""
+        if isinstance(other, Decimal):
+            return Decimal(self._val * other._val)
+        return Decimal(self._val * PyDecimal(str(other)))
+
+    def __rmul__(self, other):
+        """Reverse multiplication: y * x"""
+        return Decimal(PyDecimal(str(other)) * self._val)
+
+    def __truediv__(self, other):
+        """Division: x / y"""
+        if isinstance(other, Decimal):
+            return Decimal(self._val / other._val)
+        return Decimal(self._val / PyDecimal(str(other)))
+
+    def __rtruediv__(self, other):
+        """Reverse division: y / x"""
+        return Decimal(PyDecimal(str(other)) / self._val)
+
+    def __mod__(self, other):
+        """Modulo: x % y"""
+        if isinstance(other, Decimal):
+            return Decimal(self._val % other._val)
+        return Decimal(self._val % PyDecimal(str(other)))
+
+    def __rmod__(self, other):
+        """Reverse modulo: y % x"""
+        return Decimal(PyDecimal(str(other)) % self._val)
+
+    def __eq__(self, other):
+        """Equality: x == y"""
+        if isinstance(other, Decimal):
+            return self._val == other._val
+        if isinstance(other, (int, float, PyDecimal)):
+            return self._val == PyDecimal(str(other))
+        return False
+
+    def __hash__(self):
+        """Hash for use in dicts/sets"""
+        return hash(self._val)
+
     def literalEncode(self, out):
         """Encode for serialization.
 

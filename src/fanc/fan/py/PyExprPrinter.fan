@@ -208,14 +208,11 @@ class PyExprPrinter : PyPrinter
 
   private Void decimalLiteral(LiteralExpr e)
   {
-    // Decimal literal (5d suffix) - output as Python float
-    // Need to ensure it has decimal point so 77 becomes 77.0
-    // Otherwise 77.method() is invalid Python (77. is parsed as float)
+    // Decimal literal (5d suffix) - emit as Decimal.make("value")
+    // Matches JS transpiler pattern: sys.Decimal.make(value)
+    // Use string constructor to preserve precision for large values
     val := e.val.toStr
-    if (!val.contains(".") && !val.contains("E") && !val.contains("e"))
-      w(val).w(".0")
-    else
-      w(val)
+    w("Decimal.make(\"").w(val).w("\")")
   }
 
   private Void uriLiteral(LiteralExpr e)
