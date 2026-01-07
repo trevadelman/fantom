@@ -354,24 +354,19 @@ class ObjEncoder:
         if hasattr(t, 'k') and hasattr(t, 'v'):
             nl = self._isMultiLine(t.k) or self._isMultiLine(t.v)
 
-        # Check if we can use inferred type
+        # Check if we can use inferred type (like JS: curFieldType instanceof MapType)
         inferred = False
         if self.curFieldType is not None:
-            from fan.sys.Type import Type
-            if hasattr(self.curFieldType, 'fits'):
-                try:
-                    if self.curFieldType.fits(Type.find("sys::Map")):
-                        inferred = True
-                except:
-                    pass
+            from fan.sys.Type import Type, MapType
+            if isinstance(self.curFieldType, MapType):
+                inferred = True
 
-        # Clear field type
+        # Clear field type so it doesn't get used for inference again
         self.curFieldType = None
 
-        # For maps, we generally DON'T write type prefixes
-        # The decoder infers types from the key/value content
-        # Only write prefix if explicitly needed (e.g., empty map with non-default type)
-        # For non-empty maps, content provides enough type information
+        # If we don't have an inferred type, then prefix with type (matching JS pattern)
+        if not inferred:
+            self.wType(t)
 
         # Handle empty map
         if m.isEmpty():

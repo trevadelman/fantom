@@ -114,14 +114,28 @@ class Field(Slot):
         if obj is None:
             return None
 
-        # Instance field - try getter method first (Fantom pattern)
+        # Instance field - try getter method with trailing underscore first (transpiler pattern)
+        # Transpiled code generates: def map_(self, _val_=None) for field 'map'
+        getter_name = f"{self._name}_"
+        if hasattr(obj, getter_name):
+            attr = getattr(obj, getter_name)
+            if callable(attr):
+                return attr()  # Getter method
+
+        # Try getter method without trailing underscore (Fantom pattern)
         if hasattr(obj, self._name):
             attr = getattr(obj, self._name)
             if callable(attr):
                 return attr()  # Getter method
             return attr
 
-        # Try private field pattern (_fieldName)
+        # Try private field pattern with trailing underscore (_fieldName_)
+        # Transpiled code stores fields as: self._map_ for field 'map'
+        field_name2 = f"_{self._name}_"
+        if hasattr(obj, field_name2):
+            return getattr(obj, field_name2)
+
+        # Try private field pattern without trailing underscore (_fieldName)
         field_name = f"_{self._name}"
         if hasattr(obj, field_name):
             return getattr(obj, field_name)
@@ -145,6 +159,11 @@ class Field(Slot):
             # Static field - set on class
             py_cls = self._get_python_class()
             if py_cls is not None:
+                # Try with trailing underscore first (_fieldName_)
+                field_name2 = f"_{self._name}_"
+                if hasattr(py_cls, field_name2):
+                    setattr(py_cls, field_name2, val)
+                    return
                 field_name = f"_{self._name}"
                 setattr(py_cls, field_name, val)
             return
@@ -152,14 +171,13 @@ class Field(Slot):
         if obj is None:
             return
 
-        # Try setter accessor method first (Fantom pattern)
-        # In transpiled code, fields with custom setters become methods that take a value param
-        # But getter-only methods (def fieldName(self)) should not be called as setters
-        if hasattr(obj, self._name):
-            attr = getattr(obj, self._name)
+        # Try setter accessor method with trailing underscore first (transpiler pattern)
+        # Transpiled code generates: def map_(self, _val_=None) for field 'map'
+        setter_name = f"{self._name}_"
+        if hasattr(obj, setter_name):
+            attr = getattr(obj, setter_name)
             if callable(attr):
                 # Check if method accepts a value parameter (combined getter/setter)
-                # Combined accessors have signature: def fieldName(self, _val_=None)
                 import inspect
                 try:
                     sig = inspect.signature(attr)
@@ -168,10 +186,28 @@ class Field(Slot):
                         attr(val)  # Call setter method with value
                         return
                 except (ValueError, TypeError):
-                    # Can't inspect signature, try calling anyway
                     pass
 
-        # Fallback: Set the private field directly (_fieldName pattern)
+        # Try setter accessor method without trailing underscore (Fantom pattern)
+        if hasattr(obj, self._name):
+            attr = getattr(obj, self._name)
+            if callable(attr):
+                import inspect
+                try:
+                    sig = inspect.signature(attr)
+                    if len(sig.parameters) > 0:
+                        attr(val)
+                        return
+                except (ValueError, TypeError):
+                    pass
+
+        # Fallback: Set the private field directly with trailing underscore (_fieldName_)
+        field_name2 = f"_{self._name}_"
+        if hasattr(obj, field_name2):
+            setattr(obj, field_name2, val)
+            return
+
+        # Try without trailing underscore (_fieldName pattern)
         field_name = f"_{self._name}"
         setattr(obj, field_name, val)
 
