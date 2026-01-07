@@ -1801,6 +1801,17 @@ class PyTypePrinter : PyPrinter
         w("], ${methodFacets})").nl
       }
     }
+
+    // Register implicit default constructor if no explicit (non-synthetic) ctors defined
+    // The Fantom compiler adds a synthetic default ctor to methodDefs, so we check for non-synthetic
+    // Types without explicit constructors get an implicit make() that needs reflection registration
+    explicitCtors := t.methodDefs.findAll |m| { m.isCtor && !m.isSynthetic }
+    if (explicitCtors.isEmpty && !t.isEnum && !t.isMixin)
+    {
+      // Implicit make() is public static constructor returning This
+      // Flags: Public (0x1) | Ctor (0x100) | Static (0x800) = 0x901
+      w("_t.am_('make', 2305, '${t.qname}', [], {})").nl
+    }
   }
 
   ** Serialize facets to Python dict format: {'sys::Serializable': {'simple': True}}

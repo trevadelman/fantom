@@ -1660,6 +1660,9 @@ class Type(Obj):
         Returns:
             Facet instance or None
         """
+        # Ensure type metadata is loaded (triggers tf_() if needed)
+        self._ensure_loaded()
+
         facet_qname = facetType.qname() if hasattr(facetType, 'qname') else str(facetType)
 
         # Check own facets first

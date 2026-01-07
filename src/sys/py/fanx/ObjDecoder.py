@@ -264,7 +264,13 @@ class ObjDecoder:
     def _complexSet(self, obj, field, val, line):
         """Set field value on object."""
         try:
-            field.set(obj, val)
+            # Pass check_const=False - during deserialization we can set const fields
+            # (like JS: field.set(obj, val, false))
+            if field.isConst():
+                from fan.sys.ObjUtil import ObjUtil
+                field.set(obj, ObjUtil.toImmutable(val), check_const=False)
+            else:
+                field.set(obj, val)
         except Exception as e:
             raise self._err(f"Cannot set field {field.qname()}: {e}", line)
 
@@ -392,7 +398,7 @@ class ObjDecoder:
             if hasattr(ft, 'toNonNullable'):
                 ft = ft.toNonNullable()
             if hasattr(ft, 'v'):
-                return ft.v()
+                return ft.v  # Property access, not method call (like JS: ft.v)
         if infer:
             return None
         from fan.sys.Type import Type

@@ -112,9 +112,8 @@ class ObjEncoder:
                     ser = obj_type.facet(ser_type, False)
                     if ser is not None:
                         # Check if simple serialization
-                        is_simple = False
-                        if hasattr(ser, 'simple'):
-                            is_simple = ser.simple() if callable(ser.simple) else ser.simple
+                        # Get simple field - default is False if not set
+                        is_simple = self._getFacetBool(ser, 'simple', False)
                         if is_simple:
                             self._writeSimple(obj_type, obj)
                         else:
@@ -242,9 +241,7 @@ class ObjEncoder:
             self.w('\n')
 
         # Handle @collection
-        is_collection = False
-        if hasattr(ser, 'collection'):
-            is_collection = ser.collection() if callable(ser.collection) else ser.collection
+        is_collection = self._getFacetBool(ser, 'collection', False)
         if is_collection:
             first = self._writeCollectionItems(obj_type, obj, first)
 
@@ -277,7 +274,7 @@ class ObjEncoder:
             enc.w(',\n')
             return None
 
-        m.invoke(obj, [write_item])
+        m.callOn(obj, [write_item])
         return first
 
     def writeList(self, lst):
@@ -512,3 +509,40 @@ class ObjEncoder:
         skipErrors = options.get("skipErrors")
         if skipErrors is not None:
             self.skipErrors = bool(skipErrors)
+
+    def _getFacetBool(self, facet, name, default):
+        """Get a boolean field from a facet, with default if not set.
+
+        Args:
+            facet: Facet instance (may be FacetInstance or actual facet class)
+            name: Field name to get
+            default: Default value if field not set
+
+        Returns:
+            Boolean value of field or default
+        """
+        # Try direct attribute access (_fieldName pattern)
+        attr_name = f"_{name}"
+        if hasattr(facet, attr_name):
+            val = getattr(facet, attr_name)
+            if val is not None:
+                return bool(val)
+        # Try calling it as a method (actual facet class pattern)
+        if hasattr(facet, name):
+            val = getattr(facet, name)
+            if callable(val):
+                try:
+                    return bool(val())
+                except:
+                    pass
+            else:
+                return bool(val)
+        # Try trap for dynamic access
+        if hasattr(facet, 'trap'):
+            try:
+                val = facet.trap(name)
+                if val is not None:
+                    return bool(val)
+            except:
+                pass
+        return default
