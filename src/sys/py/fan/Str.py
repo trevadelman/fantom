@@ -310,14 +310,17 @@ class Str(Obj):
 
     @staticmethod
     def splitLines(self):
-        """Split string into lines - preserves empty strings unlike Python's splitlines"""
+        """Split string into lines - preserves empty strings unlike Python's splitlines.
+        Returns a Fantom List, not a Python list.
+        """
+        from .List import List
         if len(self) == 0:
-            return [""]
+            return List.fromLiteral([""], "sys::Str")
         result = self.splitlines(keepends=False)
         # Append empty string if original ended with newline
         if self.endswith('\n') or self.endswith('\r'):
             result.append("")
-        return result if result else [""]
+        return List.fromLiteral(result if result else [""], "sys::Str")
 
     # Padding
     @staticmethod
