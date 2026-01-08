@@ -470,6 +470,14 @@ class PyTypePrinter : PyPrinter
         addByName(podName, typeCheck.check.name)
       return
     }
+
+    // Handle throw expressions
+    if (expr.id == ExprId.throwExpr)
+    {
+      throwExpr := expr as ThrowExpr
+      scanExprForTypes(throwExpr.exception, podName, addByName)
+      return
+    }
   }
 
 //////////////////////////////////////////////////////////////////////////
@@ -1125,9 +1133,12 @@ class PyTypePrinter : PyPrinter
       parentHasRequiredParams := t.base != null && !t.base.isObj &&
         t.base.ctors.any |ctor| { ctor.params.any |p| { !p.hasDefault } }
       parentHasMultipleCtors := t.base != null && !t.base.isObj && t.base.ctors.size > 1
-      // Abstract classes typically have constructors with required params
-      parentIsAbstract := t.base != null && !t.base.isObj && t.base.isAbstract
-      if (parentHasRequiredParams || parentHasMultipleCtors || parentIsAbstract)
+      // Only call parent's _ctor_init() if parent actually has named constructors
+      // (i.e., constructors with names other than "make")
+      // This is the same condition that triggers _ctor_init() generation in the parent
+      parentHasNamedCtors := t.base != null && !t.base.isObj &&
+        t.base.ctors.any |ctor| { ctor.name != "make" }
+      if (parentHasRequiredParams || parentHasMultipleCtors || parentHasNamedCtors)
       {
         // Call parent's _ctor_init() to initialize parent fields
         w("super()._ctor_init()").eos
