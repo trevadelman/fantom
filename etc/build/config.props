@@ -25,7 +25,3 @@ buildVersion=1.0.82
 
 // Mac setup
 //jdkHome=/System/Library/Frameworks/JavaVM.framework/Versions/CurrentJDK/Home/
-
-// Haxall build macros (for xeto pod)
-hx.depend=4.0.4
-fan.depend=1.0

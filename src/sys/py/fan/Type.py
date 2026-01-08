@@ -193,6 +193,13 @@ class Type(Obj):
         if qname in Type._cache:
             return Type._cache[qname]
 
+        # Handle Java FFI types (sanitized by transpiler with java_ffi_fail. prefix)
+        # These are placeholders for Java types that can't exist in Python
+        # Always return None to allow type metadata registration to proceed
+        # (the actual methods using these types will fail at call time if invoked)
+        if qname.startswith("java_ffi_fail."):
+            return None
+
         # Check for generic parameter types like sys::V, sys::K
         if qname.startswith("sys::"):
             param_name = qname[5:]  # Remove "sys::"
@@ -328,7 +335,7 @@ class Type(Obj):
                       "dom", "domkit", "util", "webmod", "compiler", "build", "fansh", "fandoc",
                       "haystack", "xeto", "xetom", "xetoc", "testHaystack", "testXeto", "def", "ph",
                       "phIoT", "phScience", "ashrae", "hx", "defc", "obs", "axon", "folio",
-                      "rdf", "xetodoc", "markdown"}
+                      "rdf", "xetodoc", "markdown", "yaml"}
         if pod_name not in known_pods:
             raise UnknownPodErr.make(f"Unknown pod: {pod_name}")
 
@@ -3102,4 +3109,5 @@ class FacetInstance(Obj):
 # These will be set after module initialization
 def _init_type_fields():
     """Initialize static type$ fields on type classes"""
+    pass  # Will be called by runtime initialization
     pass  # Will be called by runtime initialization

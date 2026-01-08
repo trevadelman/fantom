@@ -34,6 +34,24 @@ class PyUtil
     "fan.${podName}"
   }
 
+  ** Check if a type signature is a Java FFI type
+  ** e.g., "[java]java.lang.management::ThreadMXBean"
+  static Bool isJavaFfi(Str? name)
+  {
+    if (name == null) return false
+    return name.contains("[java]")
+  }
+
+  ** Sanitize Java FFI type references for Python
+  ** In JS transpiler, these become parseable but fail at runtime if invoked
+  ** For Python, we use a similar pattern: [java]x.y -> java_ffi_fail.x.y
+  static Str sanitizeJavaFfi(Str name)
+  {
+    if (name.contains(".[java].")) return name.replace(".[java].", ".")
+    if (name.contains("[java]")) return name.replace("[java]", "java_ffi_fail.")
+    return name
+  }
+
   ** Python reserved words that need to be escaped
   static const Str:Str reservedWords
   static

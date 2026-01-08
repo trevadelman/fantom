@@ -592,7 +592,7 @@ class PyStmtPrinter : PyPrinter
     immutCase := m.closureImmutability(ce)
     w("\"immutable\": ").str(immutCase).w(", ")
 
-    // Params
+    // Params (sanitize Java FFI type signatures)
     w("\"params\": [")
     if (ce.doCall?.params != null)
     {
@@ -602,7 +602,8 @@ class PyStmtPrinter : PyPrinter
       {
         if (i > 0) w(", ")
         p := ce.doCall.params[i]
-        w("{\"name\": ").str(p.name).w(", \"type\": ").str(p.type.signature).w("}")
+        pSig := PyUtil.sanitizeJavaFfi(p.type.signature)
+        w("{\"name\": ").str(p.name).w(", \"type\": ").str(pSig).w("}")
       }
     }
     else if (sig != null && !sig.params.isEmpty)
@@ -611,7 +612,8 @@ class PyStmtPrinter : PyPrinter
       {
         if (i > 0) w(", ")
         name := sig.names.getSafe(i) ?: "_p${i}"
-        w("{\"name\": ").str(name).w(", \"type\": ").str(p.signature).w("}")
+        pSig := PyUtil.sanitizeJavaFfi(p.signature)
+        w("{\"name\": ").str(name).w(", \"type\": ").str(pSig).w("}")
       }
     }
     w("]}, _closure_${closureId})").eos
@@ -693,6 +695,35 @@ class PyStmtPrinter : PyPrinter
 
   private Void exprStmt(ExprStmt s)
   {
+    // For statement-level local variable assignments, use = not :=
+    // The walrus operator (:=) should only be used inside expressions
+    // (e.g., conditions, function arguments, etc.)
+    e := s.expr
+
+    // Unwrap coerces to find the underlying assignment
+    while (e.id == ExprId.coerce)
+    {
+      tc := e as TypeCheckExpr
+      e = tc.target
+    }
+
+    // Check if this is a local variable assignment at statement level
+    if (e.id == ExprId.assign)
+    {
+      assign := e as BinaryExpr
+      if (assign.lhs.id == ExprId.localVar)
+      {
+        // Statement-level local var assignment: use regular = not :=
+        localExpr := assign.lhs as LocalVarExpr
+        w(escapeName(localExpr.var.name))
+        w(" = ")
+        expr(assign.rhs)
+        eos
+        return
+      }
+    }
+
+    // For all other expressions, use the normal expression printer
     expr(s.expr)
     eos
   }

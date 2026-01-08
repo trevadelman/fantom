@@ -127,10 +127,14 @@ class PyTypePrinter : PyPrinter
     {
       if (podName == "sys") return  // Already imported above
       if (podName == t.pod.name) return  // Skip same-pod (handled at runtime)
+      // Skip Java FFI pods - they can't be imported in Python
+      if (PyUtil.isJavaFfi(podName)) return
 
       podPath := PyUtil.podImport(podName)
       types.each |typeName|
       {
+        // Skip Java FFI types
+        if (PyUtil.isJavaFfi(typeName)) return
         w("from ${podPath}.${typeName} import ${typeName}").nl
       }
     }
@@ -1748,7 +1752,7 @@ class PyTypePrinter : PyPrinter
       if (f.isSynthetic) return
 
       flags := fieldFlags(f)
-      typeSig := f.type.signature
+      typeSig := PyUtil.sanitizeJavaFfi(f.type.signature)
       fieldFacets := "{}"
 
       // Enum value fields get special flag handling and may have facets
@@ -1780,7 +1784,7 @@ class PyTypePrinter : PyPrinter
       if (m.isFieldAccessor) return
 
       flags := methodFlags(m)
-      retSig := m.returns.signature
+      retSig := PyUtil.sanitizeJavaFfi(m.returns.signature)
       methodFacets := facetDict(m.facets)
 
       // Build params list
@@ -1794,7 +1798,7 @@ class PyTypePrinter : PyPrinter
         m.params.each |p, i|
         {
           if (i > 0) w(", ")
-          pType := p.type.signature
+          pType := PyUtil.sanitizeJavaFfi(p.type.signature)
           hasDefault := p.hasDefault ? "True" : "False"
           w("Param('${escapeName(p.name)}', Type.find('${pType}'), ${hasDefault})")
         }

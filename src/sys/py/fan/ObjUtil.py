@@ -850,3 +850,31 @@ class ObjUtil:
             x_Wrapper = ObjUtil.cvar(x)  # instead of self.make(x)
         """
         return ObjUtil.Cvar(val)
+
+    @staticmethod
+    def setattr_return(obj, field_name, value):
+        """Set a field and return the assigned value.
+
+        Implements Fantom assignment-as-expression semantics for field assignments.
+        In Fantom (and JavaScript), `x.field = value` is an expression that returns
+        the assigned value. Python doesn't support this, so we use this helper
+        when the assignment result is needed as an expression value.
+
+        This mirrors the JS transpiler's IIFE pattern:
+            ((this$) => { let _temp = rhs; lhs.setter(_temp); return _temp; })(this)
+
+        Args:
+            obj: The target object
+            field_name: The field name (with _ prefix for direct storage, without for accessor)
+            value: The value to assign
+
+        Returns:
+            The assigned value (for use as expression result)
+        """
+        if field_name.startswith('_'):
+            # Direct storage access: obj._field = value
+            setattr(obj, field_name, value)
+        else:
+            # Accessor method call: obj.field(value)
+            getattr(obj, field_name)(value)
+        return value

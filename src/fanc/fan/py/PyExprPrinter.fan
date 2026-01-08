@@ -840,6 +840,27 @@ class PyExprPrinter : PyPrinter
     {
       fieldExpr := e.lhs as FieldExpr
 
+      // When leave=true, the assignment result is used as an expression value.
+      // Python doesn't support `=` in expression context, so we use a helper.
+      // This mirrors the JS transpiler's IIFE pattern for field assignments.
+      if (e.leave)
+      {
+        w("ObjUtil.setattr_return(")
+        if (fieldExpr.target != null)
+          expr(fieldExpr.target)
+        else
+          w("self")
+        w(", \"")
+        // Use _fieldName for backing storage (non-accessor) or fieldName for accessor
+        if (!fieldExpr.useAccessor)
+          w("_")
+        w(escapeName(fieldExpr.field.name))
+        w("\", ")
+        expr(e.rhs)
+        w(")")
+        return
+      }
+
       // Check if we should use accessor (count = 5) vs direct storage (&count = 5)
       if (fieldExpr.useAccessor)
       {
@@ -1018,8 +1039,10 @@ class PyExprPrinter : PyPrinter
 
   private Void typeRef(CType t)
   {
-    // For bootstrap, just use string representation
-    str(t.signature)
+    // Sanitize Java FFI types so they're valid Python strings
+    // (they'll fail at runtime if actually used, like JS transpiler)
+    sig := PyUtil.sanitizeJavaFfi(t.signature)
+    str(sig)
   }
 
 //////////////////////////////////////////////////////////////////////////
@@ -1615,7 +1638,8 @@ class PyExprPrinter : PyPrinter
     t := e.val as CType
     if (t != null)
     {
-      w("Type.find(").str(t.signature).w(")")
+      sig := PyUtil.sanitizeJavaFfi(t.signature)
+      w("Type.find(").str(sig).w(")")
     }
     else
     {
@@ -1757,14 +1781,15 @@ class PyExprPrinter : PyPrinter
     // Immutability case from compiler analysis
     w("\"immutable\": ").str(immutCase).w(", ")
 
-    // Params
+    // Params (sanitize Java FFI type signatures)
     w("\"params\": [")
     if (e.doCall?.params != null)
     {
       e.doCall.params.each |p, i|
       {
         if (i > 0) w(", ")
-        w("{\"name\": ").str(p.name).w(", \"type\": ").str(p.type.signature).w("}")
+        pSig := PyUtil.sanitizeJavaFfi(p.type.signature)
+        w("{\"name\": ").str(p.name).w(", \"type\": ").str(pSig).w("}")
       }
     }
     else if (sig != null && !sig.params.isEmpty)
@@ -1773,7 +1798,8 @@ class PyExprPrinter : PyPrinter
       {
         if (i > 0) w(", ")
         name := sig.names.getSafe(i) ?: "_p${i}"
-        w("{\"name\": ").str(name).w(", \"type\": ").str(p.signature).w("}")
+        pSig := PyUtil.sanitizeJavaFfi(p.signature)
+        w("{\"name\": ").str(name).w(", \"type\": ").str(pSig).w("}")
       }
     }
     w("]}, ")
