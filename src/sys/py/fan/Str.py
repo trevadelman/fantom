@@ -430,7 +430,8 @@ class Str(Obj):
     # Characters
     @staticmethod
     def chars(self):
-        return [ord(c) for c in self]
+        from .List import List as FanList
+        return FanList.from_literal([ord(c) for c in self], "sys::Int")
 
     @staticmethod
     def _get_param_count(f):

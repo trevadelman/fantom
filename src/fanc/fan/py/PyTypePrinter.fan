@@ -1125,7 +1125,9 @@ class PyTypePrinter : PyPrinter
       parentHasRequiredParams := t.base != null && !t.base.isObj &&
         t.base.ctors.any |ctor| { ctor.params.any |p| { !p.hasDefault } }
       parentHasMultipleCtors := t.base != null && !t.base.isObj && t.base.ctors.size > 1
-      if (parentHasRequiredParams || parentHasMultipleCtors)
+      // Abstract classes typically have constructors with required params
+      parentIsAbstract := t.base != null && !t.base.isObj && t.base.isAbstract
+      if (parentHasRequiredParams || parentHasMultipleCtors || parentIsAbstract)
       {
         // Call parent's _ctor_init() to initialize parent fields
         w("super()._ctor_init()").eos
@@ -1157,31 +1159,37 @@ class PyTypePrinter : PyPrinter
     }
 
     // Generate __init__ constructor (uses primary ctor's signature)
+    // For mixins with only static factories, __init__ should have no required params
     nl
     w("def __init__(self")
 
-    // In Python, once we emit a default parameter, ALL following params must have defaults
-    // Find the first index where we should start emitting defaults:
-    // - explicit hasDefault, OR
-    // - nullable type AND all following params also have defaults or are nullable
-    firstDefaultIdx := primaryCtor.params.size
-    for (i := primaryCtor.params.size - 1; i >= 0; i--)
+    // Only emit params if we have an actual instance constructor
+    // Static factories (static new) don't define instance constructor params
+    if (hasInstanceCtor)
     {
-      p := primaryCtor.params[i]
-      if (p.hasDefault || p.type.isNullable)
-        firstDefaultIdx = i
-      else
-        break  // Found a required param, stop
-    }
-
-    primaryCtor.params.each |p, i|
-    {
-      w(", ")
-      w(escapeName(p.name))
-      // Only add =None if at or after firstDefaultIdx
-      if (i >= firstDefaultIdx)
+      // In Python, once we emit a default parameter, ALL following params must have defaults
+      // Find the first index where we should start emitting defaults:
+      // - explicit hasDefault, OR
+      // - nullable type AND all following params also have defaults or are nullable
+      firstDefaultIdx := primaryCtor.params.size
+      for (i := primaryCtor.params.size - 1; i >= 0; i--)
       {
-        w("=None")
+        p := primaryCtor.params[i]
+        if (p.hasDefault || p.type.isNullable)
+          firstDefaultIdx = i
+        else
+          break  // Found a required param, stop
+      }
+
+      primaryCtor.params.each |p, i|
+      {
+        w(", ")
+        w(escapeName(p.name))
+        // Only add =None if at or after firstDefaultIdx
+        if (i >= firstDefaultIdx)
+        {
+          w("=None")
+        }
       }
     }
     w(")")
@@ -1190,12 +1198,13 @@ class PyTypePrinter : PyPrinter
     indent
 
     // Emit default parameter value checks at start of constructor body
-    // This follows the JavaScript transpiler pattern
-    emitDefaultParamChecks(primaryCtor)
+    // Only do this if we have an actual instance constructor with params
+    if (hasInstanceCtor)
+      emitDefaultParamChecks(primaryCtor)
 
     // Call super().__init__() with constructor chain arguments
     w("super().__init__(")
-    if (primaryCtor.ctorChain != null)
+    if (hasInstanceCtor && primaryCtor.ctorChain != null)
     {
       chain := primaryCtor.ctorChain
       chain.args.each |arg, i|

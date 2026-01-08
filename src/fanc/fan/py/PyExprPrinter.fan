@@ -539,12 +539,15 @@ class PyExprPrinter : PyPrinter
   }
 
   ** Check if type is a primitive that needs static method calls
-  ** NOTE: List and Map are NOT primitives - they use instance method dispatch like JS
+  ** NOTE: List and Map are NOT primitives - they are pure Fantom classes that extend Obj
+  ** (with Python ABC interfaces for interop). They use normal instance method dispatch.
+  ** See Brian Frank's guidance: primitives are Bool, Int, Float, Str, Func, Err
   private Bool isPrimitiveType(CType? t)
   {
     if (t == null) return false
     sig := t.toNonNullable.signature
     // Only Bool, Int, Float, Str, Decimal are primitives (matches JS transpiler)
+    // List and Map are NOT primitives - they use instance method dispatch
     if (sig == "sys::Bool" || sig == "sys::Int" || sig == "sys::Float" || sig == "sys::Str" || sig == "sys::Decimal")
       return true
     return false

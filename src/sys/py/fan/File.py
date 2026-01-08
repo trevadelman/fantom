@@ -391,9 +391,6 @@ class File(Obj):
                 result.append(f)
         return FanList.from_literal(result, "sys::File")
 
-    # Alias for transpiled code (list is reserved in Python contexts)
-    list_ = list
-
     def list_files(self, pattern=None):
         """List files (not directories) in directory."""
         from .List import List as FanList

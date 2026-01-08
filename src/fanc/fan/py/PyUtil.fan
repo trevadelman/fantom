@@ -13,25 +13,42 @@ using compiler
 **
 class PyUtil
 {
+  ** Python reserved words that are used as pod names and need directory escaping
+  static const Str[] reservedPodNames := ["def", "class", "import", "from", "if", "else",
+                                           "for", "while", "try", "except", "finally",
+                                           "with", "as", "in", "is", "not", "and", "or",
+                                           "True", "False", "None", "lambda", "return",
+                                           "yield", "raise", "pass", "break", "continue",
+                                           "global", "nonlocal", "async", "await"]
+
+  ** Escape pod name if it conflicts with Python reserved words
+  static Str escapePodName(Str podName)
+  {
+    reservedPodNames.contains(podName) ? "${podName}_" : podName
+  }
+
   ** Get output file for a type
   ** Uses fan/{podName}/ namespace to avoid Python built-in conflicts
   static File typeFile(File outDir, TypeDef t)
   {
-    outDir + `fan/${t.pod.name}/${t.name}.py`
+    escapedPod := escapePodName(t.pod.name)
+    return outDir + `fan/${escapedPod}/${t.name}.py`
   }
 
   ** Get output directory for a pod
   ** Uses fan/{podName}/ namespace to avoid Python built-in conflicts
   static File podDir(File outDir, Str podName)
   {
-    outDir + `fan/${podName}/`
+    escapedPod := escapePodName(podName)
+    return outDir + `fan/${escapedPod}/`
   }
 
   ** Convert pod name to Python import path
-  ** e.g., "sys" -> "fan.sys", "testSys" -> "fan.testSys"
+  ** e.g., "sys" -> "fan.sys", "testSys" -> "fan.testSys", "def" -> "fan.def_"
   static Str podImport(Str podName)
   {
-    "fan.${podName}"
+    escapedPod := escapePodName(podName)
+    return "fan.${escapedPod}"
   }
 
   ** Check if a type signature is a Java FFI type

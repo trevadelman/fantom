@@ -80,9 +80,10 @@ class Service(Obj):
             type_: The Type to search for
 
         Returns:
-            List of all matching Services (may be empty)
+            Fantom List of all matching Services (may be empty)
         """
         from .Type import Type
+        from .List import List as FanList
 
         # Get type signature for comparison
         if hasattr(type_, 'qname'):
@@ -96,16 +97,17 @@ class Service(Obj):
         for service in Service._registry:
             if Service._matches_type(service, type_, type_qname):
                 result.append(service)
-        return result
+        return FanList.from_literal(result, "sys::Service")
 
     @staticmethod
     def list_():
         """Return list of all installed services.
 
         Returns:
-            List of all installed Service instances
+            List of all installed Service instances (Fantom List)
         """
-        return list(Service._registry)
+        from .List import List as FanList
+        return FanList.from_literal(list(Service._registry), "sys::Service")
 
     @staticmethod
     def _matches_type(service, type_, type_qname):
