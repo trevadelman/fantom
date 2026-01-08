@@ -24,9 +24,9 @@ class ActorPool(Obj):
         super().__init__()
         # Default values matching Java
         self._name = "ActorPool"
-        self._maxThreads = 100
-        self._maxQueue = 100_000_000
-        self._maxTimeBeforeYield = None  # Duration - 1sec default
+        self._max_threads = 100
+        self._max_queue = 100_000_000
+        self._max_time_before_yield = None  # Duration - 1sec default
 
         # Apply it-block configuration if provided
         if it_block is not None:
@@ -34,14 +34,14 @@ class ActorPool(Obj):
                 it_block(self)
 
         # Validate configuration
-        if self._maxThreads < 1:
-            raise ArgErr.make(f"ActorPool.maxThreads must be >= 1, not {self._maxThreads}")
-        if self._maxQueue < 1:
-            raise ArgErr.make(f"ActorPool.maxQueue must be >= 1, not {self._maxQueue}")
+        if self._max_threads < 1:
+            raise ArgErr.make(f"ActorPool.max_threads must be >= 1, not {self._max_threads}")
+        if self._max_queue < 1:
+            raise ArgErr.make(f"ActorPool.max_queue must be >= 1, not {self._max_queue}")
 
         # Create thread pool with daemon threads to prevent hang on exit
         import concurrent.futures
-        self._executor = ThreadPoolExecutor(max_workers=self._maxThreads, thread_name_prefix=self._name)
+        self._executor = ThreadPoolExecutor(max_workers=self._max_threads, thread_name_prefix=self._name)
         # Make executor threads daemon so they don't block exit
         self._executor._threads = set()  # Clear to allow daemon thread creation
         self._state = ActorPool.RUNNING
@@ -49,7 +49,7 @@ class ActorPool(Obj):
         self._pending_count = 0
         self.killed = False
 
-        # Create scheduler for sendLater support
+        # Create scheduler for send_later support
         from fan.concurrent.Scheduler import Scheduler
         self._scheduler = Scheduler(self._name)
 
@@ -63,25 +63,25 @@ class ActorPool(Obj):
     def name(self):
         return self._name
 
-    def maxThreads(self):
-        return self._maxThreads
+    def max_threads(self):
+        return self._max_threads
 
-    def maxQueue(self):
-        return self._maxQueue
+    def max_queue(self):
+        return self._max_queue
 
-    def maxTimeBeforeYield(self):
-        if self._maxTimeBeforeYield is None:
+    def max_time_before_yield(self):
+        if self._max_time_before_yield is None:
             from fan.sys.Duration import Duration
-            return Duration.fromStr("1sec")
-        return self._maxTimeBeforeYield
+            return Duration.from_str("1sec")
+        return self._max_time_before_yield
 
     # Lifecycle methods
 
-    def isStopped(self):
+    def is_stopped(self):
         """Has this pool been stopped or killed."""
         return self._state != ActorPool.RUNNING
 
-    def isDone(self):
+    def is_done(self):
         """Has all the work in this queue finished processing and all threads terminated."""
         if self._state == ActorPool.DONE:
             return True
@@ -117,7 +117,7 @@ class ActorPool(Obj):
         Wait for all threads to stop.
         Return this on success or raise TimeoutErr on timeout.
         """
-        if not self.isStopped():
+        if not self.is_stopped():
             raise Err.make("ActorPool is not stopped")
 
         # Convert timeout to seconds
@@ -139,7 +139,7 @@ class ActorPool(Obj):
 
     # Work submission
 
-    def hasPending(self):
+    def has_pending(self):
         """Return if we have pending workers awaiting a thread."""
         with self._lock:
             return self._pending_count > 0
@@ -179,12 +179,12 @@ class ActorPool(Obj):
             raise IndexErr.make("Empty actor list")
 
         best = actors[0]
-        best_size = best.queueSize()
+        best_size = best.queue_size()
         if best_size == 0:
             return best
 
         for actor in actors[1:]:
-            size = actor.queueSize()
+            size = actor.queue_size()
             if size < best_size:
                 best = actor
                 best_size = size
@@ -201,12 +201,12 @@ from fan.sys.Param import Param
 _t = Type.find('concurrent::ActorPool')
 _t.tf_({'sys::Js': {}})
 _t.af_('name', 1, 'sys::Str', {})
-_t.af_('maxThreads', 1, 'sys::Int', {})
-_t.af_('maxQueue', 1, 'sys::Int', {})
-_t.af_('maxTimeBeforeYield', 1, 'sys::Duration', {})
+_t.af_('max_threads', 1, 'sys::Int', {})
+_t.af_('max_queue', 1, 'sys::Int', {})
+_t.af_('max_time_before_yield', 1, 'sys::Duration', {})
 _t.am_('make', 257, 'sys::Void', [Param('f', Type.find('sys::Func?'), True)], {})
-_t.am_('isStopped', 1, 'sys::Bool', [], {})
-_t.am_('isDone', 1, 'sys::Bool', [], {})
+_t.am_('is_stopped', 1, 'sys::Bool', [], {})
+_t.am_('is_done', 1, 'sys::Bool', [], {})
 _t.am_('stop', 1, 'concurrent::ActorPool', [], {})
 _t.am_('kill', 1, 'concurrent::ActorPool', [], {})
 _t.am_('join', 1, 'concurrent::ActorPool', [Param('timeout', Type.find('sys::Duration?'), True)], {})

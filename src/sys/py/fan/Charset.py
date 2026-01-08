@@ -12,8 +12,8 @@ class Charset(Obj):
     # Cache of charset instances
     _cache = {}
     _utf8 = None
-    _utf16BE = None
-    _utf16LE = None
+    _utf16_be = None
+    _utf16_le = None
     _iso8859_1 = None
 
     def __init__(self, name):
@@ -26,12 +26,12 @@ class Charset(Obj):
         return Charset.utf8()
 
     @staticmethod
-    def defVal():
+    def def_val():
         """Default value is UTF-8"""
         return Charset.utf8()
 
     @staticmethod
-    def fromStr(name, checked=True):
+    def from_str(name, checked=True):
         """
         Get a Charset by name (Fantom API).
         Returns cached instances for known charsets.
@@ -51,17 +51,17 @@ class Charset(Obj):
             if nname == "UTF-8":
                 return Charset.utf8()
             elif nname == "UTF-16BE":
-                return Charset.utf16BE()
+                return Charset.utf16_be()
             elif nname == "UTF-16LE":
-                return Charset.utf16LE()
+                return Charset.utf16_le()
             elif nname == "ISO-8859-1":
                 return Charset.iso8859_1()
             elif nname == "ISO-8859-2":
-                return Charset._getOrCreate("ISO-8859-2")
+                return Charset._get_or_create("ISO-8859-2")
             elif nname == "ISO-8859-5":
-                return Charset._getOrCreate("ISO-8859-5")
+                return Charset._get_or_create("ISO-8859-5")
             elif nname == "ISO-8859-8":
-                return Charset._getOrCreate("ISO-8859-8")
+                return Charset._get_or_create("ISO-8859-8")
             else:
                 # Unknown charset
                 raise ValueError(f"Unsupported charset: {nname}")
@@ -72,7 +72,7 @@ class Charset(Obj):
             raise ParseErr.make(f"Unsupported charset '{nname}'")
 
     @staticmethod
-    def _getOrCreate(name):
+    def _get_or_create(name):
         """Get or create a cached Charset instance by normalized name."""
         if name in Charset._cache:
             return Charset._cache[name]
@@ -81,7 +81,7 @@ class Charset(Obj):
         return cs
 
     @staticmethod
-    def forName(name):
+    def for_name(name):
         """
         Get a Charset by name (legacy method, use fromStr for Fantom API).
         This method is more lenient - allows creating charsets for any name.
@@ -107,7 +107,7 @@ class Charset(Obj):
         }
 
         normalized = name_map.get(name_lower, name)
-        return Charset._getOrCreate(normalized)
+        return Charset._get_or_create(normalized)
 
     @staticmethod
     def utf8():
@@ -118,20 +118,20 @@ class Charset(Obj):
         return Charset._utf8
 
     @staticmethod
-    def utf16BE():
+    def utf16_be():
         """Get UTF-16BE charset (cached singleton)"""
-        if Charset._utf16BE is None:
-            Charset._utf16BE = Charset("UTF-16BE")
-            Charset._cache["UTF-16BE"] = Charset._utf16BE
-        return Charset._utf16BE
+        if Charset._utf16_be is None:
+            Charset._utf16_be = Charset("UTF-16BE")
+            Charset._cache["UTF-16BE"] = Charset._utf16_be
+        return Charset._utf16_be
 
     @staticmethod
-    def utf16LE():
+    def utf16_le():
         """Get UTF-16LE charset (cached singleton)"""
-        if Charset._utf16LE is None:
-            Charset._utf16LE = Charset("UTF-16LE")
-            Charset._cache["UTF-16LE"] = Charset._utf16LE
-        return Charset._utf16LE
+        if Charset._utf16_le is None:
+            Charset._utf16_le = Charset("UTF-16LE")
+            Charset._cache["UTF-16LE"] = Charset._utf16_le
+        return Charset._utf16_le
 
     @staticmethod
     def iso8859_1():
@@ -145,12 +145,12 @@ class Charset(Obj):
         """Get the charset name"""
         return self._name
 
-    def toStr(self):
+    def to_str(self):
         """String representation"""
         return self._name
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()
 
     def equals(self, other):
         """Test equality"""
@@ -175,13 +175,13 @@ class Charset(Obj):
         from fan.sys.Type import Type
         return Type.find("sys::Charset")
 
-    def literalEncode(self, encoder):
+    def literal_encode(self, encoder):
         """Encode for serialization.
 
         Simple types serialize as: Type("toStr")
         Example: sys::Charset("UTF-8")
         """
-        encoder.wType(self.typeof())
+        encoder.w_type(self.typeof())
         encoder.w('(')
-        encoder.wStrLiteral(self.toStr(), '"')
+        encoder.w_str_literal(self.to_str(), '"')
         encoder.w(')')

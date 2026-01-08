@@ -26,11 +26,11 @@ class TimeZoneDstTime:
 
     def __init__(self, mon, onMode, onWeekday, onDay, atTime, atMode):
         self.mon = mon                          # month (0-11)
-        self.onMode = chr(onMode) if isinstance(onMode, int) else onMode  # 'd', 'l', '>', '<'
-        self.onWeekday = onWeekday              # weekday (0-6, 0=Sun)
-        self.onDay = onDay                      # day of month (1-31)
-        self.atTime = atTime                    # seconds from midnight
-        self.atMode = chr(atMode) if isinstance(atMode, int) else atMode  # 'w', 's', 'u'
+        self.on_mode = chr(onMode) if isinstance(onMode, int) else onMode  # 'd', 'l', '>', '<'
+        self.on_weekday = onWeekday              # weekday (0-6, 0=Sun)
+        self.on_day = onDay                      # day of month (1-31)
+        self.at_time = atTime                    # seconds from midnight
+        self.at_mode = chr(atMode) if isinstance(atMode, int) else atMode  # 'w', 's', 'u'
 
 
 class TimeZoneRule:
@@ -47,17 +47,17 @@ class TimeZoneRule:
     """
 
     def __init__(self):
-        self.startYear = None   # year rule took effect
+        self.start_year = None   # year rule took effect
         self.offset = None      # UTC offset in seconds
-        self.stdAbbr = None     # standard time abbreviation
-        self.dstOffset = None   # DST offset in seconds (0 = no DST)
-        self.dstAbbr = None     # daylight time abbreviation
-        self.dstStart = None    # TimeZoneDstTime for DST start
-        self.dstEnd = None      # TimeZoneDstTime for DST end
+        self.std_abbr = None     # standard time abbreviation
+        self.dst_offset = None   # DST offset in seconds (0 = no DST)
+        self.dst_abbr = None     # daylight time abbreviation
+        self.dst_start = None    # TimeZoneDstTime for DST start
+        self.dst_end = None      # TimeZoneDstTime for DST end
 
-    def isWallTime(self):
+    def is_wall_time(self):
         """Return True if DST transition times are in wall time (vs standard or UTC)"""
-        return self.dstStart is not None and self.dstStart.atMode == 'w'
+        return self.dst_start is not None and self.dstStart.atMode == 'w'
 
 
 # ========================================================================
@@ -88,7 +88,7 @@ class _TzBuf:
         self._pos += 1
         return b
 
-    def readS2(self):
+    def read_s2(self):
         """Read 2-byte signed integer (big-endian)"""
         c1 = self.read()
         c2 = self.read()
@@ -98,7 +98,7 @@ class _TzBuf:
         # Convert to signed
         return c if c <= 0x7FFF else (c - 0x10000)
 
-    def readS4(self):
+    def read_s4(self):
         """Read 4-byte signed integer (big-endian)"""
         c1 = self.read()
         c2 = self.read()
@@ -110,7 +110,7 @@ class _TzBuf:
         # Convert to signed
         return c if c <= 0x7FFFFFFF else (c - 0x100000000)
 
-    def readUtf(self):
+    def read_utf(self):
         """Read 2-byte length + UTF-8 string"""
         len1 = self.read()
         len2 = self.read()
@@ -159,7 +159,7 @@ def _decode_dst(buf):
         buf.read(),    # onMode ('d', 'l', '>', '<')
         buf.read(),    # onWeekday (0-6)
         buf.read(),    # onDay (1-31)
-        buf.readS4(),  # atTime (seconds from midnight)
+        buf.read_s4(),  # atTime (seconds from midnight)
         buf.read()     # atMode ('w', 's', 'u')
     )
 
@@ -176,18 +176,18 @@ def _decode_tz_rules(base64_data):
     buf = _TzBuf(data)
 
     # Read full name
-    fullName = buf.readUtf()
+    fullName = buf.read_utf()
 
     # Read rules
     rules = []
     while buf.more():
         rule = TimeZoneRule()
-        rule.startYear = buf.readS2()
-        rule.offset = buf.readS4()
-        rule.stdAbbr = buf.readUtf()
-        rule.dstOffset = buf.readS4()
+        rule.startYear = buf.read_s2()
+        rule.offset = buf.read_s4()
+        rule.stdAbbr = buf.read_utf()
+        rule.dstOffset = buf.read_s4()
         if rule.dstOffset != 0:
-            rule.dstAbbr = buf.readUtf()
+            rule.dstAbbr = buf.read_utf()
             rule.dstStart = _decode_dst(buf)
             rule.dstEnd = _decode_dst(buf)
         rules.append(rule)
@@ -336,7 +336,7 @@ def _compare(rule, x, year, mon, day, time):
     return _compare_at_time(rule, x, time)
 
 
-def _dstOffset(rule, year, mon, day, time):
+def _dst_offset(rule, year, mon, day, time):
     """Calculate DST offset for given datetime.
 
     Args:
@@ -370,7 +370,7 @@ def _dstOffset(rule, year, mon, day, time):
     return 0
 
 
-def _isDstDate(rule, x, year, mon, day):
+def _is_dst_date(rule, x, year, mon, day):
     """Return True if given date is the DST transition date."""
     return (_compare_month(x, mon) == 0 and
             _compare_on_day(rule, x, year, mon, day) == 0)
@@ -497,7 +497,7 @@ class TimeZone(Obj):
         # Initialize rules as None - loaded lazily
         self._rules = None
 
-    def _getRules(self):
+    def _get_rules(self):
         """Get timezone rules (lazily loaded from _TZ_DATA)."""
         if self._rules is not None:
             return self._rules
@@ -522,13 +522,13 @@ class TimeZone(Obj):
         self._rules = []
         return self._rules
 
-    def _getRule(self, year):
+    def _get_rule(self, year):
         """Get the timezone rule for a specific year.
 
         Rules are sorted by startYear descending - find the first rule
         where startYear <= year.
         """
-        rules = self._getRules()
+        rules = self._get_rules()
         if not rules:
             return None
 
@@ -549,7 +549,7 @@ class TimeZone(Obj):
         return TimeZone._utc
 
     @staticmethod
-    def defVal():
+    def def_val():
         """Default value is UTC timezone"""
         return TimeZone.utc()
 
@@ -578,7 +578,7 @@ class TimeZone(Obj):
                     }
                     mapped_name = offset_map.get(int(offset_hrs))
                     if mapped_name:
-                        TimeZone._cur = TimeZone.fromStr(mapped_name, checked=False)
+                        TimeZone._cur = TimeZone.from_str(mapped_name, checked=False)
                 if TimeZone._cur is None:
                     TimeZone._cur = TimeZone.utc()
             except Exception:
@@ -635,7 +635,7 @@ class TimeZone(Obj):
     }
 
     @staticmethod
-    def fromStr(name, checked=True):
+    def from_str(name, checked=True):
         """Find timezone by name"""
         # Check for alias first
         if name in TimeZone._aliases:
@@ -677,29 +677,29 @@ class TimeZone(Obj):
             return None
 
     @staticmethod
-    def listNames():
+    def list_names():
         """List all available timezone names"""
         from .List import List
         # Must include Rel and UTC plus common timezone names
         common = ["Rel", "UTC", "New_York", "Los_Angeles", "Chicago", "Denver",
                   "London", "Paris", "Tokyo", "Sydney"]
-        return List.toImmutable(List.fromList(common))
+        return List.to_immutable(List.from_list(common))
 
     @staticmethod
-    def listFullNames():
+    def list_full_names():
         """List all available full timezone names"""
         from .List import List
         # Full names including region prefixes (UTC and Rel use Etc/ prefix)
         full = ["Etc/Rel", "Etc/UTC", "America/New_York", "America/Los_Angeles",
                 "America/Chicago", "America/Denver", "Europe/London",
                 "Europe/Paris", "Asia/Tokyo", "Australia/Sydney"]
-        return List.toImmutable(List.fromList(full))
+        return List.to_immutable(List.from_list(full))
 
     def name(self):
         """Short name like 'New_York'"""
         return self._name
 
-    def fullName(self):
+    def full_name(self):
         """Full name like 'America/New_York'"""
         return self._fullName
 
@@ -715,7 +715,7 @@ class TimeZone(Obj):
         # Convert seconds to nanoseconds for Duration
         return Duration.make(int(offset.total_seconds() * 1_000_000_000))
 
-    def dstOffset(self, year):
+    def dst_offset(self, year):
         """Get the daylight savings offset as a Duration. Returns None if no DST."""
         from datetime import datetime
         from .Duration import Duration
@@ -727,7 +727,7 @@ class TimeZone(Obj):
         # Convert seconds to nanoseconds for Duration
         return Duration.make(int(dst.total_seconds() * 1_000_000_000))
 
-    def stdAbbr(self, year):
+    def std_abbr(self, year):
         """Standard abbreviation like 'EST'"""
         from datetime import datetime
         # Special case for Rel timezone - always return "Rel"
@@ -746,11 +746,11 @@ class TimeZone(Obj):
             pass
         return self._name
 
-    def dstAbbr(self, year):
+    def dst_abbr(self, year):
         """Daylight savings abbreviation like 'EDT'. Returns None if no DST."""
         from datetime import datetime
         # First check if this timezone has DST
-        dst = self.dstOffset(year)
+        dst = self.dst_offset(year)
         if dst is None or (hasattr(dst, 'ticks') and dst.ticks() == 0):
             return None  # No DST for this timezone
         # Get abbreviation for July 1 (typically daylight time)
@@ -763,11 +763,11 @@ class TimeZone(Obj):
             pass
         return self._name
 
-    def toStr(self):
+    def to_str(self):
         return self._name
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()
 
     def equals(self, other):
         """Fantom equals - compare by timezone name"""
@@ -788,11 +788,11 @@ class TimeZone(Obj):
     def make(name=None):
         """Create a TimeZone. If name is None, returns defVal (UTC)."""
         if name is None:
-            return TimeZone.defVal()
-        return TimeZone.fromStr(name)
+            return TimeZone.def_val()
+        return TimeZone.from_str(name)
 
     @staticmethod
-    def _fromGmtOffset(offset_secs):
+    def _from_gmt_offset(offset_secs):
         """Create a TimeZone from a GMT offset in seconds.
 
         This is used for parsing timezone offsets like +05:00 or -07:00
@@ -808,7 +808,7 @@ class TimeZone(Obj):
         gmt_name = f"Etc/GMT{sign}{hrs}"
 
         try:
-            return TimeZone.fromStr(gmt_name)
+            return TimeZone.from_str(gmt_name)
         except:
             # Fall back to UTC if we can't find the timezone
             return TimeZone.utc()
@@ -818,13 +818,13 @@ class TimeZone(Obj):
         from fan.sys.Type import Type
         return Type.find("sys::TimeZone")
 
-    def literalEncode(self, encoder):
+    def literal_encode(self, encoder):
         """Encode for serialization.
 
         Simple types serialize as: Type("toStr")
         Example: sys::TimeZone("New_York")
         """
-        encoder.wType(self.typeof())
+        encoder.w_type(self.typeof())
         encoder.w('(')
-        encoder.wStrLiteral(self.toStr(), '"')
+        encoder.w_str_literal(self.to_str(), '"')
         encoder.w(')')

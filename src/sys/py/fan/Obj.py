@@ -53,7 +53,7 @@ class Obj:
         """Python >= operator - delegates to compare()"""
         return self.compare(other) >= 0
 
-    def toStr(self):
+    def to_str(self):
         return f"{type(self).__name__}@{self._hash}"
 
     def typeof(self):
@@ -75,16 +75,16 @@ class Obj:
         # Default to sys pod
         return Type.find(f"sys::{class_name}")
 
-    def isImmutable(self):
+    def is_immutable(self):
         """Check if this object is immutable.
 
-        Delegates to typeof().isConst() - objects of const classes are always immutable.
+        Delegates to typeof().is_const() - objects of const classes are always immutable.
         This matches the JavaScript reference implementation:
-          isImmutable() { return this.typeof().isConst(); }
+          isImmutable() { return this.typeof().is_const(); }
         """
         t = self.typeof()
-        if t is not None and hasattr(t, 'isConst'):
-            return t.isConst()
+        if t is not None and hasattr(t, 'is_const'):
+            return t.is_const()
         return False
 
     def trap(self, name, args=None):
@@ -164,10 +164,10 @@ class Obj:
                     from .Method import Method
                     if isinstance(slot, Field):
                         if args:
-                            slot.set(self, args[0])
+                            slot.set_(self, args[0])
                             return args[0]
                         else:
-                            return slot.get(self) if not slot.isStatic() else slot.get()
+                            return slot.get(self) if not slot.is_static() else slot.get()
                     elif isinstance(slot, Method):
                         return slot.call(self, *args) if args else slot.call(self)
         except Exception:
@@ -185,20 +185,20 @@ class Obj:
     # for closures (it-blocks) that set const fields. In Python, closures
     # capture 'self' from the outer class, not the Func, so these need
     # to be available on all objects.
-    def enterCtor(self, obj):
+    def enter_ctor(self, obj):
         """Called when entering a constructor with an it-block"""
         pass
 
-    def exitCtor(self):
+    def exit_ctor(self):
         """Called when exiting a constructor with an it-block"""
         pass
 
-    def checkInCtor(self, obj):
+    def check_in_ctor(self, obj):
         """Called to verify we're in a constructor when setting const fields"""
         pass
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()
 
     def __eq__(self, other):
         return self.equals(other)
@@ -207,4 +207,4 @@ class Obj:
         return self.hash()
 
     def __repr__(self):
-        return self.toStr()
+        return self.to_str()

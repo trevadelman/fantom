@@ -15,7 +15,7 @@ class Version(Obj):
         self._segments = list(segments)
 
     @staticmethod
-    def fromStr(s, checked=True):
+    def from_str(s, checked=True):
         """Parse a Version from string like '1.2.3'"""
         if s in Version._cache:
             return Version._cache[s]
@@ -57,15 +57,15 @@ class Version(Obj):
         return Version(seg_list)
 
     @staticmethod
-    def defVal():
+    def def_val():
         """Default version 0"""
         return Version([0])
 
     def segments(self):
         """Get version segments as read-only list"""
         from fan.sys.List import List
-        result = List.fromList(self._segments)
-        return result.toImmutable()  # Return immutable list
+        result = List.from_list(self._segments)
+        return result.to_immutable()  # Return immutable list
 
     def major(self):
         """Get major version number"""
@@ -83,7 +83,7 @@ class Version(Obj):
         """Get patch number or null"""
         return self._segments[3] if len(self._segments) > 3 else None
 
-    def toStr(self):
+    def to_str(self):
         """String representation"""
         return ".".join(str(s) for s in self._segments)
 
@@ -132,13 +132,13 @@ class Version(Obj):
         from fan.sys.Type import Type
         return Type.find("sys::Version")
 
-    def literalEncode(self, encoder):
+    def literal_encode(self, encoder):
         """Encode for serialization.
 
         Simple types serialize as: Type("toStr")
         Example: sys::Version("1.2.3")
         """
-        encoder.wType(self.typeof())
+        encoder.w_type(self.typeof())
         encoder.w('(')
-        encoder.wStrLiteral(self.toStr(), '"')
+        encoder.w_str_literal(self.to_str(), '"')
         encoder.w(')')

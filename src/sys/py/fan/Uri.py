@@ -18,17 +18,17 @@ class Uri(Obj):
     _sectionFrag = 3
 
     @staticmethod
-    def sectionPath():
+    def section_path():
         """Return Int constant for path section"""
         return 1
 
     @staticmethod
-    def sectionQuery():
+    def section_query():
         """Return Int constant for query section"""
         return 2
 
     @staticmethod
-    def sectionFrag():
+    def section_frag():
         """Return Int constant for fragment section"""
         return 3
 
@@ -44,7 +44,7 @@ class Uri(Obj):
         self._pathSegs = None  # Lazy parsed
 
     @staticmethod
-    def fromStr(s, checked=True):
+    def from_str(s, checked=True):
         """Parse a URI from string"""
         if s in Uri._cache:
             return Uri._cache[s]
@@ -52,7 +52,7 @@ class Uri(Obj):
         try:
             # Preprocess: convert backslash escapes to percent encoding for urlparse
             # Fantom uses \# \? etc. but urlparse doesn't understand this
-            preprocessed, had_escapes = Uri._preprocessBackslashEscapes(s)
+            preprocessed, had_escapes = Uri._preprocess_backslash_escapes(s)
             parsed = urlparse(preprocessed)
             # Parse userInfo and host from netloc - preserve host case
             userInfo = None
@@ -96,10 +96,10 @@ class Uri(Obj):
             # Normalize pathStr - restore backslash escapes from percent encoding
             path = parsed.path
             if had_escapes:
-                path = Uri._restoreBackslashEscapes(path)
+                path = Uri._restore_backslash_escapes(path)
 
             # Apply scheme normalization
-            path, port = Uri._normalizeScheme(scheme, path, port)
+            path, port = Uri._normalize_scheme(scheme, path, port)
 
             # If host but no path, use "/"
             if host and (not path or path == ""):
@@ -108,7 +108,7 @@ class Uri(Obj):
             # Normalize path following JS logic:
             # - "." removed only if path.size > 1 OR host != null
             # - ".." removed only if preceded by non-".." segment
-            path = Uri._normalizePathWithHost(path, host)
+            path = Uri._normalize_path_with_host(path, host)
 
             uri = Uri(
                 scheme=scheme,
@@ -130,7 +130,7 @@ class Uri(Obj):
     @staticmethod
     def decode(s, checked=True):
         """Decode a URI, unescaping percent-encoded characters"""
-        return Uri.fromStr(unquote(s), checked)
+        return Uri.from_str(unquote(s), checked)
 
     @staticmethod
     def encode(s, section=None):
@@ -147,7 +147,7 @@ class Uri(Obj):
         return quote(s, safe="")
 
     @staticmethod
-    def escapeToken(s, section=None):
+    def escape_token(s, section=None):
         """Escape a URI token using backslash escaping for special chars"""
         if section is None:
             section = 1  # sectionPath
@@ -169,7 +169,7 @@ class Uri(Obj):
         return ''.join(result)
 
     @staticmethod
-    def encodeToken(s, section=None):
+    def encode_token(s, section=None):
         """Percent-encode a URI token"""
         if section is None:
             section = 1  # sectionPath
@@ -182,7 +182,7 @@ class Uri(Obj):
             return quote(s, safe="")
 
     @staticmethod
-    def unescapeToken(s):
+    def unescape_token(s):
         """Unescape a URI token (remove backslash escapes)"""
         result = []
         i = 0
@@ -196,33 +196,33 @@ class Uri(Obj):
         return ''.join(result)
 
     @staticmethod
-    def decodeToken(s, section=None):
+    def decode_token(s, section=None):
         """Decode a percent-encoded URI token and apply backslash escaping"""
         # First percent-decode, then apply backslash escaping
         decoded = unquote(s)
-        return Uri.escapeToken(decoded, section)
+        return Uri.escape_token(decoded, section)
 
     @staticmethod
-    def encodeQuery(map):
+    def encode_query(map):
         """Encode map as query string"""
         return urlencode(dict(map))
 
     @staticmethod
-    def decodeQuery(s):
+    def decode_query(s):
         """Decode query string to map"""
         from fan.sys.Map import Map
         result = {}
         for k, v in parse_qs(s, keep_blank_values=True).items():
             result[k] = v[0] if len(v) == 1 else v
-        return Map.fromDict(result)
+        return Map.from_dict(result)
 
     @staticmethod
-    def defVal():
+    def def_val():
         """Default empty URI"""
         return Uri()
 
     @staticmethod
-    def _makeFromPathStr(pathStr):
+    def _make_from_path_str(pathStr):
         """Create a Uri directly from a path string, preserving backslash escaping.
 
         This bypasses urlparse which doesn't understand Fantom's backslash escaping.
@@ -234,7 +234,7 @@ class Uri(Obj):
         return uri
 
     @staticmethod
-    def _preprocessBackslashEscapes(s):
+    def _preprocess_backslash_escapes(s):
         """Convert Fantom backslash escapes to percent encoding for urlparse.
 
         Fantom uses \\# \\? etc. to escape special chars. Python's urlparse
@@ -265,7 +265,7 @@ class Uri(Obj):
         return ''.join(result), had_escapes
 
     @staticmethod
-    def _restoreBackslashEscapes(path):
+    def _restore_backslash_escapes(path):
         """Convert percent-encoded special chars back to backslash escapes.
 
         After urlparse processes the path, we need to convert %23 back to \# etc.
@@ -280,15 +280,15 @@ class Uri(Obj):
             path = path.replace(encoded, escaped)
         return path
 
-    def isAbs(self):
+    def is_abs(self):
         """Return true if this is an absolute URI"""
         return self._scheme is not None
 
-    def isRel(self):
+    def is_rel(self):
         """Return true if this is a relative URI"""
         return self._scheme is None
 
-    def isDir(self):
+    def is_dir(self):
         """Return true if path ends with /"""
         return self._pathStr.endswith("/")
 
@@ -296,7 +296,7 @@ class Uri(Obj):
         """Get URI scheme (e.g., 'http', 'file')"""
         return self._scheme
 
-    def userInfo(self):
+    def user_info(self):
         """Get user info portion"""
         return self._userInfo
 
@@ -336,7 +336,7 @@ class Uri(Obj):
             s += ":" + str(self._port)
         return s
 
-    def pathStr(self):
+    def path_str(self):
         """Get path as string"""
         return self._pathStr
 
@@ -346,8 +346,8 @@ class Uri(Obj):
         if self._pathSegs is None:
             segs = [s for s in self._pathStr.split("/") if s]
             self._pathSegs = segs
-        lst = List.fromList(self._pathSegs)
-        return lst.toImmutable() if hasattr(lst, 'toImmutable') else lst
+        lst = List.from_list(self._pathSegs)
+        return lst.to_immutable() if hasattr(lst, 'to_immutable') else lst
 
     def name(self):
         """Get the last segment of the path"""
@@ -384,7 +384,7 @@ class Uri(Obj):
                 return None
         return n[dot+1:] if dot > 0 else None
 
-    def queryStr(self):
+    def query_str(self):
         """Get query string"""
         return self._queryStr
 
@@ -393,10 +393,10 @@ class Uri(Obj):
         from fan.sys.Map import Map
         if self._queryStr is None:
             # Return empty Str:Str map (immutable)
-            m = Map.makeWithType("sys::Str", "sys::Str")
-            return m.toImmutable() if hasattr(m, 'toImmutable') else m
-        m = Uri.decodeQuery(self._queryStr)
-        return m.toImmutable() if hasattr(m, 'toImmutable') else m
+            m = Map.make_with_type("sys::Str", "sys::Str")
+            return m.to_immutable() if hasattr(m, 'to_immutable') else m
+        m = Uri.decode_query(self._queryStr)
+        return m.to_immutable() if hasattr(m, 'to_immutable') else m
 
     def frag(self):
         """Get fragment portion"""
@@ -412,17 +412,17 @@ class Uri(Obj):
             return None
 
         # If just a simple filename (not a dir and path is relative), then no parent
-        if pathSize == 1 and not self.isPathAbs() and not self.isDir():
+        if pathSize == 1 and not self.is_path_abs() and not self.is_dir():
             return None
 
         # Use getRange to get parent
         from fan.sys.Range import Range
-        return self.getRange(Range.make(0, -2, False))
+        return self.get_range(Range.make(0, -2, False))
 
     def plus(self, other):
         """Resolve a relative URI against this URI per RFC 3986 section 5.2.2"""
         if isinstance(other, str):
-            other = Uri.fromStr(other)
+            other = Uri.from_str(other)
 
         r = other
         base = self
@@ -432,7 +432,7 @@ class Uri(Obj):
             return r
         if r._host is not None and base._scheme is None:
             return r
-        if r.isPathAbs() and base._host is None:
+        if r.is_path_abs() and base._host is None:
             return r
 
         # RFC 3986 (5.2.2) Transform References
@@ -442,7 +442,7 @@ class Uri(Obj):
             t_userInfo = r._userInfo
             t_host = r._host
             t_port = r._port
-            t_pathStr = Uri._normalizePath(r._pathStr)
+            t_pathStr = Uri._normalize_path(r._pathStr)
             t_path_segs = None  # will be recomputed
             t_queryStr = r._queryStr
             t_frag = r._frag
@@ -457,10 +457,10 @@ class Uri(Obj):
             else:
                 if r._pathStr.startswith("/"):
                     # r has absolute path
-                    t_pathStr = Uri._normalizePath(r._pathStr)
+                    t_pathStr = Uri._normalize_path(r._pathStr)
                 else:
                     # Merge paths
-                    t_pathStr = Uri._mergePaths(base, r)
+                    t_pathStr = Uri._merge_paths(base, r)
                 t_queryStr = r._queryStr
             t_userInfo = base._userInfo
             t_host = base._host
@@ -469,7 +469,7 @@ class Uri(Obj):
             t_frag = r._frag
 
         # Normalize for well-known schemes
-        t_pathStr, t_port = Uri._normalizeScheme(t_scheme, t_pathStr, t_port)
+        t_pathStr, t_port = Uri._normalize_scheme(t_scheme, t_pathStr, t_port)
 
         return Uri(
             scheme=t_scheme,
@@ -482,11 +482,11 @@ class Uri(Obj):
         )
 
     @staticmethod
-    def _mergePaths(base, r):
+    def _merge_paths(base, r):
         """Merge base and relative paths per RFC 3986"""
-        baseIsAbs = base.isPathAbs()
-        baseIsDir = base.isDir()
-        rIsDir = r.isDir()
+        baseIsAbs = base.is_path_abs()
+        baseIsDir = base.is_dir()
+        rIsDir = r.is_dir()
         rPath = r.path()
 
         # Compute the target path
@@ -533,10 +533,10 @@ class Uri(Obj):
         if finalIsDir and result and not result.endswith("/"):
             result += "/"
 
-        return Uri._normalizePath(result)
+        return Uri._normalize_path(result)
 
     @staticmethod
-    def _normalizePathWithHost(pathStr, host):
+    def _normalize_path_with_host(pathStr, host):
         """Normalize path following JS logic:
         - "." removed only if path.size > 1 OR host != null
         - ".." removed only if preceded by non-".." segment
@@ -597,7 +597,7 @@ class Uri(Obj):
         return path
 
     @staticmethod
-    def _normalizePath(pathStr):
+    def _normalize_path(pathStr):
         """Remove . and .. segments from path (without host context - used for merge)"""
         if not pathStr:
             return pathStr
@@ -646,7 +646,7 @@ class Uri(Obj):
         return path
 
     @staticmethod
-    def _normalizeScheme(scheme, pathStr, port):
+    def _normalize_scheme(scheme, pathStr, port):
         """Normalize for well-known schemes"""
         if scheme is None:
             return pathStr, port
@@ -666,7 +666,7 @@ class Uri(Obj):
 
         return pathStr, port
 
-    def plusSlash(self):
+    def plus_slash(self):
         """Ensure URI ends with /"""
         if self._pathStr.endswith("/"):
             return self
@@ -680,13 +680,13 @@ class Uri(Obj):
             frag=self._frag
         )
 
-    def relTo(self, base):
+    def rel_to(self, base):
         """Get relative URI from base.
         If authorities differ, return self unchanged.
         Otherwise compute relative path with .. backups as needed.
         """
         if isinstance(base, str):
-            base = Uri.fromStr(base)
+            base = Uri.from_str(base)
 
         # If schemes differ, return self
         if self._scheme != base._scheme:
@@ -718,7 +718,7 @@ class Uri(Obj):
 
         # If divergence is at root (no commonality)
         if d == 0:
-            # `/a/b/c`.relTo(`/`) should be `a/b/c`
+            # `/a/b/c`.rel_to(`/`) should be `a/b/c`
             if basePath.size == 0 and self._pathStr.startswith("/"):
                 return Uri(pathStr=self._pathStr[1:], queryStr=self._queryStr, frag=self._frag)
             else:
@@ -733,7 +733,7 @@ class Uri(Obj):
 
         # Insert .. backups if needed
         backup = basePath.size - d
-        if not base.isDir():
+        if not base.is_dir():
             backup -= 1
         for _ in range(backup):
             tPath.append("..")
@@ -744,12 +744,12 @@ class Uri(Obj):
 
         # Build path string
         pathStr = "/".join(tPath)
-        if self.isDir() and pathStr and not pathStr.endswith("/"):
+        if self.is_dir() and pathStr and not pathStr.endswith("/"):
             pathStr += "/"
 
         return Uri(pathStr=pathStr, queryStr=self._queryStr, frag=self._frag)
 
-    def relToAuth(self):
+    def rel_to_auth(self):
         """Get URI relative to authority (remove scheme and authority)"""
         # Return self if already no authority
         if (self._scheme is None and self._userInfo is None and
@@ -761,15 +761,15 @@ class Uri(Obj):
             frag=self._frag
         )
 
-    def isPathAbs(self):
+    def is_path_abs(self):
         """Return true if path starts with /"""
         return self._pathStr.startswith("/")
 
-    def isPathRel(self):
+    def is_path_rel(self):
         """Return true if path doesn't start with /"""
         return not self._pathStr.startswith("/")
 
-    def isPathOnly(self):
+    def is_path_only(self):
         """Return true if this URI only has a path component"""
         return (self._scheme is None and
                 self._host is None and
@@ -777,7 +777,7 @@ class Uri(Obj):
                 self._frag is None)
 
     @staticmethod
-    def isName(name):
+    def is_name(name):
         """Return true if the name is a valid URI path segment name.
         Valid names contain only unreserved characters: A-Z, a-z, 0-9, -._~
         and cannot be empty, "." or ".."
@@ -794,9 +794,9 @@ class Uri(Obj):
         return True
 
     @staticmethod
-    def checkName(name):
+    def check_name(name):
         """Throw NameErr if name is not valid"""
-        if not Uri.isName(name):
+        if not Uri.is_name(name):
             from fan.sys.Err import NameErr
             raise NameErr.make(f"Invalid Uri name: {name}")
 
@@ -804,7 +804,7 @@ class Uri(Obj):
         """Return number of path segments for slicing support"""
         return len(self.path())
 
-    def pathOnly(self):
+    def path_only(self):
         """Get URI with only the path component"""
         # Return self if already path-only
         if (self._scheme is None and self._userInfo is None and
@@ -813,10 +813,10 @@ class Uri(Obj):
             return self
         return Uri(pathStr=self._pathStr)
 
-    def plusName(self, name, asDir=False):
+    def plus_name(self, name, asDir=False):
         """Append a name to path, replacing last segment if not a directory"""
         segs = list(self.path())
-        isDir = self.isDir() or len(segs) == 0
+        isDir = self.is_dir() or len(segs) == 0
 
         if isDir:
             # Append to existing path
@@ -830,7 +830,7 @@ class Uri(Obj):
 
         # Build new path string
         pathStr = ""
-        if self.isAbs() or self.isPathAbs():
+        if self.is_abs() or self.is_path_abs():
             pathStr = "/"
         pathStr += "/".join(segs)
         if asDir:
@@ -844,16 +844,16 @@ class Uri(Obj):
             pathStr=pathStr
         )
 
-    def plusQuery(self, query):
+    def plus_query(self, query):
         """Add or merge query parameters"""
-        if query is None or (hasattr(query, 'isEmpty') and query.isEmpty()):
+        if query is None or (hasattr(query, 'is_empty') and query.is_empty()):
             return self
         # Convert Map to dict if needed
         qdict = dict(query) if hasattr(query, '__iter__') else query
         if self._queryStr:
             # Merge with existing query
             from fan.sys.Map import Map
-            existing = Uri.decodeQuery(self._queryStr)
+            existing = Uri.decode_query(self._queryStr)
             existing_dict = dict(existing._map) if hasattr(existing, '_map') else {}
             existing_dict.update(qdict)
             new_query = urlencode(existing_dict)
@@ -869,11 +869,11 @@ class Uri(Obj):
             frag=self._frag
         )
 
-    def toCode(self):
+    def to_code(self):
         """Get URI as Fantom source code literal.
         Must escape $ and ` characters with backslash for Fantom code.
         """
-        s = self.toStr()
+        s = self.to_str()
         # Escape $ and ` with backslash for Fantom literal syntax
         result = []
         for c in s:
@@ -882,25 +882,25 @@ class Uri(Obj):
             result.append(c)
         return "`" + ''.join(result) + "`"
 
-    def literalEncode(self, out):
+    def literal_encode(self, out):
         """Encode for serialization.
 
         URI literals are written as backtick-quoted strings: `http://example.com`
         """
-        out.wStrLiteral(self.toStr(), '`')
+        out.w_str_literal(self.to_str(), '`')
 
-    def mimeType(self):
+    def mime_type(self):
         """Get MIME type based on file extension or directory type"""
         from fan.sys.MimeType import MimeType
         # Directories have special mime type
-        if self.isDir():
-            return MimeType.fromStr("x-directory/normal")
+        if self.is_dir():
+            return MimeType.from_str("x-directory/normal")
         ext = self.ext()
         if ext is None:
             return None
-        return MimeType.forExt(ext)
+        return MimeType.for_ext(ext)
 
-    def toFile(self):
+    def to_file(self):
         """Convert this URI to a File.
 
         Returns:
@@ -909,7 +909,7 @@ class Uri(Obj):
         from .File import File
         return File.make(self)
 
-    def toStr(self):
+    def to_str(self):
         """String representation"""
         s = ""
         if self._scheme:
@@ -928,30 +928,34 @@ class Uri(Obj):
             s += "#" + self._frag
         return s
 
+    def to_locale(self):
+        """Locale string representation - same as toStr for URIs"""
+        return self.to_str()
+
     def encode_(self):
         """Encode URI with percent-encoding"""
-        return quote(self.toStr(), safe=":/?#[]@!$&'()*+,;=")
+        return quote(self.to_str(), safe=":/?#[]@!$&'()*+,;=")
 
     def encode(self):
         """Instance encode method - encode this URI's string representation"""
-        return quote(self.toStr(), safe=":/?#[]@!$&'()*+,;=")
+        return quote(self.to_str(), safe=":/?#[]@!$&'()*+,;=")
 
     def equals(self, other):
         """Test equality"""
         if not isinstance(other, Uri):
             return False
-        return self.toStr() == other.toStr()
+        return self.to_str() == other.to_str()
 
     def hash_(self):
         """Hash code"""
-        return hash(self.toStr())
+        return hash(self.to_str())
 
     def compare(self, other):
         """Compare URIs by string representation"""
         if other is None:
             return 1
-        a = self.toStr()
-        b = other.toStr() if isinstance(other, Uri) else str(other)
+        a = self.to_str()
+        b = other.to_str() if isinstance(other, Uri) else str(other)
         if a < b:
             return -1
         if a > b:
@@ -991,11 +995,11 @@ class Uri(Obj):
 
     def __str__(self):
         """Python str()"""
-        return self.toStr()
+        return self.to_str()
 
     def __repr__(self):
         """Python repr()"""
-        return f"Uri({self.toStr()!r})"
+        return f"Uri({self.to_str()!r})"
 
     def __getitem__(self, key):
         """Python [] operator for slicing (getRange)"""
@@ -1005,16 +1009,16 @@ class Uri(Obj):
             start = key.start if key.start is not None else 0
             stop = key.stop if key.stop is not None else len(self.path())
             r = Range.make(start, stop - 1, False)
-            return self.getRange(r)
+            return self.get_range(r)
         else:
             # Single index - return path segment
             return self.path().get(key)
 
-    def getRangeToPathAbs(self, r):
+    def get_range_to_path_abs(self, r):
         """Get a subset of path segments, forcing absolute path"""
-        return self.getRange(r, forcePathAbs=True)
+        return self.get_range(r, forcePathAbs=True)
 
-    def getRange(self, r, forcePathAbs=False):
+    def get_range(self, r, forcePathAbs=False):
         """Get a subset of path segments as new Uri"""
         segs = self.path()
         try:
@@ -1049,7 +1053,7 @@ class Uri(Obj):
         tail = (end_val == segs_size - 1)
 
         # If same as original and not forcing path abs, return self
-        if head and tail and (not forcePathAbs or self.isPathAbs()):
+        if head and tail and (not forcePathAbs or self.is_path_abs()):
             return self
 
         # Build new path from segments
@@ -1060,7 +1064,7 @@ class Uri(Obj):
 
         # Build path string
         new_path = ""
-        if (head and self.isPathAbs()) or forcePathAbs:
+        if (head and self.is_path_abs()) or forcePathAbs:
             new_path = "/"
         for i, seg in enumerate(new_segs):
             if i > 0:
@@ -1068,7 +1072,7 @@ class Uri(Obj):
             new_path += seg
 
         # Add trailing slash if needed
-        if len(new_segs) > 0 and (not tail or self.isDir()):
+        if len(new_segs) > 0 and (not tail or self.is_dir()):
             new_path += "/"
 
         # Head includes scheme/auth, tail includes query/frag
@@ -1106,7 +1110,7 @@ class UriScheme(Obj):
         """Get scheme name"""
         return self._name
 
-    def toStr(self):
+    def to_str(self):
         return self._name
 
 

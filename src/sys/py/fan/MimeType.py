@@ -23,7 +23,7 @@ class MimeType(Obj):
         """
         if subType is None:
             # Single string argument - use fromStr for caching
-            return cls.fromStr(mediaType)
+            return cls.from_str(mediaType)
         else:
             # Explicit mediaType/subType - create new instance
             instance = object.__new__(cls)
@@ -92,7 +92,7 @@ class MimeType(Obj):
                 return None
 
             # Parse parameters - always creates a typed Str:Str map
-            params = MimeType.parseParams(param_str) if param_str else MimeType._makeEmptyParams()
+            params = MimeType.parse_params(param_str) if param_str else MimeType._make_empty_params()
 
             mt = object.__new__(MimeType)
             mt._mediaType = mediaType
@@ -108,7 +108,7 @@ class MimeType(Obj):
             return None
 
     @staticmethod
-    def _makeEmptyParams():
+    def _make_empty_params():
         """Create an empty, properly typed Str:Str params map"""
         from fan.sys.Map import Map
         from fan.sys.Type import Type, MapType
@@ -122,7 +122,7 @@ class MimeType(Obj):
         return result
 
     @staticmethod
-    def fromStr(s, checked=True):
+    def from_str(s, checked=True):
         """Parse a MimeType from string like 'text/plain; charset=utf-8'"""
         if s is None:
             if checked:
@@ -146,7 +146,7 @@ class MimeType(Obj):
         return mt
 
     @staticmethod
-    def _normalizeKey(s):
+    def _normalize_key(s):
         """Normalize a MIME type string for cache key"""
         # Parse and reconstruct for normalization
         semi_idx = s.find(";")
@@ -154,7 +154,7 @@ class MimeType(Obj):
             main = s[:semi_idx].strip().lower()
             param_str = s[semi_idx + 1:]
             # Parse params and sort them
-            params = MimeType.parseParams(param_str)
+            params = MimeType.parse_params(param_str)
             if params and len(params) > 0:
                 # Sort params by lowercase key
                 sorted_params = sorted(params.items(), key=lambda x: x[0].lower())
@@ -165,7 +165,7 @@ class MimeType(Obj):
             return s.strip().lower()
 
     @staticmethod
-    def parseParams(s):
+    def parse_params(s):
         """
         Parse parameter string into case-insensitive Map.
         Handles: "a=b; c=d", "name=\"quoted\"", escaped quotes, empty values
@@ -258,7 +258,7 @@ class MimeType(Obj):
         return result
 
     @staticmethod
-    def forExt(ext):
+    def for_ext(ext):
         """Get MIME type for file extension"""
         if ext is None:
             return None
@@ -295,14 +295,14 @@ class MimeType(Obj):
 
         mime_str = ext_map.get(ext)
         if mime_str:
-            return MimeType.fromStr(mime_str)
+            return MimeType.from_str(mime_str)
         return None
 
-    def mediaType(self):
+    def media_type(self):
         """Get media type (e.g., 'text')"""
         return self._mediaType
 
-    def subType(self):
+    def sub_type(self):
         """Get sub type (e.g., 'plain')"""
         return self._subType
 
@@ -317,7 +317,7 @@ class MimeType(Obj):
             # Import Charset and look up by name
             try:
                 from fan.sys.Charset import Charset
-                return Charset.forName(cs)
+                return Charset.for_name(cs)
             except:
                 pass
         # Default UTF-8 for text types
@@ -329,15 +329,15 @@ class MimeType(Obj):
                 pass
         return None
 
-    def noParams(self):
+    def no_params(self):
         """Return MimeType without parameters"""
         if not self._params or len(self._params) == 0:
             return self
         # Return cached version without params
         key = f"{self._mediaType}/{self._subType}"
-        return MimeType.fromStr(key)
+        return MimeType.from_str(key)
 
-    def isText(self):
+    def is_text(self):
         """Return true if this is a text type"""
         if self._mediaType == "text":
             return True
@@ -346,7 +346,7 @@ class MimeType(Obj):
             return True
         return False
 
-    def toStr(self):
+    def to_str(self):
         """String representation"""
         if self._originalStr:
             return self._originalStr
@@ -357,10 +357,10 @@ class MimeType(Obj):
         return s
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()
 
     def __repr__(self):
-        return f"MimeType({self.toStr()!r})"
+        return f"MimeType({self.to_str()!r})"
 
     def equals(self, other):
         """Test equality - case insensitive for type, case sensitive for param values"""
@@ -412,9 +412,9 @@ class MimeType(Obj):
 
 
 # Predefined MIME types - use fromStr for caching
-MimeType.textPlain = MimeType.fromStr("text/plain; charset=utf-8")
-MimeType.textHtml = MimeType.fromStr("text/html; charset=utf-8")
-MimeType.textXml = MimeType.fromStr("text/xml; charset=utf-8")
-MimeType.imageGif = MimeType.fromStr("image/gif")
-MimeType.imagePng = MimeType.fromStr("image/png")
-MimeType.imageJpeg = MimeType.fromStr("image/jpeg")
+MimeType.textPlain = MimeType.from_str("text/plain; charset=utf-8")
+MimeType.textHtml = MimeType.from_str("text/html; charset=utf-8")
+MimeType.textXml = MimeType.from_str("text/xml; charset=utf-8")
+MimeType.imageGif = MimeType.from_str("image/gif")
+MimeType.imagePng = MimeType.from_str("image/png")
+MimeType.imageJpeg = MimeType.from_str("image/jpeg")

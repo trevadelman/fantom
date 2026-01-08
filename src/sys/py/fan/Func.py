@@ -32,7 +32,7 @@ class Func(Obj):
         if hasattr(self, '_params_ro') and self._params_ro is not None:
             return self._params_ro
         # Create read-only list from params
-        param_list = List.fromLiteral(self._params if self._params else [], 'sys::Param')
+        param_list = List.from_literal(self._params if self._params else [], 'sys::Param')
         self._params_ro = List.ro(param_list)
         return self._params_ro
 
@@ -60,7 +60,7 @@ class Func(Obj):
         """Call the function"""
         return self.__call__(*args)
 
-    def callList(self, args):
+    def call_list(self, args):
         """Call with args from list
 
         In Fantom, extra arguments beyond arity are silently ignored.
@@ -75,7 +75,7 @@ class Func(Obj):
             args = list(args)[:arity]
         return self._func(*args)
 
-    def callOn(self, target, args=None):
+    def call_on(self, target, args=None):
         """Call on target with args
 
         In Fantom, target becomes first arg, then args list.
@@ -116,10 +116,10 @@ class Func(Obj):
 
         # Track immutability - bound func is immutable only if all bound args are immutable
         from .ObjUtil import ObjUtil
-        all_immutable = all(ObjUtil.isImmutable(arg) for arg in bound_args)
+        all_immutable = all(ObjUtil.is_immutable(arg) for arg in bound_args)
 
         result = Func(bound, self._returns, remaining_params)
-        result._bound_immutable = all_immutable and self.isImmutable()
+        result._bound_immutable = all_immutable and self.is_immutable()
         return result
 
     def retype(self, t):
@@ -132,7 +132,7 @@ class Func(Obj):
         # Unwrap nullable types - |Int->Str|? is a nullable FuncType
         inner_type = t
         if isinstance(t, NullableType):
-            inner_type = t.toNonNullable()
+            inner_type = t.to_non_nullable()
 
         # Get returns and params from the target type
         new_returns = None
@@ -159,7 +159,7 @@ class Func(Obj):
 
         return Func(self._func, new_returns, new_params)
 
-    def isImmutable(self):
+    def is_immutable(self):
         """Return whether this Func is immutable.
 
         The Fantom compiler's ClosureToImmutable step analyzes each closure:
@@ -187,7 +187,7 @@ class Func(Obj):
         # Legacy fallback - default to True for backwards compatibility
         return True
 
-    def toImmutable(self):
+    def to_immutable(self):
         """Return immutable version of this Func.
 
         The behavior depends on the compiler-determined immutability case:
@@ -253,7 +253,7 @@ class Func(Obj):
                     immutable_vals = []
                     for cell in original_func.__closure__:
                         val = cell.cell_contents
-                        immutable_vals.append(ObjUtil.toImmutable(val))
+                        immutable_vals.append(ObjUtil.to_immutable(val))
 
                     # ARITY-BASED HEURISTIC:
                     # - Arity 0: Value-returning closure like |->Obj| { list }
@@ -286,7 +286,7 @@ class Func(Obj):
             if hasattr(original_func, '__defaults__') and original_func.__defaults__:
                 try:
                     immutable_defaults = tuple(
-                        ObjUtil.toImmutable(d) for d in original_func.__defaults__
+                        ObjUtil.to_immutable(d) for d in original_func.__defaults__
                     )
 
                     # Create new function with immutable defaults
@@ -316,10 +316,10 @@ class Func(Obj):
     def typeof(self):
         """Return the FuncType for this Func - enables Type.of() to return proper signature"""
         from .Type import Type
-        sig = self.toStr()  # e.g., |sys::Int,sys::Str->sys::Bool|
+        sig = self.to_str()  # e.g., |sys::Int,sys::Str->sys::Bool|
         return Type.find(sig)
 
-    def toStr(self):
+    def to_str(self):
         return self.signature()
 
     def signature(self):
@@ -362,7 +362,7 @@ class Func(Obj):
         return Func(func)
 
     @staticmethod
-    def makeClosure(spec, func):
+    def make_closure(spec, func):
         """Create a Func with type metadata (mirrors JS fan.sys.Func.make$closure)
 
         Args:

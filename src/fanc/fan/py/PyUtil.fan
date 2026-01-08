@@ -45,21 +45,73 @@ class PyUtil
       "break", "class", "continue", "def", "del", "elif", "else", "except",
       "finally", "for", "from", "global", "if", "import", "in", "is",
       "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try",
-      "while", "with", "yield",
+      "while", "with", "yield", "match", "case",
       // Built-in functions that could conflict
       "type", "hash", "id", "list", "map", "str", "int", "float", "bool",
-      "self"
+      "self",
+      // Additional builtins that conflict with Fantom method names
+      "abs", "all", "any", "min", "max", "pow", "round", "set", "dir",
+      "oct", "open", "vars", "print"
     ].each |name| { m[name] = "${name}_" }
     reservedWords = m.toImmutable
   }
 
+  ** Convert camelCase to snake_case
+  ** Examples:
+  **   toStr -> to_str
+  **   isEmpty -> is_empty
+  **   XMLParser -> xml_parser
+  **   getHTTPResponse -> get_http_response
+  **   utf16BE -> utf16_be
+  **   toBase64Uri -> to_base64_uri
+  static Str toSnakeCase(Str name)
+  {
+    // Fast path: if all lowercase and no uppercase, return as-is
+    hasUpper := false
+    name.each |ch| { if (ch.isUpper) hasUpper = true }
+    if (!hasUpper) return name
+
+    buf := StrBuf()
+    prev := 0
+    name.each |ch, i|
+    {
+      if (ch.isUpper)
+      {
+        // Check if this is start of acronym or end of acronym
+        next := (i + 1 < name.size) ? name[i + 1] : 0
+        prevIsLower := prev.isLower
+        prevIsDigit := prev.isDigit
+        nextIsLower := next != 0 && next.isLower
+
+        // Add underscore before uppercase if:
+        // 1. Previous char was lowercase (camelCase boundary): toStr -> to_str
+        // 2. We're in an acronym and next char is lowercase (end of acronym): XMLParser -> xml_parser
+        // 3. Previous char was a digit (number to uppercase): utf16BE -> utf16_be
+        if (i > 0 && (prevIsLower || prevIsDigit || (prev.isUpper && nextIsLower)))
+        {
+          buf.addChar('_')
+        }
+        buf.addChar(ch.lower)
+      }
+      else
+      {
+        buf.addChar(ch)
+      }
+      prev = ch
+    }
+    return buf.toStr
+  }
+
   ** Escape Python reserved words and invalid characters
+  ** Also converts camelCase to snake_case for Pythonic naming
   static Str escapeName(Str name)
   {
     // First replace $ with _ (Fantom synthetic names use $)
     escaped := name.replace("\$", "_")
+    // Convert camelCase to snake_case
+    snake := toSnakeCase(escaped)
     // Then check for reserved words
-    return reservedWords.get(escaped, escaped)
+    return reservedWords.get(snake, snake)
   }
 
   ** Convert Fantom boolean literal to Python

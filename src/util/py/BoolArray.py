@@ -57,7 +57,7 @@ class BoolArray(Obj):
         """Support [] operator for setting."""
         self.set(index, val)
 
-    def getAndSet(self, index, val):
+    def get_and_set(self, index, val):
         """
         Get the current boolean value at index, then set it to val.
         Returns the previous value.
@@ -109,7 +109,7 @@ class BoolArray(Obj):
             self._words[i] = 0
         return self
 
-    def eachTrue(self, func):
+    def each_true(self, func):
         """
         Iterate over all indices where the value is true.
         Calls func(index) for each true value.
@@ -124,7 +124,7 @@ class BoolArray(Obj):
                 if self.get(index):
                     func.call(index)
 
-    def copyFrom(self, that):
+    def copy_from(self, that):
         """
         Copy the booleans from 'that' array into this array.
         """

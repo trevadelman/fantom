@@ -29,19 +29,19 @@ class AtomicBool(Obj):
             with self._lock:
                 self.__val = new_val
 
-    def _getVal(self):
+    def _get_val(self):
         """Get the value atomically (callable version)."""
         with self._lock:
             return self.__val
 
-    def getAndSet(self, val):
+    def get_and_set(self, val):
         """Atomically set to the given value and return the old value."""
         with self._lock:
             old = self.__val
             self.__val = val
             return old
 
-    def compareAndSet(self, expect, update):
+    def compare_and_set(self, expect, update):
         """Atomically set to update if current value equals expect."""
         with self._lock:
             if self.__val == expect:
@@ -49,11 +49,11 @@ class AtomicBool(Obj):
                 return True
             return False
 
-    def toStr(self):
-        return Bool.toStr(self._getVal())
+    def to_str(self):
+        return Bool.to_str(self._get_val())
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()
 
 
 # Type metadata registration for reflection
@@ -64,6 +64,6 @@ _t = Type.find('concurrent::AtomicBool')
 _t.tf_({'sys::Js': {}})
 _t.af_('val', 1, 'sys::Bool', {})
 _t.am_('make', 257, 'sys::Void', [Param('val', Type.find('sys::Bool'), True)], {})
-_t.am_('getAndSet', 1, 'sys::Bool', [Param('val', Type.find('sys::Bool'), False)], {})
-_t.am_('compareAndSet', 1, 'sys::Bool', [Param('expect', Type.find('sys::Bool'), False), Param('update', Type.find('sys::Bool'), False)], {})
-_t.am_('toStr', 4609, 'sys::Str', [], {})
+_t.am_('get_and_set', 1, 'sys::Bool', [Param('val', Type.find('sys::Bool'), False)], {})
+_t.am_('compare_and_set', 1, 'sys::Bool', [Param('expect', Type.find('sys::Bool'), False), Param('update', Type.find('sys::Bool'), False)], {})
+_t.am_('to_str', 4609, 'sys::Str', [], {})

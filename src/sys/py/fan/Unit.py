@@ -22,7 +22,7 @@ class Unit(Obj):
 
     def __init__(self, name_or_ids, scale=1.0, offset=0.0, dim=None, definition=None, quantity=None):
         """
-        Private constructor - use Unit(name) or Unit.fromStr() for lookup.
+        Private constructor - use Unit(name) or Unit.from_str() for lookup.
         """
         # Handle lookup by name string
         if isinstance(name_or_ids, str):
@@ -217,7 +217,7 @@ class Unit(Obj):
     # ---- Static Methods ----
 
     @staticmethod
-    def fromStr(name, checked=True):
+    def from_str(name, checked=True):
         """Parse a Unit from string."""
         Unit._ensure_initialized()
         u = Unit._units_by_id.get(name)
@@ -230,21 +230,21 @@ class Unit(Obj):
     @staticmethod
     def find(name, checked=True):
         """Find unit by name (alias for fromStr)."""
-        return Unit.fromStr(name, checked)
+        return Unit.from_str(name, checked)
 
     @staticmethod
     def list_():
         """List all defined units."""
         from fan.sys.List import List
         Unit._ensure_initialized()
-        return List.fromList(Unit._units_list[:]).toImmutable()
+        return List.from_list(Unit._units_list[:]).to_immutable()
 
     @staticmethod
     def quantities():
         """List all quantity type names."""
         from fan.sys.List import List
         Unit._ensure_initialized()
-        return List.fromList(Unit._quantity_names[:]).toImmutable()
+        return List.from_list(Unit._quantity_names[:]).to_immutable()
 
     @staticmethod
     def quantity(name):
@@ -253,9 +253,9 @@ class Unit(Obj):
         from fan.sys.Type import Type
         Unit._ensure_initialized()
         units = Unit._quantities.get(name, [])
-        result = List.fromList(units[:])
+        result = List.from_list(units[:])
         result._of = Type.find("sys::Unit")
-        return result.toImmutable()
+        return result.to_immutable()
 
     @staticmethod
     def define(s):
@@ -329,7 +329,7 @@ class Unit(Obj):
     def ids(self):
         """Get unit identifiers as immutable list."""
         from fan.sys.List import List
-        return List.fromList(self._ids[:]).toImmutable()
+        return List.from_list(self._ids[:]).to_immutable()
 
     def name(self):
         """Primary name (first id)."""
@@ -377,10 +377,10 @@ class Unit(Obj):
     def sec(self):
         return self._dim[2]
 
-    def K(self):
+    def k(self):
         return self._dim[3]
 
-    def A(self):
+    def a(self):
         return self._dim[4]
 
     def mol(self):
@@ -389,7 +389,7 @@ class Unit(Obj):
     def cd(self):
         return self._dim[6]
 
-    def convertTo(self, val, to):
+    def convert_to(self, val, to):
         """Convert value from this unit to another unit."""
         # Check compatible dimensions
         if self._dim != to._dim:
@@ -401,9 +401,9 @@ class Unit(Obj):
         base = (val * self._scale) + self._offset
         return (base - to._offset) / to._scale
 
-    def convertFrom(self, val, from_):
+    def convert_from(self, val, from_):
         """Convert value from another unit to this one."""
-        return from_.convertTo(val, self)
+        return from_.convert_to(val, self)
 
     def mult(self, other):
         """Multiply units - instance method for ObjUtil compatibility."""
@@ -549,12 +549,12 @@ class Unit(Obj):
 
     # ---- Identity ----
 
-    def toStr(self):
+    def to_str(self):
         """String representation (symbol)."""
         return self.symbol()
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()
 
     def __repr__(self):
         return f"Unit({self.name()})"
@@ -588,13 +588,13 @@ class Unit(Obj):
         from fan.sys.Type import Type
         return Type.find("sys::Unit")
 
-    def literalEncode(self, encoder):
+    def literal_encode(self, encoder):
         """Encode for serialization.
 
         Simple types serialize as: Type("toStr")
         Example: sys::Unit("meter")
         """
-        encoder.wType(self.typeof())
+        encoder.w_type(self.typeof())
         encoder.w('(')
-        encoder.wStrLiteral(self.toStr(), '"')
+        encoder.w_str_literal(self.to_str(), '"')
         encoder.w(')')

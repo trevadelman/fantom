@@ -73,7 +73,7 @@ class Service(Obj):
         return None
 
     @staticmethod
-    def findAll(type_):
+    def find_all(type_):
         """Find all installed services that match the given Type.
 
         Args:
@@ -152,11 +152,11 @@ class Service(Obj):
     # Instance Lifecycle Methods
     #################################################################
 
-    def isInstalled(self):
+    def is_installed(self):
         """Return true if service is installed in the registry."""
         return self._installed
 
-    def isRunning(self):
+    def is_running(self):
         """Return true if service is currently running."""
         return self._running
 
@@ -208,7 +208,7 @@ class Service(Obj):
 
         if not self._running:
             try:
-                self.onStart()
+                self.on_start()
                 self._running = True
             except Exception as e:
                 # onStart failed - service not running
@@ -228,7 +228,7 @@ class Service(Obj):
         if self._running:
             self._running = False
             try:
-                self.onStop()
+                self.on_stop()
             except Exception as e:
                 # onStop failed - log but don't re-raise
                 pass
@@ -238,14 +238,14 @@ class Service(Obj):
     # Virtual Callbacks
     #################################################################
 
-    def onStart(self):
+    def on_start(self):
         """Called when service is started.
 
         Override this method in subclasses to perform startup logic.
         """
         pass
 
-    def onStop(self):
+    def on_stop(self):
         """Called when service is stopped.
 
         Override this method in subclasses to perform cleanup logic.

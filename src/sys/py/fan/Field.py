@@ -32,7 +32,7 @@ class Field(Slot):
         # If setter_flags not provided, use field flags (same visibility for getter/setter)
         self._setter_flags = setter_flags if setter_flags is not None else flags
 
-    def isField(self):
+    def is_field(self):
         return True
 
     def type(self):
@@ -82,7 +82,7 @@ class Field(Slot):
         Returns:
             Field value
         """
-        if self.isStatic():
+        if self.is_static():
             # Static field - get from class
             py_cls = self._get_python_class()
             if py_cls is not None:
@@ -142,7 +142,7 @@ class Field(Slot):
 
         return None
 
-    def set(self, obj, val, check_const=True):
+    def set_(self, obj, val, check_const=True):
         """Set field value on object.
 
         Args:
@@ -151,11 +151,11 @@ class Field(Slot):
             check_const: If True, raise error for const fields
         """
         # Check const constraint
-        if check_const and self.isConst():
+        if check_const and self.is_const():
             from .Err import ReadonlyErr
             raise ReadonlyErr.make(f"Cannot set const field {self.qname()}")
 
-        if self.isStatic():
+        if self.is_static():
             # Static field - set on class
             py_cls = self._get_python_class()
             if py_cls is not None:
@@ -238,7 +238,7 @@ class Field(Slot):
 
         return None
 
-    def hasFacet(self, facetType):
+    def has_facet(self, facetType):
         """Check if this field has a facet.
 
         Args:
@@ -272,7 +272,7 @@ class Field(Slot):
                     name = facet_qname.split('::')[1]
                     module = __import__(f'fan.{pod}.{name}', fromlist=[name])
                     cls = getattr(module, name)
-                    return cls.defVal()
+                    return cls.def_val()
                 except Exception as e:
                     # Fall back to FacetInstance
                     return FacetInstance(facetType, facet_data)
@@ -297,10 +297,10 @@ class Field(Slot):
             facet_type = Type.find(facet_qname, True)
             result.append(FacetInstance(facet_type, facet_data))
         # Return immutable Fantom List with Facet element type
-        self._facets_list = FanList.fromLiteral(result, "sys::Facet").toImmutable()
+        self._facets_list = FanList.from_literal(result, "sys::Facet").to_immutable()
         return self._facets_list
 
-    def toStr(self):
+    def to_str(self):
         return self.qname()
 
     @staticmethod
@@ -326,7 +326,7 @@ class Field(Slot):
         return None
 
     @staticmethod
-    def makeSetFunc(field_vals):
+    def make_set_func(field_vals):
         """Create a function that sets multiple fields on an object.
 
         Args:
@@ -355,7 +355,7 @@ class Field(Slot):
 
         def setter(obj):
             for field, value in pairs:
-                field.set(obj, value, check_const=False)
+                field.set_(obj, value, check_const=False)
 
         # Wrap in Func object with proper signature: |Obj->Void|
         return Func(setter, Type.find("sys::Void"), [Param("it", Type.find("sys::Obj"))])
@@ -391,30 +391,30 @@ class FieldGetter:
         """Getter takes no params (implicit 'this')."""
         return []
 
-    def isMethod(self):
+    def is_method(self):
         return True
 
-    def isField(self):
+    def is_field(self):
         return False
 
     # Delegate flag methods to field
-    def isPublic(self):
-        return self._field.isPublic()
+    def is_public(self):
+        return self._field.is_public()
 
-    def isProtected(self):
-        return self._field.isProtected()
+    def is_protected(self):
+        return self._field.is_protected()
 
-    def isPrivate(self):
-        return self._field.isPrivate()
+    def is_private(self):
+        return self._field.is_private()
 
-    def isInternal(self):
-        return self._field.isInternal()
+    def is_internal(self):
+        return self._field.is_internal()
 
-    def isStatic(self):
-        return self._field.isStatic()
+    def is_static(self):
+        return self._field.is_static()
 
-    def isVirtual(self):
-        return self._field.isVirtual()
+    def is_virtual(self):
+        return self._field.is_virtual()
 
     def call(self, *args):
         """Call the getter - get field value from target."""
@@ -422,7 +422,7 @@ class FieldGetter:
             return self._field.get(args[0])
         return self._field.get()
 
-    def callList(self, args):
+    def call_list(self, args):
         """Call with args list."""
         if args and len(args) > 0:
             return self._field.get(args[0])
@@ -473,43 +473,43 @@ class FieldSetter:
         from .Param import Param
         return [Param("it", self._field.type(), False)]
 
-    def isMethod(self):
+    def is_method(self):
         return True
 
-    def isField(self):
+    def is_field(self):
         return False
 
     # Use setter-specific flags for visibility checks
-    def isPublic(self):
+    def is_public(self):
         return bool(self._field._setter_flags & self._PUBLIC)
 
-    def isProtected(self):
+    def is_protected(self):
         return bool(self._field._setter_flags & self._PROTECTED)
 
-    def isPrivate(self):
+    def is_private(self):
         return bool(self._field._setter_flags & self._PRIVATE)
 
-    def isInternal(self):
+    def is_internal(self):
         return bool(self._field._setter_flags & self._INTERNAL)
 
-    def isStatic(self):
+    def is_static(self):
         # Static is same for getter/setter, use field's value
-        return self._field.isStatic()
+        return self._field.is_static()
 
-    def isVirtual(self):
+    def is_virtual(self):
         # Virtual is same for getter/setter, use field's value
-        return self._field.isVirtual()
+        return self._field.is_virtual()
 
     def call(self, *args):
         """Call the setter - set field value on target."""
         if len(args) >= 2:
-            self._field.set(args[0], args[1])
+            self._field.set_(args[0], args[1])
         elif len(args) == 1:
-            self._field.set(None, args[0])
+            self._field.set_(None, args[0])
 
-    def callList(self, args):
+    def call_list(self, args):
         """Call with args list."""
         if args and len(args) >= 2:
-            self._field.set(args[0], args[1])
+            self._field.set_(args[0], args[1])
         elif args and len(args) == 1:
-            self._field.set(None, args[0])
+            self._field.set_(None, args[0])

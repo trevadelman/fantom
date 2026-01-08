@@ -22,7 +22,7 @@ class StrBuf(Obj):
     # Accessors
     #################################################################
 
-    def isEmpty(self):
+    def is_empty(self):
         """Return true if size is zero."""
         return len(self._buf) == 0
 
@@ -40,7 +40,7 @@ class StrBuf(Obj):
         """Set capacity."""
         self._capacity = int(size)
 
-    def setCapacity(self, size):
+    def set_capacity(self, size):
         """Ensure capacity for at least size characters."""
         self._capacity = int(size)
         return self
@@ -68,7 +68,7 @@ class StrBuf(Obj):
                 return ''.join(self._buf[start:stop])
         return self.get(index)
 
-    def getRange(self, r):
+    def get_range(self, r):
         """Get substring for range."""
         from .Err import IndexErr
         n = len(self._buf)
@@ -84,7 +84,7 @@ class StrBuf(Obj):
 
         return ''.join(self._buf[s:e+1])
 
-    def set(self, index, ch):
+    def set_(self, index, ch):
         """Set character at index. Supports negative indexing."""
         if index < 0:
             index = len(self._buf) + index
@@ -96,7 +96,7 @@ class StrBuf(Obj):
 
     def __setitem__(self, index, ch):
         """Support [] operator for setting characters."""
-        self.set(index, ch)
+        self.set_(index, ch)
 
     #################################################################
     # Modification
@@ -105,16 +105,16 @@ class StrBuf(Obj):
     def add(self, obj):
         """Append string representation of object."""
         from .ObjUtil import ObjUtil
-        s = "null" if obj is None else ObjUtil.toStr(obj)
+        s = "null" if obj is None else ObjUtil.to_str(obj)
         self._buf.extend(list(s))
         return self
 
-    def addChar(self, ch):
+    def add_char(self, ch):
         """Append single character by codepoint."""
         self._buf.append(chr(int(ch)))
         return self
 
-    def addRange(self, s, r):
+    def add_range(self, s, r):
         """Append substring of s defined by range."""
         n = len(s)
         start = r._start
@@ -137,13 +137,13 @@ class StrBuf(Obj):
     def join(self, obj, sep=" "):
         """Append object with separator if not empty."""
         from .ObjUtil import ObjUtil
-        s = "null" if obj is None else ObjUtil.toStr(obj)
+        s = "null" if obj is None else ObjUtil.to_str(obj)
         if len(self._buf) > 0:
             self._buf.extend(list(sep))
         self._buf.extend(list(s))
         return self
 
-    def joinNotNull(self, obj, sep=" "):
+    def join_not_null(self, obj, sep=" "):
         """Append object with separator if object is not null and buffer not empty."""
         if obj is not None:
             self.join(obj, sep)
@@ -152,7 +152,7 @@ class StrBuf(Obj):
     def insert(self, index, obj):
         """Insert string representation at index."""
         from .ObjUtil import ObjUtil
-        s = "null" if obj is None else ObjUtil.toStr(obj)
+        s = "null" if obj is None else ObjUtil.to_str(obj)
         index = int(index)
         if index < 0:
             index = len(self._buf) + index
@@ -174,7 +174,7 @@ class StrBuf(Obj):
         del self._buf[index]
         return self
 
-    def removeRange(self, r):
+    def remove_range(self, r):
         """Remove characters in range."""
         n = len(self._buf)
         start = r._start
@@ -199,7 +199,7 @@ class StrBuf(Obj):
         del self._buf[start:end]
         return self
 
-    def replaceRange(self, r, s):
+    def replace_range(self, r, s):
         """Replace characters in range with string."""
         n = len(self._buf)
         start = r._start
@@ -238,15 +238,15 @@ class StrBuf(Obj):
     # Conversion
     #################################################################
 
-    def toStr(self):
+    def to_str(self):
         """Return current string value."""
         return ''.join(self._buf)
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()
 
     def __repr__(self):
-        return f"StrBuf({self.toStr()!r})"
+        return f"StrBuf({self.to_str()!r})"
 
     #################################################################
     # OutStream Integration
@@ -280,12 +280,12 @@ class StrBufOutStream:
                 self.name = "UTF-8"
         return Charset()
 
-    def writeChar(self, ch):
+    def write_char(self, ch):
         """Write single character."""
-        self._buf.addChar(ch)
+        self._buf.add_char(ch)
         return self
 
-    def writeChars(self, s, off=0, length=None):
+    def write_chars(self, s, off=0, length=None):
         """Write string of characters."""
         if length is None:
             self._buf.add(s[off:])
@@ -301,12 +301,12 @@ class StrBufOutStream:
     # Alias for transpiled code that uses 'print' directly
     print = print_
 
-    def printLine(self, obj=""):
+    def print_line(self, obj=""):
         """Print object with newline."""
-        self._buf.add(obj).addChar(ord('\n'))
+        self._buf.add(obj).add_char(ord('\n'))
         return self
 
-    def writeXml(self, s, flags=0):
+    def write_xml(self, s, flags=0):
         """Write string with XML escaping.
 
         Args:
@@ -331,7 +331,7 @@ class StrBufOutStream:
         self._buf.add(''.join(result))
         return self
 
-    def writeProps(self, props):
+    def write_props(self, props):
         """Write map as properties file format."""
         for key, val in props.items() if hasattr(props, 'items') else []:
             # Escape special characters in value
@@ -339,7 +339,7 @@ class StrBufOutStream:
             self._buf.add(f"{key}={escaped_val}\n")
         return self
 
-    def writeObj(self, obj, options=None):
+    def write_obj(self, obj, options=None):
         """Write serialized object representation using Fantom serialization format.
 
         Args:
@@ -350,7 +350,7 @@ class StrBufOutStream:
             self for chaining
         """
         from fanx.ObjEncoder import ObjEncoder
-        ObjEncoder(self, options).writeObj(obj)
+        ObjEncoder(self, options).write_obj(obj)
         return self
 
     def flush(self):
@@ -366,30 +366,30 @@ class StrBufOutStream:
         from .Err import UnsupportedErr
         raise UnsupportedErr.make("Binary write not supported for StrBuf.out")
 
-    def writeBuf(self, buf, n=None):
+    def write_buf(self, buf, n=None):
         from .Err import UnsupportedErr
         raise UnsupportedErr.make("Binary write not supported for StrBuf.out")
 
-    def writeI2(self, n):
+    def write_i2(self, n):
         from .Err import UnsupportedErr
         raise UnsupportedErr.make("Binary write not supported for StrBuf.out")
 
-    def writeI4(self, n):
+    def write_i4(self, n):
         from .Err import UnsupportedErr
         raise UnsupportedErr.make("Binary write not supported for StrBuf.out")
 
-    def writeI8(self, n):
+    def write_i8(self, n):
         from .Err import UnsupportedErr
         raise UnsupportedErr.make("Binary write not supported for StrBuf.out")
 
-    def writeF4(self, n):
+    def write_f4(self, n):
         from .Err import UnsupportedErr
         raise UnsupportedErr.make("Binary write not supported for StrBuf.out")
 
-    def writeF8(self, n):
+    def write_f8(self, n):
         from .Err import UnsupportedErr
         raise UnsupportedErr.make("Binary write not supported for StrBuf.out")
 
-    def writeUtf(self, s):
+    def write_utf(self, s):
         from .Err import UnsupportedErr
         raise UnsupportedErr.make("Binary write not supported for StrBuf.out")

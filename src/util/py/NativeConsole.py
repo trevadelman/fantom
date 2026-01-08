@@ -22,7 +22,7 @@ class NativeConsole(Obj):
         self._indent = 0
 
     @staticmethod
-    def curNative():
+    def cur_native():
         """Get the default console singleton."""
         if NativeConsole._curNative is None:
             NativeConsole._curNative = NativeConsole()
@@ -83,7 +83,7 @@ class NativeConsole(Obj):
 
         if err is not None:
             try:
-                trace = err.traceToStr()
+                trace = err.trace_to_str()
                 for line in str(trace).splitlines():
                     if level:
                         print(f"{indent_str}{level}: {line}", file=file)
@@ -116,7 +116,7 @@ class NativeConsole(Obj):
         self._indent += 1
         return self
 
-    def groupEnd(self):
+    def group_end(self):
         """Exit an indented group level."""
         if self._indent > 0:
             self._indent -= 1
@@ -129,7 +129,7 @@ class NativeConsole(Obj):
         except EOFError:
             return None
 
-    def promptPassword(self, msg=""):
+    def prompt_password(self, msg=""):
         """Prompt the user to enter a password with echo disabled."""
         try:
             import getpass

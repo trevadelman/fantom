@@ -23,7 +23,7 @@ class Enum(Obj):
         """Return enum name"""
         return self._name
 
-    def toStr(self):
+    def to_str(self):
         """Return string representation (the name)"""
         return self._name
 

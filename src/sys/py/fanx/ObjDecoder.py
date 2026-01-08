@@ -28,7 +28,7 @@ class ObjDecoder:
         from fan.sys.Str import Str
         # Create InStream from string
         in_stream = _StrInStream(s)
-        return ObjDecoder(in_stream, None).readObj()
+        return ObjDecoder(in_stream, None).read_obj()
 
     def __init__(self, in_stream, options=None):
         """Create decoder for input stream.
@@ -43,50 +43,50 @@ class ObjDecoder:
         self.curt = None
         self._consume()
 
-    def readObj(self):
+    def read_obj(self):
         """Read an object from the stream.
 
         Returns:
             Decoded object
         """
-        self._readHeader()
-        return self._readObj(None, None, True)
+        self._read_header()
+        return self._read_obj(None, None, True)
 
-    def _readHeader(self):
+    def _read_header(self):
         """Parse using statements at beginning of stream."""
         while self.curt == Token.USING:
-            u = self._readUsing()
+            u = self._read_using()
             self.usings.append(u)
 
-    def _readUsing(self):
+    def _read_using(self):
         """Parse using statement."""
         line = self.tokenizer.line
         self._consume()
 
-        pod_name = self._consumeId("Expecting pod name")
+        pod_name = self._consume_id("Expecting pod name")
         from fan.sys.Pod import Pod
         pod = Pod.find(pod_name, False)
         if pod is None:
             raise self._err(f"Unknown pod: {pod_name}")
 
         if self.curt != Token.DOUBLE_COLON:
-            self._endOfStmt(line)
+            self._end_of_stmt(line)
             return _UsingPod(pod)
 
         self._consume()
-        type_name = self._consumeId("Expecting type name")
+        type_name = self._consume_id("Expecting type name")
         t = pod.type(type_name, False)
         if t is None:
             raise self._err(f"Unknown type: {pod_name}::{type_name}")
 
         if self.curt == Token.AS:
             self._consume()
-            type_name = self._consumeId("Expecting using as name")
+            type_name = self._consume_id("Expecting using as name")
 
-        self._endOfStmt(line)
+        self._end_of_stmt(line)
         return _UsingType(t, type_name)
 
-    def _readObj(self, cur_field, peek_type, root):
+    def _read_obj(self, cur_field, peek_type, root):
         """Read object based on current token context.
 
         Args:
@@ -98,46 +98,46 @@ class ObjDecoder:
             Decoded object
         """
         # Literals are standalone
-        if Token.isLiteral(self.curt):
+        if Token.is_literal(self.curt):
             val = self.tokenizer.val
             self._consume()
             return val
 
         # [ is always list/map collection
         if self.curt == Token.LBRACKET:
-            return self._readCollection(cur_field, peek_type)
+            return self._read_collection(cur_field, peek_type)
 
         # Remaining options must start with type signature
         line = self.tokenizer.line
-        t = peek_type if peek_type else self._readType()
+        t = peek_type if peek_type else self._read_type()
 
         # type(str) = simple
         if self.curt == Token.LPAREN:
-            return self._readSimple(line, t)
+            return self._read_simple(line, t)
         # type# = type or slot literal
         elif self.curt == Token.POUND:
-            return self._readTypeOrSlotLiteral(line, t)
+            return self._read_type_or_slot_literal(line, t)
         # type[ = list/map
         elif self.curt == Token.LBRACKET:
-            return self._readCollection(cur_field, t)
+            return self._read_collection(cur_field, t)
         # type or type{ = complex
         else:
-            return self._readComplex(line, t, root)
+            return self._read_complex(line, t, root)
 
-    def _readTypeOrSlotLiteral(self, line, t):
+    def _read_type_or_slot_literal(self, line, t):
         """Parse type# or type#slot literal."""
         self._consume(Token.POUND, "Expected '#' for type literal")
-        if self.curt == Token.ID and not self._isEndOfStmt(line):
-            slot_name = self._consumeId("slot literal name")
+        if self.curt == Token.ID and not self._is_end_of_stmt(line):
+            slot_name = self._consume_id("slot literal name")
             return t.slot(slot_name)
         else:
             return t
 
-    def _readSimple(self, line, t):
+    def _read_simple(self, line, t):
         """Parse simple type: type(str)"""
         # Parse type(str)
         self._consume(Token.LPAREN, "Expected ( in simple")
-        s = self._consumeStr("Expected string literal for simple")
+        s = self._consume_str("Expected string literal for simple")
         self._consume(Token.RPAREN, "Expected ) in simple")
 
         # Look up fromStr method
@@ -152,7 +152,7 @@ class ObjDecoder:
             from fan.sys.Err import ParseErr
             raise ParseErr.make(f"{e} [Line {line}]")
 
-    def _readComplex(self, line, t, root):
+    def _read_complex(self, line, t, root):
         """Parse complex type with fields."""
         from fan.sys.Map import Map
         from fan.sys.List import List
@@ -162,21 +162,21 @@ class ObjDecoder:
         to_add = []  # collection items
 
         # Read fields/collection
-        self._readComplexFields(t, to_set, to_add)
+        self._read_complex_fields(t, to_set, to_add)
 
         # Handle special case of sys::Map
         if t.qname() == "sys::Map":
             # Return empty map since we don't have type params here
             m = Map()
             for field, val in to_set.items():
-                self._complexSet(m, field, val, line)
+                self._complex_set(m, field, val, line)
             return m
 
         # Handle special case of sys::List
         if t.qname() == "sys::List":
             lst = List.make(Type.find("sys::Obj?"))
             for field, val in to_set.items():
-                self._complexSet(lst, field, val, line)
+                self._complex_set(lst, field, val, line)
             return lst
 
         # Get make constructor
@@ -192,7 +192,7 @@ class ObjDecoder:
         # Construct object
         try:
             if args:
-                obj = make_ctor.callList(args)
+                obj = make_ctor.call_list(args)
             else:
                 obj = make_ctor.call()
         except Exception as e:
@@ -200,7 +200,7 @@ class ObjDecoder:
 
         # Set fields
         for field, val in to_set.items():
-            self._complexSet(obj, field, val, line)
+            self._complex_set(obj, field, val, line)
 
         # Add collection items
         if to_add:
@@ -208,11 +208,11 @@ class ObjDecoder:
             if add_method is None:
                 raise self._err(f"Method not found: {t.qname()}.add", line)
             for val in to_add:
-                self._complexAdd(t, obj, add_method, val, line)
+                self._complex_add(t, obj, add_method, val, line)
 
         return obj
 
-    def _readComplexFields(self, t, to_set, to_add):
+    def _read_complex_fields(self, t, to_set, to_add):
         """Parse fields and collection items inside { }."""
         if self.curt != Token.LBRACE:
             return
@@ -223,10 +223,10 @@ class ObjDecoder:
             read_field = False
 
             if self.curt == Token.ID:
-                name = self._consumeId("Expected field name")
+                name = self._consume_id("Expected field name")
                 if self.curt == Token.EQ:
                     self._consume()
-                    self._readComplexSet(t, line, name, to_set)
+                    self._read_complex_set(t, line, name, to_set)
                     read_field = True
                 else:
                     # Pushback - reset to start of collection item
@@ -234,66 +234,66 @@ class ObjDecoder:
                     self.curt = self.tokenizer.reset(Token.ID, name, line)
 
             if not read_field:
-                self._readComplexAdd(t, line, to_add)
+                self._read_complex_add(t, line, to_add)
 
             if self.curt == Token.COMMA:
                 self._consume()
             else:
-                self._endOfStmt(line)
+                self._end_of_stmt(line)
 
         self._consume(Token.RBRACE, "Expected '}'")
 
-    def _readComplexSet(self, t, line, name, to_set):
+    def _read_complex_set(self, t, line, name, to_set):
         """Read field value assignment."""
         field = t.field(name, False)
         if field is None:
             raise self._err(f"Field not found: {t.qname()}.{name}", line)
 
-        val = self._readObj(field, None, False)
+        val = self._read_obj(field, None, False)
 
         # Make const if needed
-        if field.isConst():
+        if field.is_const():
             from fan.sys.ObjUtil import ObjUtil
             try:
-                val = ObjUtil.toImmutable(val)
+                val = ObjUtil.to_immutable(val)
             except Exception as e:
                 raise self._err(f"Cannot make object const for {field.qname()}: {e}", line)
 
         to_set[field] = val
 
-    def _complexSet(self, obj, field, val, line):
+    def _complex_set(self, obj, field, val, line):
         """Set field value on object."""
         try:
             # Pass check_const=False - during deserialization we can set const fields
-            # (like JS: field.set(obj, val, false))
-            if field.isConst():
+            # (like JS: field.set_(obj, val, false))
+            if field.is_const():
                 from fan.sys.ObjUtil import ObjUtil
-                field.set(obj, ObjUtil.toImmutable(val), check_const=False)
+                field.set_(obj, ObjUtil.to_immutable(val), check_const=False)
             else:
-                field.set(obj, val)
+                field.set_(obj, val)
         except Exception as e:
             raise self._err(f"Cannot set field {field.qname()}: {e}", line)
 
-    def _readComplexAdd(self, t, line, to_add):
+    def _read_complex_add(self, t, line, to_add):
         """Read collection item to add."""
-        val = self._readObj(None, None, False)
+        val = self._read_obj(None, None, False)
         to_add.append(val)
 
-    def _complexAdd(self, t, obj, add_method, val, line):
+    def _complex_add(self, t, obj, add_method, val, line):
         """Add collection item to object."""
         try:
             add_method.call(obj, val)
         except Exception as e:
             raise self._err(f"Cannot call {t.qname()}.add: {e}", line)
 
-    def _readCollection(self, cur_field, t):
+    def _read_collection(self, cur_field, t):
         """Parse list or map collection."""
         self._consume(Token.LBRACKET, "Expecting '['")
 
         # Check for type signature
         peek_type = None
         if self.curt == Token.ID and t is None:
-            peek_type = self._readType(True)
+            peek_type = self._read_type(True)
 
             # [mapType] is explicit map signature
             if self.curt == Token.RBRACKET and peek_type is not None:
@@ -304,10 +304,10 @@ class ObjDecoder:
                     self._consume()
                     while self.curt == Token.LRBRACKET:
                         self._consume()
-                        t = t.toListOf()
+                        t = t.to_list_of()
                     if self.curt == Token.QUESTION:
                         self._consume()
-                        t = t.toNullable()
+                        t = t.to_nullable()
                     if self.curt == Token.POUND:
                         self._consume()
                         return t
@@ -318,7 +318,7 @@ class ObjDecoder:
             self._consume()
             self._consume(Token.RBRACKET, "Expecting ']'")
             from fan.sys.List import List
-            of_type = self._toListOfType(t, cur_field, False)
+            of_type = self._to_list_of_type(t, cur_field, False)
             return List.make(of_type)
 
         # Handle [:] empty map
@@ -326,19 +326,19 @@ class ObjDecoder:
             self._consume()
             self._consume(Token.RBRACKET, "Expecting ']'")
             from fan.sys.Map import Map
-            map_type = self._toMapType(t, cur_field, False)
+            map_type = self._to_map_type(t, cur_field, False)
             return Map.make(map_type)
 
         # Read first item
-        first = self._readObj(None, peek_type, False)
+        first = self._read_obj(None, peek_type, False)
 
         # Distinguish list vs map
         if self.curt == Token.COLON:
-            return self._readMap(self._toMapType(t, cur_field, True), first)
+            return self._read_map(self._to_map_type(t, cur_field, True), first)
         else:
-            return self._readList(self._toListOfType(t, cur_field, True), first)
+            return self._read_list(self._to_list_of_type(t, cur_field, True), first)
 
-    def _readList(self, of_type, first):
+    def _read_list(self, of_type, first):
         """Parse list: [item, item, ...]"""
         items = [first]
 
@@ -346,32 +346,32 @@ class ObjDecoder:
             self._consume(Token.COMMA, "Expected ','")
             if self.curt == Token.RBRACKET:
                 break
-            items.append(self._readObj(None, None, False))
+            items.append(self._read_obj(None, None, False))
 
         self._consume(Token.RBRACKET, "Expected ']'")
 
         # Infer type if needed
         if of_type is None:
-            of_type = self._inferType(items)
+            of_type = self._infer_type(items)
 
         from fan.sys.List import List
         return List.make(of_type, items)
 
-    def _readMap(self, map_type, first_key):
+    def _read_map(self, map_type, first_key):
         """Parse map: [key:val, key:val, ...]"""
         items = []  # List of (key, val) pairs
 
         # Finish first pair
         self._consume(Token.COLON, "Expected ':'")
-        items.append((first_key, self._readObj(None, None, False)))
+        items.append((first_key, self._read_obj(None, None, False)))
 
         while self.curt != Token.RBRACKET:
             self._consume(Token.COMMA, "Expected ','")
             if self.curt == Token.RBRACKET:
                 break
-            key = self._readObj(None, None, False)
+            key = self._read_obj(None, None, False)
             self._consume(Token.COLON, "Expected ':'")
-            val = self._readObj(None, None, False)
+            val = self._read_obj(None, None, False)
             items.append((key, val))
 
         self._consume(Token.RBRACKET, "Expected ']'")
@@ -380,54 +380,54 @@ class ObjDecoder:
         if map_type is None:
             keys = [k for k, v in items]
             vals = [v for k, v in items]
-            map_type = self._inferMapType({k: v for k, v in items})
+            map_type = self._infer_map_type({k: v for k, v in items})
 
         # Create map and populate it
         from fan.sys.Map import Map
         m = Map.make(map_type)
         for key, val in items:
-            m.set(key, val)
+            m.set_(key, val)
         return m
 
-    def _toListOfType(self, t, cur_field, infer):
+    def _to_list_of_type(self, t, cur_field, infer):
         """Determine list element type."""
         if t is not None:
             return t
         if cur_field is not None:
             ft = cur_field.type()
-            if hasattr(ft, 'toNonNullable'):
-                ft = ft.toNonNullable()
+            if hasattr(ft, 'to_non_nullable'):
+                ft = ft.to_non_nullable()
             if hasattr(ft, 'v'):
                 return ft.v  # Property access, not method call (like JS: ft.v)
         if infer:
             return None
         from fan.sys.Type import Type
-        return Type.find("sys::Obj").toNullable()
+        return Type.find("sys::Obj").to_nullable()
 
-    def _toMapType(self, t, cur_field, infer):
+    def _to_map_type(self, t, cur_field, infer):
         """Determine map type."""
         from fan.sys.Type import Type, MapType
         if t is not None and isinstance(t, MapType):
             return t
         if cur_field is not None:
             ft = cur_field.type()
-            if hasattr(ft, 'toNonNullable'):
-                ft = ft.toNonNullable()
+            if hasattr(ft, 'to_non_nullable'):
+                ft = ft.to_non_nullable()
             if isinstance(ft, MapType):
                 return ft
         if infer:
             return None
         return Type.find("[sys::Obj:sys::Obj?]")
 
-    def _inferType(self, items):
+    def _infer_type(self, items):
         """Infer common type from list of items."""
         from fan.sys.Type import Type
         if not items:
-            return Type.find("sys::Obj").toNullable()
+            return Type.find("sys::Obj").to_nullable()
         # Simple: use first item's type
         first = items[0]
         if first is None:
-            return Type.find("sys::Obj").toNullable()
+            return Type.find("sys::Obj").to_nullable()
         if hasattr(first, 'typeof'):
             return first.typeof()
         # Python primitives
@@ -441,24 +441,24 @@ class ObjDecoder:
             return Type.find("sys::Str")
         return Type.find("sys::Obj")
 
-    def _inferMapType(self, items):
+    def _infer_map_type(self, items):
         """Infer map type from key/value items."""
         from fan.sys.Type import Type
         if not items:
             return Type.find("[sys::Obj:sys::Obj?]")
         keys = list(items.keys())
         vals = list(items.values())
-        k_type = self._inferType(keys)
-        v_type = self._inferType(vals)
+        k_type = self._infer_type(keys)
+        v_type = self._infer_type(vals)
         return Type.find(f"[{k_type.signature()}:{v_type.signature()}]")
 
-    def _readType(self, lbracket=False):
+    def _read_type(self, lbracket=False):
         """Parse type signature."""
-        t = self._readSimpleType(lbracket)
+        t = self._read_simple_type(lbracket)
 
         if self.curt == Token.QUESTION:
             self._consume()
-            t = t.toNullable()
+            t = t.to_nullable()
 
         if self.curt == Token.COLON:
             self._consume()
@@ -466,24 +466,24 @@ class ObjDecoder:
             if lbracket2:
                 self._consume()
             from fan.sys.Type import Type
-            t = Type.find(f"[{t.signature()}:{self._readType(lbracket2).signature()}]")
+            t = Type.find(f"[{t.signature()}:{self._read_type(lbracket2).signature()}]")
             if lbracket2:
                 self._consume(Token.RBRACKET, "Expected closing ]")
 
         while self.curt == Token.LRBRACKET:
             self._consume()
-            t = t.toListOf()
+            t = t.to_list_of()
 
         if self.curt == Token.QUESTION:
             self._consume()
-            t = t.toNullable()
+            t = t.to_nullable()
 
         return t
 
-    def _readSimpleType(self, lbracket):
+    def _read_simple_type(self, lbracket):
         """Parse simple type: [pod::]type"""
         line = self.tokenizer.line
-        n = self._consumeId("Expected type signature")
+        n = self._consume_id("Expected type signature")
 
         # Check for using-imported name first
         if self.curt != Token.DOUBLE_COLON:
@@ -495,7 +495,7 @@ class ObjDecoder:
 
         # Fully qualified: pod::type
         self._consume(Token.DOUBLE_COLON, "Expected ::")
-        type_name = self._consumeId("Expected type name")
+        type_name = self._consume_id("Expected type name")
 
         from fan.sys.Type import Type
 
@@ -506,14 +506,14 @@ class ObjDecoder:
 
         return t
 
-    def _consumeId(self, expected):
+    def _consume_id(self, expected):
         """Consume identifier token."""
         self._verify(Token.ID, expected)
         id_val = self.tokenizer.val
         self._consume()
         return id_val
 
-    def _consumeStr(self, expected):
+    def _consume_str(self, expected):
         """Consume string literal token."""
         self._verify(Token.STR_LITERAL, expected)
         s = self.tokenizer.val
@@ -529,9 +529,9 @@ class ObjDecoder:
     def _verify(self, token_type, expected):
         """Verify current token type."""
         if self.curt != token_type:
-            raise self._err(f"{expected}, not '{Token.toString(self.curt)}'")
+            raise self._err(f"{expected}, not '{Token.to_string(self.curt)}'")
 
-    def _isEndOfStmt(self, last_line):
+    def _is_end_of_stmt(self, last_line):
         """Check if current token ends a statement."""
         if self.curt == Token.EOF:
             return True
@@ -539,7 +539,7 @@ class ObjDecoder:
             return True
         return last_line < self.tokenizer.line
 
-    def _endOfStmt(self, last_line):
+    def _end_of_stmt(self, last_line):
         """Verify end of statement."""
         if self.curt == Token.EOF:
             return
@@ -550,7 +550,7 @@ class ObjDecoder:
             return
         if self.curt == Token.RBRACE:
             return
-        raise self._err(f"Expected end of statement; not '{Token.toString(self.curt)}'")
+        raise self._err(f"Expected end of statement; not '{Token.to_string(self.curt)}'")
 
     def _err(self, msg, line=None):
         """Create error with line context."""
@@ -567,7 +567,7 @@ class _StrInStream:
         self.text = text
         self.pos = 0
 
-    def rChar(self):
+    def r_char(self):
         if self.pos >= len(self.text):
             return None
         c = ord(self.text[self.pos])

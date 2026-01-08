@@ -37,7 +37,7 @@ class Locale(Obj):
             self._country = None
 
     @staticmethod
-    def fromStr(s, checked=True):
+    def from_str(s, checked=True):
         """Parse a Locale from string like 'en' or 'en-US'.
 
         Format: "xx" or "xx-XX" where:
@@ -87,18 +87,18 @@ class Locale(Obj):
     def en():
         """Get English locale singleton"""
         if Locale._en is None:
-            Locale._en = Locale.fromStr("en")
+            Locale._en = Locale.from_str("en")
         return Locale._en
 
     @staticmethod
     def cur():
         """Get current locale for this thread"""
         if not hasattr(Locale._thread_local, 'current') or Locale._thread_local.current is None:
-            Locale._thread_local.current = Locale.fromStr("en-US")
+            Locale._thread_local.current = Locale.from_str("en-US")
         return Locale._thread_local.current
 
     @staticmethod
-    def setCur(locale):
+    def set_cur(locale):
         """Set current locale for this thread"""
         if locale is None:
             from fan.sys.Err import NullErr
@@ -121,15 +121,15 @@ class Locale(Obj):
         Returns the function's result.
         """
         old = Locale.cur()  # Get current for this thread
-        Locale.setCur(self)
+        Locale.set_cur(self)
         try:
             # Fantom's use expects |This| closure, so pass self as argument
             result = func(self)
             return result
         finally:
-            Locale.setCur(old)
+            Locale.set_cur(old)
 
-    def toStr(self):
+    def to_str(self):
         """String representation"""
         return self._str
 
@@ -166,13 +166,13 @@ class Locale(Obj):
         from fan.sys.Type import Type
         return Type.find("sys::Locale")
 
-    def literalEncode(self, encoder):
+    def literal_encode(self, encoder):
         """Encode for serialization.
 
         Simple types serialize as: Type("toStr")
         Example: sys::Locale("en-US")
         """
-        encoder.wType(self.typeof())
+        encoder.w_type(self.typeof())
         encoder.w('(')
-        encoder.wStrLiteral(self.toStr(), '"')
+        encoder.w_str_literal(self.to_str(), '"')
         encoder.w(')')

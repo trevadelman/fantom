@@ -10,15 +10,15 @@ class Str(Obj):
     """String type - uses static methods on native str"""
 
     @staticmethod
-    def defVal():
+    def def_val():
         return ""
 
     @staticmethod
-    def isImmutable(self):
+    def is_immutable(self):
         return True
 
     @staticmethod
-    def toImmutable(self):
+    def to_immutable(self):
         """Strings are already immutable, return self"""
         return self
 
@@ -49,7 +49,7 @@ class Str(Obj):
         return len(self)
 
     @staticmethod
-    def isEmpty(self):
+    def is_empty(self):
         return len(self) == 0
 
     @staticmethod
@@ -57,13 +57,13 @@ class Str(Obj):
         return ord(self[index])
 
     @staticmethod
-    def getSafe(self, index, default=0):
+    def get_safe(self, index, default=0):
         if index < 0 or index >= len(self):
             return default
         return ord(self[index])
 
     @staticmethod
-    def getRange(self, r):
+    def get_range(self, r):
         """Get substring from range"""
         from .Err import IndexErr
         n = len(self)
@@ -91,7 +91,7 @@ class Str(Obj):
         return 0
 
     @staticmethod
-    def compareIgnoreCase(self, that):
+    def compare_ignore_case(self, that):
         return Str.compare(self.lower(), that.lower())
 
     # Concatenation
@@ -100,7 +100,7 @@ class Str(Obj):
         from .ObjUtil import ObjUtil
         if obj is None:
             return self + "null"
-        return self + ObjUtil.toStr(obj)
+        return self + ObjUtil.to_str(obj)
 
     # Transformations
     @staticmethod
@@ -177,7 +177,7 @@ class Str(Obj):
         return self[start:end]
 
     @staticmethod
-    def trimStart(self):
+    def trim_start(self):
         """Trim chars <= 0x20 (space) from start - return same object if no change"""
         n = len(self)
         if n == 0:
@@ -191,7 +191,7 @@ class Str(Obj):
         return self[start:]
 
     @staticmethod
-    def trimEnd(self):
+    def trim_end(self):
         """Trim chars <= 0x20 (space) from end - return same object if no change"""
         n = len(self)
         if n == 0:
@@ -205,7 +205,7 @@ class Str(Obj):
         return self[:end]
 
     @staticmethod
-    def trimToNull(self):
+    def trim_to_null(self):
         """Trim and return null if empty"""
         result = Str.trim(self)
         return None if len(result) == 0 else result
@@ -232,16 +232,16 @@ class Str(Obj):
         return s in self
 
     @staticmethod
-    def containsChar(self, ch):
+    def contains_char(self, ch):
         """Check if string contains the character (given as codepoint)"""
         return chr(ch) in self
 
     @staticmethod
-    def startsWith(self, s):
+    def starts_with(self, s):
         return self.startswith(s)
 
     @staticmethod
-    def endsWith(self, s):
+    def ends_with(self, s):
         return self.endswith(s)
 
     @staticmethod
@@ -288,39 +288,39 @@ class Str(Obj):
         if sep is None:
             # Split on whitespace
             if len(self) == 0:
-                return List.fromLiteral([""], "sys::Str")
+                return List.from_literal([""], "sys::Str")
             result = self.split()
             if trimmed:
                 result = [s.strip() for s in result if s.strip()]
             if len(result) == 0:
-                return List.fromLiteral([""], "sys::Str")  # All whitespace returns empty string
-            return List.fromLiteral(result, "sys::Str")
+                return List.from_literal([""], "sys::Str")  # All whitespace returns empty string
+            return List.from_literal(result, "sys::Str")
         else:
             # Convert int separator to char
             if isinstance(sep, int):
                 sep = chr(sep)
             # Handle empty string case
             if len(self) == 0:
-                return List.fromLiteral([""], "sys::Str")
+                return List.from_literal([""], "sys::Str")
             result = self.split(sep)
             if trimmed:
                 # Trim each part but keep empty strings
                 result = [s.strip() for s in result]
-            return List.fromLiteral(result, "sys::Str")
+            return List.from_literal(result, "sys::Str")
 
     @staticmethod
-    def splitLines(self):
+    def split_lines(self):
         """Split string into lines - preserves empty strings unlike Python's splitlines.
         Returns a Fantom List, not a Python list.
         """
         from .List import List
         if len(self) == 0:
-            return List.fromLiteral([""], "sys::Str")
+            return List.from_literal([""], "sys::Str")
         result = self.splitlines(keepends=False)
         # Append empty string if original ended with newline
         if self.endswith('\n') or self.endswith('\r'):
             result.append("")
-        return List.fromLiteral(result if result else [""], "sys::Str")
+        return List.from_literal(result if result else [""], "sys::Str")
 
     # Padding
     @staticmethod
@@ -333,23 +333,23 @@ class Str(Obj):
 
     # Conversion
     @staticmethod
-    def toStr(self):
+    def to_str(self):
         return self
 
     @staticmethod
-    def toUri(s):
+    def to_uri(s):
         """Convert string to Uri"""
         from .Uri import Uri
-        return Uri.fromStr(s)
+        return Uri.from_str(s)
 
     @staticmethod
-    def toRegex(self):
+    def to_regex(self):
         """Convert string to Regex pattern"""
         from .Regex import Regex
-        return Regex.fromStr(self)
+        return Regex.from_str(self)
 
     @staticmethod
-    def toCode(self, quote='"', escapeUnicode=False):
+    def to_code(self, quote='"', escapeUnicode=False):
         """Convert to Fantom string literal code.
 
         Uses Fantom escape syntax:
@@ -391,7 +391,7 @@ class Str(Obj):
         return quote + ''.join(result) + quote
 
     @staticmethod
-    def toBool(self, checked=True):
+    def to_bool(self, checked=True):
         lower = self.lower()
         if lower == "true":
             return True
@@ -400,31 +400,31 @@ class Str(Obj):
         if not checked:
             return None
         from .Err import ParseErr
-        raise ParseErr.makeStr("Bool", self)
+        raise ParseErr.make_str("Bool", self)
 
     @staticmethod
-    def toInt(self, radix=10, checked=True):
+    def to_int(self, radix=10, checked=True):
         try:
             return int(self, radix)
         except ValueError:
             if not checked:
                 return None
             from .Err import ParseErr
-            raise ParseErr.makeStr("Int", self)
+            raise ParseErr.make_str("Int", self)
 
     @staticmethod
-    def toFloat(self, checked=True):
+    def to_float(self, checked=True):
         try:
             return float(self)
         except ValueError:
             if not checked:
                 return None
             from .Err import ParseErr
-            raise ParseErr.makeStr("Float", self)
+            raise ParseErr.make_str("Float", self)
 
     # Parsing (static)
     @staticmethod
-    def fromStr(s, checked=True):
+    def from_str(s, checked=True):
         return s
 
     # Characters
@@ -460,7 +460,7 @@ class Str(Obj):
                 f(ord(ch))
 
     @staticmethod
-    def eachWhile(self, f):
+    def each_while(self, f):
         """Iterate until f returns non-null"""
         param_count = Str._get_param_count(f)
         if param_count >= 2:
@@ -490,7 +490,7 @@ class Str(Obj):
 
     # String tests
     @staticmethod
-    def isSpace(self):
+    def is_space(self):
         """Return true if all chars are whitespace (or empty)"""
         for ch in self:
             if ord(ch) > 0x20:
@@ -498,7 +498,7 @@ class Str(Obj):
         return True
 
     @staticmethod
-    def isAlpha(self):
+    def is_alpha(self):
         """Return true if all chars are ASCII alpha (or empty)"""
         for ch in self:
             c = ord(ch)
@@ -507,7 +507,7 @@ class Str(Obj):
         return True
 
     @staticmethod
-    def isAlphaNum(self):
+    def is_alpha_num(self):
         """Return true if all chars are ASCII alphanumeric (or empty)"""
         for ch in self:
             c = ord(ch)
@@ -516,7 +516,7 @@ class Str(Obj):
         return True
 
     @staticmethod
-    def isUpper(self):
+    def is_upper(self):
         """Return true if all chars are ASCII uppercase letters (or empty)"""
         for ch in self:
             c = ord(ch)
@@ -526,7 +526,7 @@ class Str(Obj):
         return True
 
     @staticmethod
-    def isLower(self):
+    def is_lower(self):
         """Return true if all chars are ASCII lowercase letters (or empty)"""
         for ch in self:
             c = ord(ch)
@@ -536,7 +536,7 @@ class Str(Obj):
         return True
 
     @staticmethod
-    def isAscii(self):
+    def is_ascii(self):
         """Return true if all chars are ASCII (0-127)"""
         for ch in self:
             if ord(ch) > 127:
@@ -545,7 +545,7 @@ class Str(Obj):
 
     # Equality with case options
     @staticmethod
-    def equalsIgnoreCase(self, that):
+    def equals_ignore_case(self, that):
         """Case-insensitive equality"""
         if that is None:
             return False
@@ -553,7 +553,7 @@ class Str(Obj):
 
     # Additional index methods
     @staticmethod
-    def indexIgnoreCase(self, s, off=0):
+    def index_ignore_case(self, s, off=0):
         """Case-insensitive index search"""
         try:
             return self.lower().index(s.lower(), off)
@@ -561,7 +561,7 @@ class Str(Obj):
             return None
 
     @staticmethod
-    def indexrIgnoreCase(self, s, off=None):
+    def indexr_ignore_case(self, s, off=None):
         """Case-insensitive reverse index search"""
         try:
             lower_self = self.lower()
@@ -613,7 +613,7 @@ class Str(Obj):
 
     # Newline counting
     @staticmethod
-    def numNewlines(self):
+    def num_newlines(self):
         """Count number of newline chars (\n or \r)"""
         count = 0
         i = 0
@@ -638,7 +638,7 @@ class Str(Obj):
 
     # Predicate methods
     @staticmethod
-    def all(self, f):
+    def all_(self, f):
         """Return true if f returns true for all chars"""
         param_count = Str._get_param_count(f)
         if param_count >= 2:
@@ -652,7 +652,7 @@ class Str(Obj):
         return True
 
     @staticmethod
-    def any(self, f):
+    def any_(self, f):
         """Return true if f returns true for any char"""
         param_count = Str._get_param_count(f)
         if param_count >= 2:
@@ -666,7 +666,7 @@ class Str(Obj):
         return False
 
     @staticmethod
-    def fromChars(chars):
+    def from_chars(chars):
         """Create string from list of char codepoints"""
         return ''.join(chr(c) for c in chars)
 
@@ -677,46 +677,46 @@ class Str(Obj):
         return sys.intern(self)
 
     @staticmethod
-    def toLocale(self):
+    def to_locale(self):
         """Return locale string representation (same as toStr for strings)"""
         return self
 
     @staticmethod
-    def localeUpper(self):
+    def locale_upper(self):
         """Convert to uppercase using current locale"""
         return self.upper()
 
     @staticmethod
-    def localeLower(self):
+    def locale_lower(self):
         """Convert to lowercase using current locale"""
         return self.lower()
 
     @staticmethod
-    def localeCompare(self, that):
+    def locale_compare(self, that):
         """Compare strings using locale rules"""
         return Str.compare(self, that)
 
     @staticmethod
-    def localeCapitalize(self):
+    def locale_capitalize(self):
         """Capitalize using current locale"""
         return self.capitalize()
 
     @staticmethod
-    def localeDecapitalize(self):
+    def locale_decapitalize(self):
         """Decapitalize using current locale"""
         if len(self) == 0:
             return self
         return self[0].lower() + self[1:]
 
     @staticmethod
-    def eachLine(self, f):
+    def each_line(self, f):
         """Iterate over each line"""
-        lines = Str.splitLines(self)
+        lines = Str.split_lines(self)
         for line in lines:
             f(line)
 
     @staticmethod
-    def toDecimal(self, checked=True):
+    def to_decimal(self, checked=True):
         """Convert to Decimal"""
         from decimal import Decimal as PyDecimal, InvalidOperation
         try:
@@ -725,10 +725,10 @@ class Str(Obj):
             if not checked:
                 return None
             from .Err import ParseErr
-            raise ParseErr.makeStr("Decimal", self)
+            raise ParseErr.make_str("Decimal", self)
 
     @staticmethod
-    def toDisplayName(self):
+    def to_display_name(self):
         """Convert camelCase to display name with spaces.
 
         XMLCode -> XML Code
@@ -814,7 +814,7 @@ class Str(Obj):
         return s
 
     @staticmethod
-    def fromDisplayName(self):
+    def from_display_name(self):
         """Convert display name with spaces to camelCase.
 
         "Foo Bar" -> "fooBar"
@@ -857,7 +857,7 @@ class Str(Obj):
         return ''.join(result)
 
     @staticmethod
-    def toXml(self):
+    def to_xml(self):
         """Escape string for XML - return same object if no escaping needed.
 
         Rules:
@@ -904,7 +904,7 @@ class Str(Obj):
         return ''.join(result)
 
     @staticmethod
-    def toBuf(self, charset=None):
+    def to_buf(self, charset=None):
         """Convert to Buf using given charset"""
         # For now, use UTF-8 encoding
         from .Buf import Buf

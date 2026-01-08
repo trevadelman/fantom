@@ -37,7 +37,7 @@ class ObjUtil:
             import math
             if math.isnan(a) and math.isnan(b):
                 return True
-        if hasattr(a, "equals") and callable(a.equals):
+        if hasattr(a, "equals") and callable(getattr(a, "equals", None)):
             return a.equals(b)
         return a == b
 
@@ -67,9 +67,9 @@ class ObjUtil:
         # Value types like Duration, Date, Time, etc. - same value means same identity
         # In Fantom, literals like 5ns === 5ns are true because they represent same value
         # Check for value types by seeing if they have equals() and are immutable
-        if hasattr(a, 'equals') and hasattr(a, 'isImmutable'):
+        if hasattr(a, 'equals') and hasattr(a, 'is_immutable'):
             try:
-                if a.isImmutable() and type(a) == type(b):
+                if a.is_immutable() and type(a) == type(b):
                     return a.equals(b)
             except:
                 pass
@@ -96,11 +96,11 @@ class ObjUtil:
         return 0
 
     @staticmethod
-    def compareNE(a, b):
+    def compare_ne(a, b):
         return not ObjUtil.equals(a, b)
 
     @staticmethod
-    def compareLT(a, b):
+    def compare_lt(a, b):
         # NaN comparisons always return false (except for ==)
         import math
         if isinstance(a, float) and math.isnan(a):
@@ -110,7 +110,7 @@ class ObjUtil:
         return ObjUtil.compare(a, b) < 0
 
     @staticmethod
-    def compareLE(a, b):
+    def compare_le(a, b):
         # NaN comparisons always return false
         import math
         if isinstance(a, float) and math.isnan(a):
@@ -120,7 +120,7 @@ class ObjUtil:
         return ObjUtil.compare(a, b) <= 0
 
     @staticmethod
-    def compareGE(a, b):
+    def compare_ge(a, b):
         # NaN comparisons always return false
         import math
         if isinstance(a, float) and math.isnan(a):
@@ -130,7 +130,7 @@ class ObjUtil:
         return ObjUtil.compare(a, b) >= 0
 
     @staticmethod
-    def compareGT(a, b):
+    def compare_gt(a, b):
         # NaN comparisons always return false
         import math
         if isinstance(a, float) and math.isnan(a):
@@ -140,7 +140,7 @@ class ObjUtil:
         return ObjUtil.compare(a, b) > 0
 
     @staticmethod
-    def toStr(obj):
+    def to_str(obj):
         if obj is None:
             return "null"
         if isinstance(obj, bool):
@@ -149,15 +149,15 @@ class ObjUtil:
             return obj
         if isinstance(obj, float):
             from .Float import Float
-            return Float.toStr(obj)
+            return Float.to_str(obj)
         if isinstance(obj, int):
             return str(obj)
-        if hasattr(obj, "toStr") and callable(obj.toStr):
-            return obj.toStr()
+        if hasattr(obj, "to_str") and callable(getattr(obj, "to_str", None)):
+            return obj.to_str()
         return str(obj)
 
     @staticmethod
-    def toCode(obj):
+    def to_code(obj):
         """Convert object to Fantom code representation"""
         if obj is None:
             return "null"
@@ -165,28 +165,28 @@ class ObjUtil:
             return "true" if obj else "false"
         if isinstance(obj, str):
             from .Str import Str
-            return Str.toCode(obj)
+            return Str.to_code(obj)
         if isinstance(obj, float):
             # Check if it has a toCode method (e.g., Float or Decimal wrapper)
-            if hasattr(obj, "toCode") and callable(obj.toCode):
-                return obj.toCode()
+            if hasattr(obj, "to_code") and callable(getattr(obj, "to_code", None)):
+                return obj.to_code()
             # Default: treat Python floats as Float with 'f' suffix
             from .Float import Float
-            return Float.toStr(obj) + "f"
+            return Float.to_str(obj) + "f"
         if isinstance(obj, int) and not isinstance(obj, bool):
             return str(obj)
         # Handle lists - use List.toCode static method
         if isinstance(obj, list):
             from .List import List
-            return List.toCode(obj)
+            return List.to_code(obj)
         # Handle maps - use Map.toCode method
         from .Map import Map
         if isinstance(obj, Map):
-            return obj.toCode()
+            return obj.to_code()
         # Check for toCode method
-        if hasattr(obj, "toCode") and callable(obj.toCode):
-            return obj.toCode()
-        return ObjUtil.toStr(obj)
+        if hasattr(obj, "to_code") and callable(getattr(obj, "to_code", None)):
+            return obj.to_code()
+        return ObjUtil.to_str(obj)
 
     @staticmethod
     def typeof(obj):
@@ -195,7 +195,7 @@ class ObjUtil:
         if obj is None:
             return None
         # Check for Fantom objects with typeof() method
-        if hasattr(obj, "typeof") and callable(obj.typeof):
+        if hasattr(obj, "typeof") and callable(getattr(obj, "typeof", None)):
             return obj.typeof()
         # Map Python primitives to Fantom types
         if isinstance(obj, bool):
@@ -208,7 +208,7 @@ class ObjUtil:
             return Type.find("sys::Str")
         if isinstance(obj, list):
             # For plain Python lists without type info, infer from contents
-            return ObjUtil._inferListType(obj)
+            return ObjUtil._infer_list_type(obj)
         if isinstance(obj, dict):
             # For plain Python dicts without type info, return generic Map
             return Type.find("[sys::Obj:sys::Obj?]")
@@ -216,7 +216,7 @@ class ObjUtil:
         return Type.of(obj)
 
     @staticmethod
-    def _inferListType(lst):
+    def _infer_list_type(lst):
         """Infer Fantom list type from list contents"""
         from .Type import Type
         if len(lst) == 0:
@@ -252,13 +252,13 @@ class ObjUtil:
         return Type.find(f"{sig}[]")
 
     @staticmethod
-    def _isList(obj):
+    def _is_list(obj):
         """Check if obj is a Fantom List (our List class or Python list)"""
         from .List import List
         return isinstance(obj, (list, List))
 
     @staticmethod
-    def _isMap(obj):
+    def _is_map(obj):
         """Check if obj is a Fantom Map"""
         from .Map import Map
         return isinstance(obj, (dict, Map))
@@ -289,10 +289,10 @@ class ObjUtil:
         if qname == "sys::Str":
             return isinstance(obj, str)
         if qname == "sys::List":
-            return ObjUtil._isList(obj)
+            return ObjUtil._is_list(obj)
         # Parameterized list types like Obj[], Str[], etc.
         if qname.endswith("[]"):
-            if not ObjUtil._isList(obj):
+            if not ObjUtil._is_list(obj):
                 return False
             # For explicit type-aware lists, check element type compatibility
             # Otherwise be permissive (like Fantom 'as' behavior)
@@ -330,23 +330,23 @@ class ObjUtil:
             # Check if objElemType extends targetElemType
             return objElemTypeBase.fits(targetElemType)
         if qname == "sys::Map":
-            return ObjUtil._isMap(obj)
+            return ObjUtil._is_map(obj)
         # Parameterized map types like [Int:Str]
         if qname.startswith("[") and ":" in qname:
-            if not ObjUtil._isMap(obj):
+            if not ObjUtil._is_map(obj):
                 return False
             # Check type parameters for covariance
             # Map<K1,V1> is Map<K2,V2> if K1 extends K2 AND V1 extends V2
             from .Type import Type, MapType
             targetType = Type.find(qname, False)
             if targetType is None or not isinstance(targetType, MapType):
-                return ObjUtil._isMap(obj)
+                return ObjUtil._is_map(obj)
             # Get object's map type
             objType = None
             if hasattr(obj, 'typeof'):
                 objType = obj.typeof()
             if objType is None or not isinstance(objType, MapType):
-                return ObjUtil._isMap(obj)  # Can't verify types, assume ok
+                return ObjUtil._is_map(obj)  # Can't verify types, assume ok
             # Check K1 extends K2 (object key type must extend target key type)
             if not objType.k.fits(targetType.k):
                 return False
@@ -386,13 +386,13 @@ class ObjUtil:
         # For parameterized map types, be permissive (just check if it's a map)
         # Fantom's 'as' allows casting maps to more specific map types
         if qname.startswith("[") and ":" in qname:
-            if ObjUtil._isMap(obj):
+            if ObjUtil._is_map(obj):
                 return obj
             return None
 
         # For parameterized list types, be permissive (just check if it's a list)
         if qname.endswith("[]"):
-            if ObjUtil._isList(obj):
+            if ObjUtil._is_list(obj):
                 return obj
             return None
 
@@ -451,7 +451,7 @@ class ObjUtil:
             if isinstance(obj, (int, float)) and not isinstance(obj, bool):
                 return obj
         elif base_qname == "sys::List" or base_qname.endswith("[]"):
-            if ObjUtil._isList(obj):
+            if ObjUtil._is_list(obj):
                 return obj
         elif base_qname == "sys::Map" or (base_qname.startswith("[") and ":" in base_qname):
             if isinstance(obj, dict):
@@ -473,7 +473,7 @@ class ObjUtil:
         raise CastErr.make(f"{objTypeName} cannot be cast to {qname}")
 
     @staticmethod
-    def isImmutable(obj):
+    def is_immutable(obj):
         """Check if object is immutable"""
         import types
         if obj is None:
@@ -482,8 +482,8 @@ class ObjUtil:
             return True
         # Check if object has its own isImmutable method FIRST
         # This handles Func instances which track their own immutability
-        if hasattr(obj, "isImmutable") and callable(obj.isImmutable):
-            return obj.isImmutable()
+        if hasattr(obj, "is_immutable") and callable(getattr(obj, "is_immutable", None)):
+            return obj.is_immutable()
         # Python functions/lambdas are considered immutable in Fantom context
         # (const closures in Fantom transpile to Python lambdas/functions)
         if isinstance(obj, (types.FunctionType, types.LambdaType, types.MethodType)):
@@ -494,7 +494,7 @@ class ObjUtil:
         return False
 
     @staticmethod
-    def toImmutable(obj):
+    def to_immutable(obj):
         """Return immutable version of object"""
         from .Err import NotImmutableErr
         import types
@@ -504,21 +504,21 @@ class ObjUtil:
         if isinstance(obj, (bool, int, float, str)):
             return obj
         # Check if already immutable FIRST
-        if hasattr(obj, 'isImmutable') and callable(obj.isImmutable):
-            if obj.isImmutable():
+        if hasattr(obj, 'is_immutable') and callable(obj.is_immutable):
+            if obj.is_immutable():
                 return obj
         # Check if object has toImmutable method (List, Map, Func, etc.)
-        if hasattr(obj, "toImmutable") and callable(obj.toImmutable):
-            return obj.toImmutable()
+        if hasattr(obj, "to_immutable") and callable(getattr(obj, "to_immutable", None)):
+            return obj.to_immutable()
         # Handle plain Python lists (from List.map_, Str.split, etc.)
         if isinstance(obj, list):
             from .List import List
-            return List.toImmutable(obj)
+            return List.to_immutable(obj)
         # Check if it's a const type - const types are inherently immutable
         from .Type import Type
         try:
             objType = Type.of(obj)
-            if objType is not None and objType.isConst():
+            if objType is not None and objType.is_const():
                 # Const types are inherently immutable
                 return obj
         except Exception:
@@ -527,7 +527,7 @@ class ObjUtil:
         raise NotImmutableErr.make(f"Cannot make {type(obj).__name__} immutable")
 
     @staticmethod
-    def toFloat(obj):
+    def to_float(obj):
         """Convert to Float - dispatch to appropriate type"""
         if obj is None:
             return 0.0
@@ -535,12 +535,12 @@ class ObjUtil:
             return obj
         if isinstance(obj, int):
             return float(obj)
-        if hasattr(obj, "toFloat") and callable(obj.toFloat):
-            return obj.toFloat()
+        if hasattr(obj, "to_float") and callable(getattr(obj, "to_float", None)):
+            return obj.to_float()
         return float(obj)
 
     @staticmethod
-    def toInt(obj):
+    def to_int(obj):
         """Convert to Int - dispatch to appropriate type"""
         import math
         if obj is None:
@@ -559,12 +559,12 @@ class ObjUtil:
             return int(obj)
         if isinstance(obj, bool):
             return 1 if obj else 0
-        if hasattr(obj, "toInt") and callable(obj.toInt):
-            return obj.toInt()
+        if hasattr(obj, "to_int") and callable(getattr(obj, "to_int", None)):
+            return obj.to_int()
         return int(obj)
 
     @staticmethod
-    def toDecimal(obj):
+    def to_decimal(obj):
         """Convert to Decimal - dispatch to appropriate type"""
         if obj is None:
             return 0.0
@@ -572,28 +572,28 @@ class ObjUtil:
             return obj
         if isinstance(obj, int):
             return float(obj)
-        if hasattr(obj, "toDecimal") and callable(obj.toDecimal):
-            return obj.toDecimal()
+        if hasattr(obj, "to_decimal") and callable(getattr(obj, "to_decimal", None)):
+            return obj.to_decimal()
         return float(obj)
 
     @staticmethod
-    def toLocale(obj, pattern=None, locale=None):
+    def to_locale(obj, pattern=None, locale=None):
         """Format number according to locale pattern - dispatch to appropriate type"""
         if obj is None:
             return "null"
         if isinstance(obj, float):
             from .Float import Float
-            return Float.toLocale(obj, pattern, locale)
+            return Float.to_locale(obj, pattern, locale)
         if isinstance(obj, int) and not isinstance(obj, bool):
             from .Int import Int
-            return Int.toLocale(obj, pattern, locale)
-        if hasattr(obj, "toLocale") and callable(obj.toLocale):
+            return Int.to_locale(obj, pattern, locale)
+        if hasattr(obj, "to_locale") and callable(getattr(obj, "to_locale", None)):
             if locale is not None:
-                return obj.toLocale(pattern, locale)
+                return obj.to_locale(pattern, locale)
             elif pattern is not None:
-                return obj.toLocale(pattern)
+                return obj.to_locale(pattern)
             else:
-                return obj.toLocale()
+                return obj.to_locale()
         return str(obj)
 
     @staticmethod
@@ -602,7 +602,7 @@ class ObjUtil:
         if obj is None:
             print("")
         else:
-            print(ObjUtil.toStr(obj))
+            print(ObjUtil.to_str(obj))
 
     @staticmethod
     def throw_(err):
@@ -617,56 +617,56 @@ class ObjUtil:
         raise err
 
     @staticmethod
-    def incField(obj, fieldName):
+    def inc_field(obj, fieldName):
         """Increment a field and return new value (for ++field - pre-increment)"""
         val = getattr(obj, fieldName) + 1
         setattr(obj, fieldName, val)
         return val
 
     @staticmethod
-    def incFieldPost(obj, fieldName):
+    def inc_field_post(obj, fieldName):
         """Increment a field and return old value (for field++ - post-increment)"""
         old = getattr(obj, fieldName)
         setattr(obj, fieldName, old + 1)
         return old
 
     @staticmethod
-    def decField(obj, fieldName):
+    def dec_field(obj, fieldName):
         """Decrement a field and return new value (for --field - pre-decrement)"""
         val = getattr(obj, fieldName) - 1
         setattr(obj, fieldName, val)
         return val
 
     @staticmethod
-    def decFieldPost(obj, fieldName):
+    def dec_field_post(obj, fieldName):
         """Decrement a field and return old value (for field-- - post-decrement)"""
         old = getattr(obj, fieldName)
         setattr(obj, fieldName, old - 1)
         return old
 
     @staticmethod
-    def incIndex(obj, index):
+    def inc_index(obj, index):
         """Increment a list/array element and return new value (for ++list[i])"""
         val = obj[index] + 1
         obj[index] = val
         return val
 
     @staticmethod
-    def incIndexPost(obj, index):
+    def inc_index_post(obj, index):
         """Increment a list/array element and return old value (for list[i]++)"""
         old = obj[index]
         obj[index] = old + 1
         return old
 
     @staticmethod
-    def decIndex(obj, index):
+    def dec_index(obj, index):
         """Decrement a list/array element and return new value (for --list[i])"""
         val = obj[index] - 1
         obj[index] = val
         return val
 
     @staticmethod
-    def decIndexPost(obj, index):
+    def dec_index_post(obj, index):
         """Decrement a list/array element and return old value (for list[i]--)"""
         old = obj[index]
         obj[index] = old - 1
@@ -817,11 +817,11 @@ class ObjUtil:
                     if isinstance(slot, Field):
                         if args:
                             # Setting a field via trap
-                            slot.set(obj, args[0])
+                            slot.set_(obj, args[0])
                             return
                         else:
                             # Getting a field via trap
-                            return slot.get(obj) if not slot.isStatic() else slot.get()
+                            return slot.get(obj) if not slot.is_static() else slot.get()
                     elif isinstance(slot, Method):
                         return slot.call(obj, *call_args) if call_args else slot.call(obj)
         except Exception:

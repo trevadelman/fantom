@@ -45,37 +45,37 @@ class IntArray(Obj):
         raise NotImplementedError("Use makeS1, makeU1, makeS2, etc.")
 
     @staticmethod
-    def makeS1(size):
+    def make_s1(size):
         """Create a signed 8-bit, 1-byte integer array (-128 to 127)."""
         return IntArray(size, 'S1')
 
     @staticmethod
-    def makeU1(size):
+    def make_u1(size):
         """Create an unsigned 8-bit, 1-byte integer array (0 to 255)."""
         return IntArray(size, 'U1')
 
     @staticmethod
-    def makeS2(size):
+    def make_s2(size):
         """Create a signed 16-bit, 2-byte integer array (-32_768 to 32_767)."""
         return IntArray(size, 'S2')
 
     @staticmethod
-    def makeU2(size):
+    def make_u2(size):
         """Create an unsigned 16-bit, 2-byte integer array (0 to 65_535)."""
         return IntArray(size, 'U2')
 
     @staticmethod
-    def makeS4(size):
+    def make_s4(size):
         """Create a signed 32-bit, 4-byte integer array."""
         return IntArray(size, 'S4')
 
     @staticmethod
-    def makeU4(size):
+    def make_u4(size):
         """Create an unsigned 32-bit, 4-byte integer array (0 to 4_294_967_295)."""
         return IntArray(size, 'U4')
 
     @staticmethod
-    def makeS8(size):
+    def make_s8(size):
         """Create a signed 64-bit, 8-byte integer array."""
         return IntArray(size, 'S8')
 
@@ -113,7 +113,7 @@ class IntArray(Obj):
         """Support [] operator for setting."""
         self.set(index, val)
 
-    def copyFrom(self, that, thatRange=None, thisOffset=0):
+    def copy_from(self, that, thatRange=None, thisOffset=0):
         """
         Copy the integers from 'that' array into this array and return this.
         """

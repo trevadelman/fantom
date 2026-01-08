@@ -175,7 +175,7 @@ class ScheduledWork:
 
     def work(self):
         """Called when deadline hits - enqueue the future to the actor."""
-        if not self.future.isCancelled():
+        if not self.future.is_cancelled():
             self.actor._enqueue_later(self.future)
 
     def cancel(self):

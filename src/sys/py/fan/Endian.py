@@ -30,7 +30,7 @@ class Endian(Obj):
         return Endian._little
 
     @staticmethod
-    def fromStr(s, checked=True):
+    def from_str(s, checked=True):
         """Get Endian from string."""
         s = str(s).lower()
         if s == "big":
@@ -46,13 +46,13 @@ class Endian(Obj):
     def vals():
         """Return list of all Endian values."""
         from .List import List
-        return List.fromLiteral([Endian.big(), Endian.little()], "sys::Endian")
+        return List.from_literal([Endian.big(), Endian.little()], "sys::Endian")
 
     @property
     def name(self):
         return self._name
 
-    def toStr(self):
+    def to_str(self):
         return self._name
 
     def __str__(self):

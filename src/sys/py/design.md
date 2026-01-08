@@ -198,7 +198,7 @@ class Color(Obj):
     @staticmethod
     def vals():
         if Color._vals is None:
-            Color._vals = List.toImmutable(List.fromList([
+            Color._vals = List.to_immutable(List.from_list([
                 Color._make_enum(0, "red"),
                 Color._make_enum(1, "green"),
                 Color._make_enum(2, "blue")
@@ -221,7 +221,7 @@ class Color(Obj):
 
 ## Funcs and Closures
 
-Fantom closures are generated as Python lambdas wrapped in `Func.makeClosure()` to provide
+Fantom closures are generated as Python lambdas wrapped in `Func.make_closure()` to provide
 Fantom's Func API (`bind()`, `params()`, `returns()`, etc.).
 
 Fantom:
@@ -231,7 +231,7 @@ list.each |item, i| { echo(item) }
 
 Python:
 ```python
-List.each(list, Func.makeClosure({
+List.each(list, Func.make_closure({
     "returns": "sys::Void",
     "params": [{"name": "item", "type": "sys::Obj"}, {"name": "i", "type": "sys::Int"}]
 }, (lambda item=None, i=None: print(item))))
@@ -241,7 +241,7 @@ For simple single-expression closures, the lambda is inlined. For multi-statemen
 a named function is emitted before the usage point.
 
 Unlike JavaScript where closures are invoked directly (`f(args)`), Python closures through
-`Func.makeClosure()` are also callable directly - the wrapper implements `__call__`.
+`Func.make_closure()` are also callable directly - the wrapper implements `__call__`.
 
 ## Primitives
 
@@ -266,7 +266,7 @@ s.size
 
 Python:
 ```python
-Int.toStr(x)
+Int.to_str(x)
 Str.size(s)
 ```
 
@@ -332,18 +332,46 @@ _t.am_('doSomething', 1, 'sys::Void', [Param('arg', Type.find('sys::Int'), False
 
 All class names are preserved when going from Fantom to Python.
 
-Slot and parameter names that conflict with Python keywords are "pickled" to end with `_`.
-The list includes: `class`, `def`, `return`, `if`, `else`, `for`, `while`, `import`, `from`,
+## Snake_Case Conversion
+
+Method and field names are converted from camelCase to snake_case for a Pythonic API:
+
+| Fantom | Python |
+|--------|--------|
+| `toStr` | `to_str` |
+| `fromStr` | `from_str` |
+| `isEmpty` | `is_empty` |
+| `findAll` | `find_all` |
+| `containsKey` | `contains_key` |
+| `XMLParser` | `xml_parser` |
+| `utf16BE` | `utf16_be` |
+
+The conversion is handled by `PyUtil.toSnakeCase()` and applied through `escapeName()`.
+
+## Reserved Word Escaping
+
+Names that conflict with Python keywords or builtins get a trailing underscore `_`:
+
+**Keywords:** `class`, `def`, `return`, `if`, `else`, `for`, `while`, `import`, `from`,
 `is`, `in`, `not`, `and`, `or`, `True`, `False`, `None`, `lambda`, `global`, `nonlocal`,
 `pass`, `break`, `continue`, `raise`, `try`, `except`, `finally`, `with`, `as`, `assert`,
-`yield`, `del`, `elif`, `exec`, `print`.
+`yield`, `del`, `elif`, `match`, `case`
+
+**Builtins:** `type`, `hash`, `id`, `list`, `map`, `str`, `int`, `float`, `bool`, `abs`,
+`all`, `any`, `min`, `max`, `pow`, `round`, `set`, `dir`, `oct`, `open`, `vars`, `print`
 
 ```
 # Fantom
 Void class(Str is) { ... }
+Int hash() { ... }
+Bool any(|V| f) { ... }
 
 # Python
 def class_(self, is_):
+    ...
+def hash_(self):
+    ...
+def any_(self, f):
     ...
 ```
 

@@ -85,7 +85,7 @@ class PyExprPrinter : PyPrinter
 
   private Void listLiteral(ListLiteralExpr e)
   {
-    // Generate type-aware list: List.fromLiteral([items], elementType)
+    // Generate type-aware list: List.from_literal([items], elementType)
     // Extract element type from ListType
     listType := e.ctype
     CType? elemType := null
@@ -107,7 +107,7 @@ class PyExprPrinter : PyPrinter
     // Use Obj? as fallback if we couldn't determine type
     elemSig := elemType?.signature ?: "sys::Obj?"
 
-    w("List.fromLiteral([")
+    w("List.from_literal([")
     e.vals.each |val, i|
     {
       if (i > 0) w(", ")
@@ -120,7 +120,7 @@ class PyExprPrinter : PyPrinter
 
   private Void mapLiteral(MapLiteralExpr e)
   {
-    // Generate type-aware map: Map.fromLiteral([keys], [vals], keyType, valType)
+    // Generate type-aware map: Map.from_literal([keys], [vals], keyType, valType)
     // Extract key/value types (explicit or inferred from compiler)
     mapType := e.ctype
 
@@ -157,7 +157,7 @@ class PyExprPrinter : PyPrinter
     keySig := keyType?.signature ?: "sys::Obj"
     valSig := valType?.signature ?: "sys::Obj?"
 
-    w("Map.fromLiteral([")
+    w("Map.from_literal([")
     // Keys array
     e.keys.each |key, i|
     {
@@ -217,15 +217,15 @@ class PyExprPrinter : PyPrinter
 
   private Void uriLiteral(LiteralExpr e)
   {
-    // URI literal `http://example.com` -> Uri.fromStr("http://example.com")
+    // URI literal `http://example.com` -> Uri.from_str("http://example.com")
     uri := e.val as Uri
     if (uri != null)
     {
-      w("Uri.fromStr(").str(uri.toStr).w(")")
+      w("Uri.from_str(").str(uri.toStr).w(")")
     }
     else
     {
-      w("Uri.fromStr(").str(e.val.toStr).w(")")
+      w("Uri.from_str(").str(e.val.toStr).w(")")
     }
   }
 
@@ -333,7 +333,7 @@ class PyExprPrinter : PyPrinter
         expr(e.target)
       else
         w("self")
-      w(", ").str(e.name)
+      w(", ").str(escapeName(e.name))
       // Fantom semantics: no args = null, with args = list
       if (e.args.isEmpty)
       {
@@ -522,9 +522,8 @@ class PyExprPrinter : PyPrinter
   {
     methodName := e.method.name
 
-    // Map method names if needed
-    pyName := methodName
-    if (methodName == "typeof") pyName = "typeof"
+    // Convert to snake_case for Python
+    pyName := escapeName(methodName)
 
     w("ObjUtil.").w(pyName).w("(")
     expr(e.target)
@@ -610,7 +609,7 @@ class PyExprPrinter : PyPrinter
     // Dynamic call (-> operator) with safe nav
     if (e.isDynamic)
     {
-      w("ObjUtil.trap(_safe_, ").str(e.name)
+      w("ObjUtil.trap(_safe_, ").str(escapeName(e.name))
       if (e.args.isEmpty)
         w(", None)")
       else
@@ -647,9 +646,7 @@ class PyExprPrinter : PyPrinter
     // ObjUtil method call with safe nav
     if (e.target != null && isObjUtilMethod(e.method))
     {
-      methodName := e.method.name
-      pyName := methodName
-      if (methodName == "typeof") pyName = "typeof"
+      pyName := escapeName(e.method.name)
       w("ObjUtil.").w(pyName).w("(_safe_")
       if (!e.args.isEmpty)
       {
@@ -1117,10 +1114,10 @@ class PyExprPrinter : PyPrinter
         // Check the opToken for comparison type
         switch (e.opToken)
         {
-          case Token.lt:   comparison(e, "compareLT")
-          case Token.ltEq: comparison(e, "compareLE")
-          case Token.gt:   comparison(e, "compareGT")
-          case Token.gtEq: comparison(e, "compareGE")
+          case Token.lt:   comparison(e, "compare_lt")
+          case Token.ltEq: comparison(e, "compare_le")
+          case Token.gt:   comparison(e, "compare_gt")
+          case Token.gtEq: comparison(e, "compare_ge")
           default:         cmp(e)  // <=>
         }
       case ShortcutOp.negate:    w("(-"); expr(e.target); w(")")
@@ -1407,13 +1404,13 @@ class PyExprPrinter : PyPrinter
     {
       // Field access - use ObjUtil helper
       fieldExpr := target as FieldExpr
-      method := isPost ? "incFieldPost" : "incField"
+      method := isPost ? "inc_field_post" : "inc_field"
       w("ObjUtil.").w(method).w("(")
       if (fieldExpr.target != null)
         expr(fieldExpr.target)
       else
         w("self")
-      w(", \"_").w(fieldExpr.field.name).w("\")")
+      w(", \"_").w(escapeName(fieldExpr.field.name)).w("\")")
     }
     else if (target.id == ExprId.shortcut)
     {
@@ -1421,7 +1418,7 @@ class PyExprPrinter : PyPrinter
       shortcutExpr := target as ShortcutExpr
       if (shortcutExpr.op == ShortcutOp.get)
       {
-        method := isPost ? "incIndexPost" : "incIndex"
+        method := isPost ? "inc_index_post" : "inc_index"
         w("ObjUtil.").w(method).w("(")
         expr(shortcutExpr.target)
         w(", ")
@@ -1473,13 +1470,13 @@ class PyExprPrinter : PyPrinter
     {
       // Field access - use ObjUtil helper
       fieldExpr := target as FieldExpr
-      method := isPost ? "decFieldPost" : "decField"
+      method := isPost ? "dec_field_post" : "dec_field"
       w("ObjUtil.").w(method).w("(")
       if (fieldExpr.target != null)
         expr(fieldExpr.target)
       else
         w("self")
-      w(", \"_").w(fieldExpr.field.name).w("\")")
+      w(", \"_").w(escapeName(fieldExpr.field.name)).w("\")")
     }
     else if (target.id == ExprId.shortcut)
     {
@@ -1487,7 +1484,7 @@ class PyExprPrinter : PyPrinter
       shortcutExpr := target as ShortcutExpr
       if (shortcutExpr.op == ShortcutOp.get)
       {
-        method := isPost ? "decIndexPost" : "decIndex"
+        method := isPost ? "dec_index_post" : "dec_index"
         w("ObjUtil.").w(method).w("(")
         expr(shortcutExpr.target)
         w(", ")
@@ -1539,8 +1536,8 @@ class PyExprPrinter : PyPrinter
     {
       if (argSig == "sys::Range")
       {
-        // str[range] -> Str.getRange(str, range)
-        w("Str.getRange(")
+        // str[range] -> Str.get_range(str, range)
+        w("Str.get_range(")
         expr(e.target)
         w(", ")
         expr(arg)
@@ -1558,11 +1555,11 @@ class PyExprPrinter : PyPrinter
       return
     }
 
-    // Check if index is a Range - need to use List.getRange() instead
+    // Check if index is a Range - need to use List.get_range() instead
     if (argSig == "sys::Range")
     {
-      // list[range] -> List.getRange(list, range)
-      w("List.getRange(")
+      // list[range] -> List.get_range(list, range)
+      w("List.get_range(")
       expr(e.target)
       w(", ")
       expr(arg)
@@ -1630,7 +1627,7 @@ class PyExprPrinter : PyPrinter
   {
     // Slot literal like Int#plus - create Method.find() or Field.find()
     parentSig := e.parent.signature
-    slotName := e.name
+    slotName := escapeName(e.name)  // Convert to snake_case for Python lookup
 
     // Determine if it's a method or field
     if (e.slot != null && e.slot is CField)
@@ -1732,13 +1729,13 @@ class PyExprPrinter : PyPrinter
       }
     }
 
-    // Fallback - wrap with Func.makeClosure() even when body not handled
+    // Fallback - wrap with Func.make_closure() even when body not handled
     // This ensures ALL closures have bind(), params(), etc. (consistent with JS transpiler)
     closureLambda(e) |->| { none }
   }
 
   ** Generate lambda with outer self capture if needed
-  ** Uses Func.makeClosure() for proper Fantom Func methods (bind, params, etc.)
+  ** Uses Func.make_closure() for proper Fantom Func methods (bind, params, etc.)
   private Void closureLambda(ClosureExpr e, |->| body)
   {
     // Check if closure captures outer this (has $this field)
@@ -1750,8 +1747,8 @@ class PyExprPrinter : PyPrinter
     // Determine immutability from compiler analysis
     immutCase := m.closureImmutability(e)
 
-    // Generate Func.makeClosure(spec, lambda)
-    w("Func.makeClosure({")
+    // Generate Func.make_closure(spec, lambda)
+    w("Func.make_closure({")
 
     // Returns type
     retType := sig?.returns?.signature ?: "sys::Void"
@@ -1801,7 +1798,7 @@ class PyExprPrinter : PyPrinter
       w(")")
     }
 
-    w(")")  // Close Func.makeClosure()
+    w(")")  // Close Func.make_closure()
   }
 
   ** Check if expression is an assignment (can't be in lambda body)

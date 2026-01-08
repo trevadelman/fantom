@@ -37,8 +37,8 @@ class Actor(Obj):
         else:
             # Ensure receive function is immutable
             from fan.sys.ObjUtil import ObjUtil
-            if not ObjUtil.isImmutable(receive):
-                receive = receive.toImmutable()
+            if not ObjUtil.is_immutable(receive):
+                receive = receive.to_immutable()
 
         self._pool = pool
         self._receive_func = receive
@@ -56,15 +56,15 @@ class Actor(Obj):
         return Actor(pool, receive)
 
     @staticmethod
-    def makeCoalescing(pool, toKey, coalesce, receive=None):
+    def make_coalescing(pool, toKey, coalesce, receive=None):
         """Create an actor with a coalescing message loop"""
         from fan.sys.ObjUtil import ObjUtil
 
         # Make functions immutable
-        if toKey is not None and hasattr(toKey, 'toImmutable'):
-            toKey = toKey.toImmutable()
-        if coalesce is not None and hasattr(coalesce, 'toImmutable'):
-            coalesce = coalesce.toImmutable()
+        if toKey is not None and hasattr(toKey, 'to_immutable'):
+            toKey = toKey.to_immutable()
+        if coalesce is not None and hasattr(coalesce, 'to_immutable'):
+            coalesce = coalesce.to_immutable()
 
         # Create actor with coalescing queue
         actor = Actor(pool, receive)
@@ -85,7 +85,7 @@ class Actor(Obj):
         """
         return self._send(msg, None, None)
 
-    def sendLater(self, duration, msg):
+    def send_later(self, duration, msg):
         """
         Schedule a message for delivery after the specified duration.
         If msg is not immutable, then NotImmutableErr is thrown.
@@ -95,7 +95,7 @@ class Actor(Obj):
         msg = Actor._safe(msg)
 
         # Don't deliver new messages to a stopped pool
-        if self._pool.isStopped():
+        if self._pool.is_stopped():
             raise Err.make(f"ActorPool is stopped [{self._pool.name()}]")
 
         # Create future for this message
@@ -107,7 +107,7 @@ class Actor(Obj):
 
         return future
 
-    def sendWhenComplete(self, future, msg):
+    def send_when_complete(self, future, msg):
         """
         Schedule a message for delivery after the given future completes.
         If msg is not immutable, then NotImmutableErr is thrown.
@@ -117,7 +117,7 @@ class Actor(Obj):
         msg = Actor._safe(msg)
 
         # Don't deliver new messages to a stopped pool
-        if self._pool.isStopped():
+        if self._pool.is_stopped():
             raise Err.make(f"ActorPool is stopped [{self._pool.name()}]")
 
         # Create future for this message
@@ -128,13 +128,13 @@ class Actor(Obj):
         when_done_future = Actor._to_when_done_future(future)
 
         # Register to be notified when the original future completes
-        when_done_future.sendWhenDone(self, new_future)
+        when_done_future.send_when_done(self, new_future)
 
         return new_future
 
-    def sendWhenDone(self, future, msg):
-        """Deprecated - use sendWhenComplete"""
-        return self.sendWhenComplete(future, msg)
+    def send_when_done(self, future, msg):
+        """Deprecated - use send_when_complete"""
+        return self.send_when_complete(future, msg)
 
     @staticmethod
     def _to_when_done_future(future):
@@ -151,7 +151,7 @@ class Actor(Obj):
             return wraps
 
         # Not an actor future
-        raise ArgErr.make("Only actor Futures supported for sendWhenComplete")
+        raise ArgErr.make("Only actor Futures supported for send_when_complete")
 
     def receive(self, msg):
         """
@@ -173,7 +173,7 @@ class Actor(Obj):
 
     # Diagnostics
 
-    def threadState(self):
+    def thread_state(self):
         """Return debug string for current state: idle, running, or pending"""
         if self._cur_msg != Actor._idle_msg:
             return "running"
@@ -181,23 +181,23 @@ class Actor(Obj):
             return "pending"
         return "idle"
 
-    def isQueueFull(self):
-        """Return if queueSize >= pool's maxQueue"""
-        return self._queue.size >= self._pool.maxQueue()
+    def is_queue_full(self):
+        """Return if queue_size >= pool's max_queue"""
+        return self._queue.size >= self._pool.max_queue()
 
-    def queueSize(self):
+    def queue_size(self):
         """Get current number of messages pending"""
         return self._queue.size
 
-    def queuePeak(self):
+    def queue_peak(self):
         """Get peak number of messages queued"""
         return self._queue.peak
 
-    def receiveCount(self):
+    def receive_count(self):
         """Get total number of messages processed"""
         return self._receive_count
 
-    def receiveTicks(self):
+    def receive_ticks(self):
         """Get total nanoseconds spent in receive"""
         return self._receive_ticks
 
@@ -229,7 +229,7 @@ class Actor(Obj):
         msg = Actor._safe(msg)
 
         # Don't deliver new messages to a stopped pool
-        if self._pool.isStopped():
+        if self._pool.is_stopped():
             raise Err.make(f"ActorPool is stopped [{self._pool.name()}]")
 
         # Create future for this message
@@ -254,8 +254,8 @@ class Actor(Obj):
                     return coalesced
 
             # Check queue size
-            if self._queue.size + 1 > self._pool.maxQueue() and check_max_queue:
-                future.completeErr(QueueOverflowErr.make(f"queueSize: {self._queue.size}"))
+            if self._queue.size + 1 > self._pool.max_queue() and check_max_queue:
+                future.complete_err(QueueOverflowErr.make(f"queue_size: {self._queue.size}"))
                 return future
 
             # Add to queue
@@ -281,11 +281,11 @@ class Actor(Obj):
         # Reset environment for this actor
         Actor._thread_locals.actor_locals = self._context.locals
         from fan.sys.Locale import Locale
-        Locale.setCur(self._context.locale)
+        Locale.set_cur(self._context.locale)
 
         # Process messages
         start_ticks = time.time_ns()
-        max_ticks = self._pool.maxTimeBeforeYield().ticks() if self._pool.maxTimeBeforeYield() else 1_000_000_000
+        max_ticks = self._pool.max_time_before_yield().ticks() if self._pool.max_time_before_yield() else 1_000_000_000
 
         while True:
             # Get next message
@@ -301,7 +301,7 @@ class Actor(Obj):
             self._cur_msg = Actor._idle_msg
 
             # Check if we should yield our thread
-            if self._pool.hasPending():
+            if self._pool.has_pending():
                 cur_ticks = time.time_ns()
                 if cur_ticks - start_ticks >= max_ticks:
                     break
@@ -323,7 +323,7 @@ class Actor(Obj):
     def _dispatch(self, future):
         """Process a single message"""
         try:
-            if future.isCancelled():
+            if future.is_cancelled():
                 return
             if self._pool.killed:
                 future.cancel()
@@ -332,9 +332,9 @@ class Actor(Obj):
             result = self.receive(future.msg)
             future.complete(result)
         except Err as e:
-            future.completeErr(e)
+            future.complete_err(e)
         except Exception as e:
-            future.completeErr(Err.make(str(e)))
+            future.complete_err(Err.make(str(e)))
 
     def _kill(self):
         """Cancel all pending messages"""
@@ -353,7 +353,7 @@ class Actor(Obj):
     def _safe(obj):
         """Ensure object is immutable"""
         from fan.sys.ObjUtil import ObjUtil
-        return ObjUtil.toImmutable(obj)
+        return ObjUtil.to_immutable(obj)
 
     # Inner classes
 

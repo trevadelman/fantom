@@ -36,12 +36,12 @@ class FloatArray(Obj):
         raise NotImplementedError("Use makeF4 or makeF8")
 
     @staticmethod
-    def makeF4(size):
+    def make_f4(size):
         """Create a 32-bit, 4-byte float array."""
         return FloatArray(size, 'F4')
 
     @staticmethod
-    def makeF8(size):
+    def make_f8(size):
         """Create a 64-bit, 8-byte float array."""
         return FloatArray(size, 'F8')
 
@@ -65,7 +65,7 @@ class FloatArray(Obj):
         """Support [] operator for setting."""
         self.set(index, val)
 
-    def copyFrom(self, that, thatRange=None, thisOffset=0):
+    def copy_from(self, that, thatRange=None, thisOffset=0):
         """
         Copy the floats from 'that' array into this array and return this.
         """

@@ -58,70 +58,70 @@ class Slot(Obj):
             return f"{self._parent.qname()}.{self._name}"
         return self._name
 
-    def isField(self):
+    def is_field(self):
         """Return true if this is a Field."""
         return False
 
-    def isMethod(self):
+    def is_method(self):
         """Return true if this is a Method."""
         return False
 
-    def isCtor(self):
+    def is_ctor(self):
         """Return true if this is a constructor."""
         return (self._flags & FConst.Ctor) != 0
 
-    def isPublic(self):
+    def is_public(self):
         """Return true if public access."""
         return (self._flags & FConst.Public) != 0 or self._flags == 0  # Default to public
 
-    def isProtected(self):
+    def is_protected(self):
         """Return true if protected access."""
         return (self._flags & FConst.Protected) != 0
 
-    def isPrivate(self):
+    def is_private(self):
         """Return true if private access."""
         return (self._flags & FConst.Private) != 0
 
-    def isInternal(self):
+    def is_internal(self):
         """Return true if internal access."""
         return (self._flags & FConst.Internal) != 0
 
-    def isStatic(self):
+    def is_static(self):
         """Return true if static."""
         return (self._flags & FConst.Static) != 0
 
-    def isVirtual(self):
+    def is_virtual(self):
         """Return true if virtual."""
         return (self._flags & FConst.Virtual) != 0
 
-    def isAbstract(self):
+    def is_abstract(self):
         """Return true if abstract."""
         return (self._flags & FConst.Abstract) != 0
 
-    def isOverride(self):
+    def is_override(self):
         """Return true if override."""
         return (self._flags & FConst.Override) != 0
 
-    def isFinal(self):
+    def is_final(self):
         """Return true if final."""
         return (self._flags & FConst.Final) != 0
 
-    def isConst(self):
+    def is_const(self):
         """Return true if const."""
         return (self._flags & FConst.Const) != 0
 
-    def isNative(self):
+    def is_native(self):
         """Return true if native."""
         return (self._flags & FConst.Native) != 0
 
-    def isSynthetic(self):
+    def is_synthetic(self):
         """Return true if synthetic."""
         return (self._flags & FConst.Synthetic) != 0
 
-    def toStr(self):
+    def to_str(self):
         return self.qname()
 
-    def literalEncode(self, out):
+    def literal_encode(self, out):
         """Encode for serialization.
 
         Slot literals are written as: ParentType#slotName
@@ -132,7 +132,7 @@ class Slot(Obj):
         out.w(self._name)
 
     def __repr__(self):
-        return self.toStr()
+        return self.to_str()
 
     def trap(self, name, args=None):
         """Dynamic method invocation via -> operator.
@@ -188,12 +188,12 @@ class Slot(Obj):
         return type_obj.slot(slot_name, checked)
 
     @staticmethod
-    def findMethod(qname, checked=True):
+    def find_method(qname, checked=True):
         """Find method by qualified name."""
         slot = Slot.find(qname, checked)
         if slot is None:
             return None
-        if slot.isMethod():
+        if slot.is_method():
             return slot
         if checked:
             from .Err import CastErr
@@ -201,12 +201,12 @@ class Slot(Obj):
         return None
 
     @staticmethod
-    def findField(qname, checked=True):
+    def find_field(qname, checked=True):
         """Find field by qualified name."""
         slot = Slot.find(qname, checked)
         if slot is None:
             return None
-        if slot.isField():
+        if slot.is_field():
             return slot
         if checked:
             from .Err import CastErr
@@ -214,7 +214,7 @@ class Slot(Obj):
         return None
 
     @staticmethod
-    def findFunc(qname, checked=True):
+    def find_func(qname, checked=True):
         """Find slot by qualified name and return its func.
 
         This is a convenience method that finds a slot (typically a Method)

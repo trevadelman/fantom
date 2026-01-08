@@ -31,11 +31,11 @@ class Unsafe:
         """Get current value"""
         return self._val
 
-    def isImmutable(self):
+    def is_immutable(self):
         """Unsafe wrapper is always immutable"""
         return True
 
-    def toStr(self):
+    def to_str(self):
         return f"Unsafe({self._val})"
 
 

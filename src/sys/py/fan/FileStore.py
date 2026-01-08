@@ -17,15 +17,15 @@ class FileStore(Obj):
     def __init__(self):
         pass
 
-    def totalSpace(self):
+    def total_space(self):
         """Total storage space in bytes, or null if unknown."""
         return None
 
-    def availSpace(self):
+    def avail_space(self):
         """Available storage space in bytes, or null if unknown."""
         return None
 
-    def freeSpace(self):
+    def free_space(self):
         """Free storage space in bytes, or null if unknown."""
         return None
 
@@ -46,7 +46,7 @@ class LocalFileStore(FileStore):
         from .Type import Type
         return Type.find("sys::LocalFileStore")
 
-    def totalSpace(self):
+    def total_space(self):
         """Total storage space in bytes."""
         try:
             usage = shutil.disk_usage(self._path)
@@ -54,7 +54,7 @@ class LocalFileStore(FileStore):
         except Exception:
             return None
 
-    def availSpace(self):
+    def avail_space(self):
         """Available storage space in bytes (usable by non-root user)."""
         try:
             usage = shutil.disk_usage(self._path)
@@ -64,7 +64,7 @@ class LocalFileStore(FileStore):
         except Exception:
             return None
 
-    def freeSpace(self):
+    def free_space(self):
         """Free storage space in bytes (total unallocated)."""
         try:
             usage = shutil.disk_usage(self._path)

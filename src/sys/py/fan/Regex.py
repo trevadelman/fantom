@@ -39,7 +39,7 @@ class Regex(Obj):
         return result
 
     @staticmethod
-    def fromStr(pattern, checked=True):
+    def from_str(pattern, checked=True):
         """Parse a Regex from string pattern"""
         try:
             return Regex(pattern)
@@ -71,11 +71,11 @@ class Regex(Obj):
         return re.escape(s)
 
     @staticmethod
-    def defVal():
+    def def_val():
         """Default value is empty pattern"""
         return Regex("")
 
-    def toStr(self):
+    def to_str(self):
         """Return the pattern string"""
         return self._pattern
 
@@ -110,7 +110,7 @@ class Regex(Obj):
         from fan.sys.List import List
         if limit == 1:
             # No splitting - return original string as single element
-            return List.fromList([s])
+            return List.from_list([s])
         elif limit > 1:
             # Python maxsplit = limit - 1 (limit=2 means 1 split = 2 parts)
             parts = self._compiled.split(s, limit - 1)
@@ -122,7 +122,7 @@ class Regex(Obj):
         if limit == 0:
             while parts and parts[-1] == '':
                 parts.pop()
-        return List.fromList(parts)
+        return List.from_list(parts)
 
     def equals(self, other):
         """Test equality"""
@@ -139,15 +139,15 @@ class Regex(Obj):
         from fan.sys.Type import Type
         return Type.find("sys::Regex")
 
-    def literalEncode(self, encoder):
+    def literal_encode(self, encoder):
         """Encode for serialization.
 
         Simple types serialize as: Type("toStr")
         Example: sys::Regex("foo")
         """
-        encoder.wType(self.typeof())
+        encoder.w_type(self.typeof())
         encoder.w('(')
-        encoder.wStrLiteral(self.toStr(), '"')
+        encoder.w_str_literal(self.to_str(), '"')
         encoder.w(')')
 
 
@@ -176,11 +176,11 @@ class RegexMatcher(Obj):
             return True
         return False
 
-    def replaceFirst(self, replacement):
+    def replace_first(self, replacement):
         """Replace first occurrence"""
         return self._compiled.sub(replacement, self._s, count=1)
 
-    def replaceAll(self, replacement):
+    def replace_all(self, replacement):
         """Replace all occurrences"""
         return self._compiled.sub(replacement, self._s)
 
@@ -192,7 +192,7 @@ class RegexMatcher(Obj):
             return self._match.group(0)
         return self._match.group(group)
 
-    def groupCount(self):
+    def group_count(self):
         """Get number of capturing groups"""
         if self._match is None:
             return 0
@@ -210,6 +210,6 @@ class RegexMatcher(Obj):
             return -1
         return self._match.end(group)
 
-    def toStr(self):
+    def to_str(self):
         """String representation"""
         return f"RegexMatcher({self._compiled.pattern})"

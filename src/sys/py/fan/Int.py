@@ -4,17 +4,18 @@
 #
 
 from .Obj import Obj
+from .Type import _camel_to_snake
 
 
 class Int(Obj):
     """Integer type - uses static methods on native int"""
 
     @staticmethod
-    def defVal():
+    def def_val():
         return 0
 
     @staticmethod
-    def isImmutable(self):
+    def is_immutable(self):
         return True
 
     @staticmethod
@@ -119,13 +120,13 @@ class Int(Obj):
 
     # Conversions
     @staticmethod
-    def toStr(self):
+    def to_str(self):
         if self is None:
             return None
         return str(self)
 
     @staticmethod
-    def toCode(self, base=10):
+    def to_code(self, base=10):
         if base == 10:
             return str(self)
         if base == 16:
@@ -134,7 +135,7 @@ class Int(Obj):
         raise ArgErr(f"Invalid base {base}")
 
     @staticmethod
-    def toHex(self, width=None):
+    def to_hex(self, width=None):
         if self < 0:
             # Handle negative numbers as unsigned 64-bit
             val = self & 0xFFFFFFFFFFFFFFFF
@@ -146,9 +147,9 @@ class Int(Obj):
         return h
 
     @staticmethod
-    def toRadix(self, radix, width=None):
+    def to_radix(self, radix, width=None):
         if radix == 16:
-            s = Int.toHex(self)
+            s = Int.to_hex(self)
         elif radix == 2:
             s = bin(self)[2:]
         elif radix == 8:
@@ -160,7 +161,7 @@ class Int(Obj):
         return s
 
     @staticmethod
-    def toChar(self):
+    def to_char(self):
         # Valid Unicode range: 0 to 0x10FFFF (1,114,111)
         if self < 0 or self > 0x10FFFF:
             from .Err import Err
@@ -168,24 +169,24 @@ class Int(Obj):
         return chr(self)
 
     @staticmethod
-    def toFloat(self):
+    def to_float(self):
         return float(self)
 
     # Math operations
     @staticmethod
-    def abs(self):
+    def abs_(self):
         return abs(self)
 
     @staticmethod
-    def min(self, that):
+    def min_(self, that):
         return min(self, that)
 
     @staticmethod
-    def max(self, that):
+    def max_(self, that):
         return max(self, that)
 
     @staticmethod
-    def pow(self, exp):
+    def pow_(self, exp):
         if exp < 0:
             from .Err import ArgErr
             raise ArgErr("pow < 0")
@@ -223,7 +224,7 @@ class Int(Obj):
 
     # Parsing
     @staticmethod
-    def fromStr(s, radix=10, checked=True):
+    def from_str(s, radix=10, checked=True):
         try:
             # For non-decimal radixes, negative numbers are not supported
             if radix != 10 and s.startswith('-'):
@@ -237,7 +238,7 @@ class Int(Obj):
             if not checked:
                 return None
             from .Err import ParseErr
-            raise ParseErr.makeStr("Int", s)
+            raise ParseErr.make_str("Int", s)
 
     @staticmethod
     def clamp(self, min_val, max_val):
@@ -248,32 +249,32 @@ class Int(Obj):
         return self
 
     @staticmethod
-    def isEven(self):
+    def is_even(self):
         return self % 2 == 0
 
     @staticmethod
-    def isOdd(self):
+    def is_odd(self):
         return self % 2 != 0
 
     # Character tests (for Unicode codepoints)
     # Fantom uses ASCII-only definitions for these methods
     @staticmethod
-    def isSpace(ch):
+    def is_space(ch):
         # ASCII whitespace: space, tab, newline, carriage return, etc.
         return ch == 32 or ch == 9 or ch == 10 or ch == 13 or ch == 12
 
     @staticmethod
-    def isAlpha(ch):
+    def is_alpha(ch):
         # ASCII letters only: A-Z (65-90), a-z (97-122)
         return (65 <= ch <= 90) or (97 <= ch <= 122)
 
     @staticmethod
-    def isAlphaNum(ch):
+    def is_alpha_num(ch):
         # ASCII alphanumeric: 0-9, A-Z, a-z
         return (48 <= ch <= 57) or (65 <= ch <= 90) or (97 <= ch <= 122)
 
     @staticmethod
-    def isDigit(ch, radix=10):
+    def is_digit(ch, radix=10):
         """Check if ch is a digit in the given radix"""
         if 48 <= ch <= 57:  # '0'-'9'
             digit_val = ch - 48
@@ -286,12 +287,12 @@ class Int(Obj):
         return digit_val < radix
 
     @staticmethod
-    def isUpper(ch):
+    def is_upper(ch):
         # ASCII uppercase only: A-Z (65-90)
         return 65 <= ch <= 90
 
     @staticmethod
-    def isLower(ch):
+    def is_lower(ch):
         # ASCII lowercase only: a-z (97-122)
         return 97 <= ch <= 122
 
@@ -310,39 +311,39 @@ class Int(Obj):
         return ch
 
     @staticmethod
-    def equalsIgnoreCase(a, b):
+    def equals_ignore_case(a, b):
         return chr(a).lower() == chr(b).lower()
 
     @staticmethod
-    def localeIsLower(ch, locale=None):
+    def locale_is_lower(ch, locale=None):
         """Check if character is lowercase per locale.
         Uses Python's Unicode-aware islower() which handles locale-specific cases.
         """
         return chr(ch).islower()
 
     @staticmethod
-    def localeIsUpper(ch, locale=None):
+    def locale_is_upper(ch, locale=None):
         """Check if character is uppercase per locale.
         Uses Python's Unicode-aware isupper() which handles locale-specific cases.
         """
         return chr(ch).isupper()
 
     @staticmethod
-    def localeUpper(ch, locale=None):
+    def locale_upper(ch, locale=None):
         """Convert character to uppercase per locale.
         Uses Python's Unicode-aware upper() which handles locale-specific cases.
         """
         return ord(chr(ch).upper())
 
     @staticmethod
-    def localeLower(ch, locale=None):
+    def locale_lower(ch, locale=None):
         """Convert character to lowercase per locale.
         Uses Python's Unicode-aware lower() which handles locale-specific cases.
         """
         return ord(chr(ch).lower())
 
     @staticmethod
-    def toDigit(i, radix=10):
+    def to_digit(i, radix=10):
         """Convert int 0-35 to digit char ('0'-'9', 'a'-'z')"""
         if i < 0 or i >= radix:
             return None
@@ -351,7 +352,7 @@ class Int(Obj):
         return 97 + (i - 10)  # 'a' + (i - 10)
 
     @staticmethod
-    def fromDigit(ch, radix=10):
+    def from_digit(ch, radix=10):
         """Convert digit char to int value, or None if invalid"""
         if 48 <= ch <= 57:  # '0'-'9'
             val = ch - 48
@@ -367,7 +368,7 @@ class Int(Obj):
 
     # Duration conversion (nanoseconds)
     @staticmethod
-    def toDuration(self):
+    def to_duration(self):
         from .Duration import Duration
         return Duration.make(self)
 
@@ -376,7 +377,7 @@ class Int(Obj):
     def random(r=None):
         import random
         if r is None:
-            return random.randint(Int.minVal(), Int.maxVal())
+            return random.randint(Int.min_val(), Int.max_val())
         # r should be a Range object
         start = r._start if hasattr(r, '_start') else 0
         end = r._end if hasattr(r, '_end') else 100
@@ -395,7 +396,7 @@ class Int(Obj):
             return random.randint(start, end)
 
     @staticmethod
-    def _getLocaleSeparators(locale=None):
+    def _get_locale_separators(locale=None):
         """Get thousands and decimal separators for the given locale.
 
         Returns (thousands_sep, decimal_sep) tuple.
@@ -427,18 +428,18 @@ class Int(Obj):
     _GB = 1024 * 1024 * 1024
 
     @staticmethod
-    def toLocale(self, pattern=None, locale=None):
+    def to_locale(self, pattern=None, locale=None):
         """Format int according to locale pattern"""
         # Get locale-specific thousands separator
-        thousands_sep, decimal_sep = Int._getLocaleSeparators(locale)
+        thousands_sep, decimal_sep = Int._get_locale_separators(locale)
 
         # Special case: "B" pattern formats as bytes with KB/MB/GB suffix
         if pattern == "B":
-            return Int._toLocaleBytes(self, locale)
+            return Int._to_locale_bytes(self, locale)
 
         if pattern is None:
             # Default: add thousands separators (3-digit groups)
-            return Int._formatWithGrouping(self, 3, thousands_sep)
+            return Int._format_with_grouping(self, 3, thousands_sep)
 
         # Handle patterns like "#,###" or "#,####" or "0000"
         # Check for suffix patterns (alpha characters at end)
@@ -454,7 +455,7 @@ class Int(Obj):
             parts = pattern.split(',')
             # Group size is the length of the last segment
             group_size = len(parts[-1])
-            return Int._formatWithGrouping(self, group_size, thousands_sep) + suffix
+            return Int._format_with_grouping(self, group_size, thousands_sep) + suffix
 
         # Fixed width with leading zeros (pattern like "000")
         if pattern.startswith('0'):
@@ -469,7 +470,7 @@ class Int(Obj):
         return str(self) + suffix
 
     @staticmethod
-    def _formatWithGrouping(val, group_size, sep):
+    def _format_with_grouping(val, group_size, sep):
         """Format integer with specified group size and separator"""
         neg = val < 0
         s = str(abs(val))
@@ -485,7 +486,7 @@ class Int(Obj):
         return ('-' + formatted) if neg else formatted
 
     @staticmethod
-    def _toLocaleBytes(b, locale=None):
+    def _to_locale_bytes(b, locale=None):
         """Format bytes with KB/MB/GB suffix based on magnitude.
 
         Following the same algorithm as the JavaScript runtime:
@@ -506,61 +507,55 @@ class Int(Obj):
         if b < KB:
             return str(b) + "B"
         if b < 10 * KB:
-            return Float.toLocale(b / KB, "#.#", locale) + "KB"
+            return Float.to_locale(b / KB, "#.#", locale) + "KB"
         if b < MB:
             return str(round(b / KB)) + "KB"
         if b < 10 * MB:
-            return Float.toLocale(b / MB, "#.#", locale) + "MB"
+            return Float.to_locale(b / MB, "#.#", locale) + "MB"
         if b < GB:
             return str(round(b / MB)) + "MB"
         if b < 10 * GB:
-            return Float.toLocale(b / GB, "#.#", locale) + "GB"
+            return Float.to_locale(b / GB, "#.#", locale) + "GB"
         return str(round(b / GB)) + "GB"
 
     @staticmethod
     def trap(self, name, args=None):
-        """Dynamic method invocation"""
+        """Dynamic method invocation with automatic name conversion.
+
+        Supports both Fantom names (camelCase) and Python names (snake_case).
+        Uses dynamic getattr() lookup instead of hardcoded map.
+        """
         if args is None:
             args = []
-        # Map method names to static methods
-        method_map = {
-            'and': Int.and_,
-            'or': Int.or_,
-            'xor': Int.xor,
-            'not': Int.not_,
-            'plus': Int.plus,
-            'minus': Int.minus,
-            'mult': Int.mult,
-            'div': Int.div,
-            'mod': Int.mod,
-            'shiftl': Int.shiftl,
-            'shiftr': Int.shiftr,
-            'shifta': Int.shifta,
-            'abs': Int.abs,
-            'min': Int.min,
-            'max': Int.max,
-            'pow': Int.pow,
-            'toStr': Int.toStr,
-            'toHex': Int.toHex,
-            'toChar': Int.toChar,
-            'toFloat': Int.toFloat,
-        }
-        method = method_map.get(name)
-        if method:
+
+        # First try exact match
+        method = getattr(Int, name, None)
+
+        # Try camelCase -> snake_case conversion
+        if method is None:
+            snake_name = _camel_to_snake(name)
+            method = getattr(Int, snake_name, None)
+
+        # Try adding underscore for Python builtins (and -> and_, or -> or_)
+        if method is None and not name.endswith('_'):
+            method = getattr(Int, name + '_', None)
+
+        if method is not None and callable(method):
             return method(self, *args)
+
         raise AttributeError(f"Int.{name}")
 
     # Constants
     @staticmethod
-    def maxVal():
+    def max_val():
         return 9223372036854775807  # 2^63 - 1
 
     @staticmethod
-    def minVal():
+    def min_val():
         return -9223372036854775808  # -2^63
 
     @staticmethod
-    def toDateTime(ticks, tz=None):
+    def to_date_time(ticks, tz=None):
         """Convert ticks to DateTime"""
         from .DateTime import DateTime
-        return DateTime.makeTicks(ticks, tz)
+        return DateTime.make_ticks(ticks, tz)

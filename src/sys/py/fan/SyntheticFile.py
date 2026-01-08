@@ -17,7 +17,7 @@ class SyntheticFile(File):
         from .Uri import Uri
 
         if isinstance(uri, str):
-            self._uri = Uri.fromStr(uri)
+            self._uri = Uri.from_str(uri)
         elif isinstance(uri, Uri):
             self._uri = uri
         else:
@@ -49,7 +49,7 @@ class SyntheticFile(File):
             return  # No-op
         return None
 
-    def osPath(self):
+    def os_path(self):
         """Return null - no OS path."""
         return None
 
@@ -57,10 +57,10 @@ class SyntheticFile(File):
         """Return null."""
         return None
 
-    def list(self, pattern=None):
+    def list_(self, pattern=None):
         """Return empty list."""
         from .List import List as FanList
-        return FanList.fromLiteral([], "sys::File")
+        return FanList.from_literal([], "sys::File")
 
     list_ = list
 
@@ -72,8 +72,8 @@ class SyntheticFile(File):
         """Return another SyntheticFile."""
         from .Uri import Uri
         if isinstance(uri, str):
-            uri = Uri.fromStr(uri)
-        resolved = self._uri.plus(uri) if hasattr(self._uri, 'plus') else Uri.fromStr(str(self._uri) + str(uri))
+            uri = Uri.from_str(uri)
+        resolved = self._uri.plus(uri) if hasattr(self._uri, 'plus') else Uri.from_str(str(self._uri) + str(uri))
         return SyntheticFile(resolved)
 
     def create(self):
@@ -81,7 +81,7 @@ class SyntheticFile(File):
         from .Err import IOErr
         raise IOErr.make("SyntheticFile cannot be created")
 
-    def moveTo(self, to):
+    def move_to(self, to):
         """Raise IOErr."""
         from .Err import IOErr
         raise IOErr.make("SyntheticFile cannot be moved")
@@ -91,12 +91,12 @@ class SyntheticFile(File):
         from .Err import IOErr
         raise IOErr.make("SyntheticFile cannot be deleted")
 
-    def deleteOnExit(self):
+    def delete_on_exit(self):
         """Raise IOErr."""
         from .Err import IOErr
         raise IOErr.make("SyntheticFile cannot be deleted")
 
-    def open(self, mode="rw"):
+    def open_(self, mode="rw"):
         """Raise IOErr."""
         from .Err import IOErr
         raise IOErr.make("SyntheticFile cannot be opened")
@@ -116,17 +116,17 @@ class SyntheticFile(File):
         from .Err import IOErr
         raise IOErr.make("SyntheticFile cannot be written")
 
-    def readAllStr(self, normalizeNewlines=True):
+    def read_all_str(self, normalizeNewlines=True):
         """Raise IOErr."""
         from .Err import IOErr
         raise IOErr.make("SyntheticFile cannot be read")
 
-    def readAllLines(self):
+    def read_all_lines(self):
         """Raise IOErr."""
         from .Err import IOErr
         raise IOErr.make("SyntheticFile cannot be read")
 
-    def readAllBuf(self):
+    def read_all_buf(self):
         """Raise IOErr."""
         from .Err import IOErr
         raise IOErr.make("SyntheticFile cannot be read")

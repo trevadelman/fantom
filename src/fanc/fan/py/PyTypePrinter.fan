@@ -620,11 +620,11 @@ class PyTypePrinter : PyPrinter
       indent
       if (m.params.size > 0)
       {
-        w("return self.${m.name}(other)").eos
+        w("return self.${escapeName(m.name)}(other)").eos
       }
       else
       {
-        w("return self.${m.name}()").eos
+        w("return self.${escapeName(m.name)}()").eos
       }
       unindent
     }
@@ -663,7 +663,7 @@ class PyTypePrinter : PyPrinter
     indent
     w("if ${t.name}._vals is None").colon
     indent
-    w("${t.name}._vals = List.toImmutable(List.fromList([").nl
+    w("${t.name}._vals = List.to_immutable(List.from_list([").nl
     indent
     enumFields.each |f, i|
     {
@@ -687,10 +687,10 @@ class PyTypePrinter : PyPrinter
     w("return ${t.name}._vals").eos
     unindent
 
-    // fromStr() method
+    // from_str() method
     nl
     w("@staticmethod").nl
-    w("def fromStr(name, checked=True)").colon
+    w("def from_str(name, checked=True)").colon
     indent
     w("for v in ${t.name}.vals()").colon
     indent
@@ -756,9 +756,9 @@ class PyTypePrinter : PyPrinter
     w("return self._name").eos
     unindent
 
-    // toStr() returns the name
+    // to_str() returns the name
     nl
-    w("def toStr(self)").colon
+    w("def to_str(self)").colon
     indent
     w("return self._name").eos
     unindent
@@ -900,7 +900,7 @@ class PyTypePrinter : PyPrinter
     // Generate static factory methods for ALL constructors
     ctorMethods.each |ctorMethod|
     {
-      ctorName := ctorMethod.name  // "make", "make1", "make2", etc.
+      ctorName := escapeName(ctorMethod.name)  // "make", "make_def", etc. (snake_case)
       isStaticFactory := ctorMethod.isStatic  // static new make(...) vs new make(...)
 
       nl
@@ -991,7 +991,7 @@ class PyTypePrinter : PyPrinter
       if (ctorMethod.name == "make") return  // Primary ctor uses __init__
 
       nl
-      w("def _${ctorMethod.name}_body(self")
+      w("def _${escapeName(ctorMethod.name)}_body(self")
       ctorMethod.params.each |p|
       {
         w(", ")
@@ -1757,7 +1757,7 @@ class PyTypePrinter : PyPrinter
         // Enum values are public static const
         enumFlags := 0x00000001.or(0x00000800).or(0x00002000).or(0x00000020)  // Public | Static | Const | Enum
         fieldFacets = facetDict(f.enumDef.facets)
-        w("_t.af_('${f.name}', ${enumFlags}, '${typeSig}', ${fieldFacets})").nl
+        w("_t.af_('${escapeName(f.name)}', ${enumFlags}, '${typeSig}', ${fieldFacets})").nl
       }
       else
       {
@@ -1765,9 +1765,9 @@ class PyTypePrinter : PyPrinter
         setterFlags := setterFlags(f)
         // Only emit setter flags if they differ from field flags
         if (setterFlags != flags)
-          w("_t.af_('${f.name}', ${flags}, '${typeSig}', ${fieldFacets}, ${setterFlags})").nl
+          w("_t.af_('${escapeName(f.name)}', ${flags}, '${typeSig}', ${fieldFacets}, ${setterFlags})").nl
         else
-          w("_t.af_('${f.name}', ${flags}, '${typeSig}', ${fieldFacets})").nl
+          w("_t.af_('${escapeName(f.name)}', ${flags}, '${typeSig}', ${fieldFacets})").nl
       }
     }
 
@@ -1786,17 +1786,17 @@ class PyTypePrinter : PyPrinter
       // Build params list
       if (m.params.isEmpty)
       {
-        w("_t.am_('${m.name}', ${flags}, '${retSig}', [], ${methodFacets})").nl
+        w("_t.am_('${escapeName(m.name)}', ${flags}, '${retSig}', [], ${methodFacets})").nl
       }
       else
       {
-        w("_t.am_('${m.name}', ${flags}, '${retSig}', [")
+        w("_t.am_('${escapeName(m.name)}', ${flags}, '${retSig}', [")
         m.params.each |p, i|
         {
           if (i > 0) w(", ")
           pType := p.type.signature
           hasDefault := p.hasDefault ? "True" : "False"
-          w("Param('${p.name}', Type.find('${pType}'), ${hasDefault})")
+          w("Param('${escapeName(p.name)}', Type.find('${pType}'), ${hasDefault})")
         }
         w("], ${methodFacets})").nl
       }

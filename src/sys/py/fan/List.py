@@ -47,12 +47,12 @@ class List(Obj, MutableSequence):
 
     def __setitem__(self, index, value):
         """Set item at index"""
-        self._checkReadonly()
+        self._check_readonly()
         self._values[index] = value
 
     def __delitem__(self, index):
         """Delete item at index"""
-        self._checkReadonly()
+        self._check_readonly()
         del self._values[index]
 
     def __len__(self):
@@ -63,7 +63,7 @@ class List(Obj, MutableSequence):
         """Insert item at index - ABC required method.
         Returns self for method chaining (Fantom style).
         """
-        self._checkReadonly()
+        self._check_readonly()
         self._values.insert(index, value)
         if len(self._values) > self._capacity:
             self._capacity = len(self._values)
@@ -97,7 +97,7 @@ class List(Obj, MutableSequence):
         return f"List({self._values})"
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()
 
     def __eq__(self, other):
         """Equality comparison"""
@@ -121,7 +121,7 @@ class List(Obj, MutableSequence):
     # Read-only Check
     #################################################################
 
-    def _checkReadonly(self):
+    def _check_readonly(self):
         """Check if list is readonly - override in subclasses"""
         pass  # Base List is always read-write
 
@@ -144,10 +144,10 @@ class List(Obj, MutableSequence):
             raise NullErr("of not defined")
         if values is None or isinstance(values, (int, Type)):
             values = []
-        return List.fromLiteral(list(values), of)
+        return List.from_literal(list(values), of)
 
     @staticmethod
-    def fromLiteral(values, elementType):
+    def from_literal(values, elementType):
         """Create type-aware list from literal values.
 
         Args:
@@ -172,11 +172,11 @@ class List(Obj, MutableSequence):
         return result
 
     @staticmethod
-    def fromList(values, elementType=None):
+    def from_list(values, elementType=None):
         """Create a List from a Python list"""
         if elementType is None:
             elementType = "sys::Obj"
-        return List.fromLiteral(list(values), elementType)
+        return List.from_literal(list(values), elementType)
 
     #################################################################
     # Type/Reflection Methods
@@ -207,7 +207,7 @@ class List(Obj, MutableSequence):
     @size.setter
     def size(self, val):
         """Set size - grows or shrinks list"""
-        self._checkReadonly()
+        self._check_readonly()
         current = len(self._values)
         if val > current:
             elemType = self._elementType
@@ -231,13 +231,13 @@ class List(Obj, MutableSequence):
     @capacity.setter
     def capacity(self, val):
         """Set capacity"""
-        self._checkReadonly()
+        self._check_readonly()
         if val < len(self._values):
             from .Err import ArgErr
             raise ArgErr(f"Cannot set capacity {val} below size {len(self._values)}")
         self._capacity = val
 
-    def isEmpty(self):
+    def is_empty(self):
         """Return true if list is empty"""
         return len(self._values) == 0
 
@@ -245,15 +245,15 @@ class List(Obj, MutableSequence):
     # Read-only/Immutable Methods
     #################################################################
 
-    def isRO(self):
+    def is_ro(self):
         """Return true if this list is read-only"""
         return False
 
-    def isRW(self):
+    def is_rw(self):
         """Return true if this list is read-write"""
         return True
 
-    def isImmutable(self):
+    def is_immutable(self):
         """Return true if this list is immutable"""
         return False
 
@@ -272,17 +272,17 @@ class List(Obj, MutableSequence):
         """Return read-write version - this is already read-write"""
         return self
 
-    def toImmutable(self):
+    def to_immutable(self):
         """Return immutable version of this list"""
         from .ObjUtil import ObjUtil
         immutable_items = []
         for item in self._values:
             if item is None:
                 immutable_items.append(None)
-            elif ObjUtil.isImmutable(item):
+            elif ObjUtil.is_immutable(item):
                 immutable_items.append(item)
-            elif hasattr(item, 'toImmutable') and callable(item.toImmutable):
-                immutable_items.append(item.toImmutable())
+            elif hasattr(item, 'to_immutable') and callable(item.to_immutable):
+                immutable_items.append(item.to_immutable())
             else:
                 immutable_items.append(item)
         result = ImmutableList(None, immutable_items)
@@ -303,7 +303,7 @@ class List(Obj, MutableSequence):
             return default
         return self._values[index]
 
-    def getSafe(self, index, default=None):
+    def get_safe(self, index, default=None):
         """Get element or default if out of bounds"""
         n = len(self._values)
         if index < 0:
@@ -320,21 +320,21 @@ class List(Obj, MutableSequence):
         """Get last element or null"""
         return self._values[-1] if self._values else None
 
-    def getRange(self, r_or_target=None, r=None):
+    def get_range(self, r_or_target=None, r=None):
         """Get a slice using a Range.
 
         Can be called as:
-        - List.getRange(target, range) - static dispatch from transpiler
-        - list.getRange(range) - instance method call
+        - List.get_range(target, range) - static dispatch from transpiler
+        - list.get_range(range) - instance method call
 
         Delegates to target's getRange method if target is not a List.
         """
         from .Range import Range
 
-        # When transpiler generates List.getRange(target, range):
+        # When transpiler generates List.get_range(target, range):
         # Python binds: self=target, r_or_target=range, r=None
 
-        # When called as instance method list.getRange(range):
+        # When called as instance method list.get_range(range):
         # Python binds: self=list, r_or_target=range, r=None
 
         # Both cases have r=None and r_or_target=Range
@@ -342,12 +342,12 @@ class List(Obj, MutableSequence):
         if isinstance(r_or_target, Range) and r is None:
             # Check if self is a List instance (or subclass that uses _values)
             if isinstance(self, List) and hasattr(self, '_values'):
-                return self._getRange(r_or_target)
+                return self._get_range(r_or_target)
 
             # self is not a List with _values (could be Uri, StrBuf, Buf, GbGrid, etc.)
             # Check if type has its own getRange method (not inherited from List)
-            own_class_getRange = type(self).__dict__.get('getRange', None)
-            if own_class_getRange is not None and own_class_getRange is not List.getRange:
+            own_class_getRange = type(self).__dict__.get('get_range', None)
+            if own_class_getRange is not None and own_class_getRange is not List.get_range:
                 # Type has its own getRange - call it directly
                 # Use object.__getattribute__ to bypass our own getRange
                 return own_class_getRange(self, r_or_target)
@@ -356,13 +356,13 @@ class List(Obj, MutableSequence):
             for cls in type(self).__mro__:
                 if cls is List:
                     continue
-                cls_getRange = cls.__dict__.get('getRange', None)
+                cls_getRange = cls.__dict__.get('get_range', None)
                 if cls_getRange is not None:
                     return cls_getRange(self, r_or_target)
 
             # Fallback: check for _getRange
-            if hasattr(self, '_getRange'):
-                return self._getRange(r_or_target)
+            if hasattr(self, '_get_range'):
+                return self._get_range(r_or_target)
 
             raise TypeError(f"{type(self).__name__} does not support getRange")
 
@@ -370,14 +370,14 @@ class List(Obj, MutableSequence):
         if r is not None:
             target = r_or_target
             if isinstance(target, List) and hasattr(target, '_values'):
-                return target._getRange(r)
-            if hasattr(target, 'getRange'):
-                return target.getRange(r)
+                return target._get_range(r)
+            if hasattr(target, 'get_range'):
+                return target.get_range(r)
             raise TypeError(f"{type(target).__name__} does not support getRange")
 
         raise ValueError("getRange requires a Range argument")
 
-    def _getRange(self, r):
+    def _get_range(self, r):
         """Internal getRange implementation for List instances."""
         from .Err import IndexErr
         start = r._start
@@ -407,21 +407,21 @@ class List(Obj, MutableSequence):
         """Check if list contains item"""
         return item in self
 
-    def containsSame(self, item):
+    def contains_same(self, item):
         """Check if list contains item using identity"""
         for x in self._values:
             if x is item:
                 return True
         return False
 
-    def containsAll(self, items):
+    def contains_all(self, items):
         """Check if list contains all items"""
         for item in items:
             if item not in self:
                 return False
         return True
 
-    def containsAny(self, items):
+    def contains_any(self, items):
         """Check if list contains any item"""
         for item in items:
             if item in self:
@@ -462,7 +462,7 @@ class List(Obj, MutableSequence):
                 return i
         return None
 
-    def indexSame(self, item, off=0):
+    def index_same(self, item, off=0):
         """Find index using identity comparison"""
         for i in range(off, len(self._values)):
             if self._values[i] is item:
@@ -473,7 +473,7 @@ class List(Obj, MutableSequence):
     # Modification Methods
     #################################################################
 
-    def _growCapacity(self, minCapacity):
+    def _grow_capacity(self, minCapacity):
         """Grow capacity using standard growth algorithm"""
         # Java ArrayList style growth: max(minCapacity, oldCapacity * 1.5 + 1, 10)
         newCapacity = max(minCapacity, int(self._capacity * 1.5) + 1, 10)
@@ -481,25 +481,25 @@ class List(Obj, MutableSequence):
 
     def add(self, item):
         """Add item to end of list"""
-        self._checkReadonly()
+        self._check_readonly()
         self._values.append(item)
         if len(self._values) > self._capacity:
-            self._growCapacity(len(self._values))
+            self._grow_capacity(len(self._values))
         self._roView = None
         return self
 
-    def addAll(self, items):
+    def add_all(self, items):
         """Add all items from another collection"""
-        self._checkReadonly()
+        self._check_readonly()
         self._values.extend(items)
         if len(self._values) > self._capacity:
             self._capacity = len(self._values)
         self._roView = None
         return self
 
-    def addNotNull(self, item):
+    def add_not_null(self, item):
         """Add item if not null"""
-        self._checkReadonly()
+        self._check_readonly()
         if item is not None:
             self._values.append(item)
             if len(self._values) > self._capacity:
@@ -507,10 +507,10 @@ class List(Obj, MutableSequence):
             self._roView = None
         return self
 
-    def insertAll(self, index, items):
+    def insert_all(self, index, items):
         """Insert all items at index"""
         from .Err import IndexErr
-        self._checkReadonly()
+        self._check_readonly()
         items_copy = list(items)
         n = len(self._values)
         orig_index = index
@@ -523,24 +523,24 @@ class List(Obj, MutableSequence):
         self._roView = None
         return self
 
-    def set(self, index, val):
+    def set_(self, index, val):
         """Set item at index"""
-        self._checkReadonly()
+        self._check_readonly()
         self._values[index] = val
         self._roView = None
         return self
 
-    def setNotNull(self, index, val):
+    def set_not_null(self, index, val):
         """Set item at index only if val is not null"""
         if val is not None:
-            self._checkReadonly()
+            self._check_readonly()
             self._values[index] = val
             self._roView = None
         return self
 
     def remove(self, item):
         """Remove first occurrence of item"""
-        self._checkReadonly()
+        self._check_readonly()
         from .ObjUtil import ObjUtil
         for i, x in enumerate(self._values):
             if ObjUtil.equals(x, item):
@@ -548,24 +548,24 @@ class List(Obj, MutableSequence):
                 return self._values.pop(i)
         return None
 
-    def removeSame(self, item):
+    def remove_same(self, item):
         """Remove first occurrence using identity"""
-        self._checkReadonly()
+        self._check_readonly()
         for i, x in enumerate(self._values):
             if x is item:
                 self._roView = None
                 return self._values.pop(i)
         return None
 
-    def removeAt(self, index):
+    def remove_at(self, index):
         """Remove and return item at index"""
-        self._checkReadonly()
+        self._check_readonly()
         self._roView = None
         return self._values.pop(index)
 
-    def removeRange(self, r):
+    def remove_range(self, r):
         """Remove items in range"""
-        self._checkReadonly()
+        self._check_readonly()
         start = r._start
         end = r._end
         exclusive = r._exclusive
@@ -580,9 +580,9 @@ class List(Obj, MutableSequence):
         self._roView = None
         return self
 
-    def removeAll(self, items):
+    def remove_all(self, items):
         """Remove all occurrences of items"""
-        self._checkReadonly()
+        self._check_readonly()
         from .ObjUtil import ObjUtil
         for item in items:
             i = 0
@@ -596,7 +596,7 @@ class List(Obj, MutableSequence):
 
     def clear(self):
         """Remove all items"""
-        self._checkReadonly()
+        self._check_readonly()
         self._values.clear()
         self._roView = None
         return self
@@ -611,7 +611,7 @@ class List(Obj, MutableSequence):
 
     def pop(self, index=None):
         """Pop item from stack"""
-        self._checkReadonly()
+        self._check_readonly()
         if index is not None:
             self._roView = None
             return self._values.pop(index)
@@ -630,7 +630,7 @@ class List(Obj, MutableSequence):
 
     def fill(self, val, times):
         """Fill list with val, times number of times"""
-        self._checkReadonly()
+        self._check_readonly()
         for _ in range(times):
             self._values.append(val)
         if len(self._values) > self._capacity:
@@ -647,7 +647,7 @@ class List(Obj, MutableSequence):
 
     def trim(self):
         """Trim capacity to size"""
-        self._checkReadonly()
+        self._check_readonly()
         self._capacity = len(self._values)
         return self
 
@@ -689,7 +689,7 @@ class List(Obj, MutableSequence):
             for item in reversed(self._values):
                 f(item)
 
-    def eachWhile(self, f):
+    def each_while(self, f):
         """Iterate until f returns non-null"""
         param_count = List._get_param_count(f)
         if param_count >= 2:
@@ -704,7 +704,7 @@ class List(Obj, MutableSequence):
                     return result
         return None
 
-    def eachrWhile(self, f):
+    def eachr_while(self, f):
         """Iterate in reverse until f returns non-null"""
         param_count = List._get_param_count(f)
         if param_count >= 2:
@@ -719,7 +719,7 @@ class List(Obj, MutableSequence):
                     return result
         return None
 
-    def eachRange(self, r, f):
+    def each_range(self, r, f):
         """Iterate over a range of indices"""
         start = r._start
         end = r._end
@@ -739,7 +739,7 @@ class List(Obj, MutableSequence):
             for i in range(start, end):
                 f(self._values[i])
 
-    def eachNotNull(self, f):
+    def each_not_null(self, f):
         """Iterate over non-null elements"""
         param_count = List._get_param_count(f)
         if param_count >= 2:
@@ -765,9 +765,9 @@ class List(Obj, MutableSequence):
         else:
             for item in self._values:
                 result.append(f(item))
-        return List.fromLiteral(result, self._elementType if self._elementType else "sys::Obj")
+        return List.from_literal(result, self._elementType if self._elementType else "sys::Obj")
 
-    def flatMap(self, f):
+    def flat_map(self, f):
         """Map and flatten results"""
         result = []
         param_count = List._get_param_count(f)
@@ -785,16 +785,16 @@ class List(Obj, MutableSequence):
                     result.extend(mapped)
                 else:
                     result.append(mapped)
-        return List.fromLiteral(result, "sys::Obj")
+        return List.from_literal(result, "sys::Obj")
 
-    def mapNotNull(self, f):
+    def map_not_null(self, f):
         """Transform elements, excluding null results"""
         result = []
         for item in self._values:
             mapped = f(item)
             if mapped is not None:
                 result.append(mapped)
-        return List.fromLiteral(result, "sys::Obj")
+        return List.from_literal(result, "sys::Obj")
 
     def flatten(self):
         """Flatten nested lists recursively"""
@@ -806,7 +806,7 @@ class List(Obj, MutableSequence):
                 result.extend(List(None, item).flatten()._values)
             else:
                 result.append(item)
-        return List.fromLiteral(result, "sys::Obj")
+        return List.from_literal(result, "sys::Obj")
 
     #################################################################
     # Filter/Find Methods
@@ -825,7 +825,7 @@ class List(Obj, MutableSequence):
                     return item
         return None
 
-    def findAll(self, f):
+    def find_all(self, f):
         """Find all elements matching predicate"""
         result = []
         param_count = List._get_param_count(f)
@@ -837,9 +837,9 @@ class List(Obj, MutableSequence):
             for item in self._values:
                 if f(item):
                     result.append(item)
-        return List.fromLiteral(result, self._elementType if self._elementType else "sys::Obj")
+        return List.from_literal(result, self._elementType if self._elementType else "sys::Obj")
 
-    def findIndex(self, f):
+    def find_index(self, f):
         """Find index of first element matching predicate"""
         param_count = List._get_param_count(f)
         if param_count >= 2:
@@ -852,16 +852,16 @@ class List(Obj, MutableSequence):
                     return i
         return None
 
-    def findType(self, type_):
+    def find_type(self, type_):
         """Find all elements of given type"""
         from .ObjUtil import ObjUtil
         result = []
         for item in self._values:
             if ObjUtil.is_(item, type_):
                 result.append(item)
-        return List.fromLiteral(result, type_)
+        return List.from_literal(result, type_)
 
-    def findNotNull(self):
+    def find_not_null(self):
         """Return list with null values removed"""
         result = [item for item in self._values if item is not None]
         elemType = self._elementType
@@ -869,8 +869,8 @@ class List(Obj, MutableSequence):
             sig = elemType.signature() if hasattr(elemType, 'signature') else str(elemType)
             if sig.endswith("?"):
                 sig = sig[:-1]
-            return List.fromLiteral(result, sig)
-        return List.fromLiteral(result, "sys::Obj")
+            return List.from_literal(result, sig)
+        return List.from_literal(result, "sys::Obj")
 
     def exclude(self, f):
         """Exclude elements matching predicate"""
@@ -884,9 +884,9 @@ class List(Obj, MutableSequence):
             for item in self._values:
                 if not f(item):
                     result.append(item)
-        return List.fromLiteral(result, self._elementType if self._elementType else "sys::Obj")
+        return List.from_literal(result, self._elementType if self._elementType else "sys::Obj")
 
-    def any(self, f):
+    def any_(self, f):
         """Return true if any element matches predicate"""
         param_count = List._get_param_count(f)
         if param_count >= 2:
@@ -899,7 +899,7 @@ class List(Obj, MutableSequence):
                     return True
         return False
 
-    def all(self, f):
+    def all_(self, f):
         """Return true if all elements match predicate"""
         param_count = List._get_param_count(f)
         if param_count >= 2:
@@ -928,7 +928,7 @@ class List(Obj, MutableSequence):
                 acc = f(acc, item)
         return acc
 
-    def min(self, f=None):
+    def min_(self, f=None):
         """Get minimum value"""
         if len(self._values) == 0:
             return None
@@ -939,7 +939,7 @@ class List(Obj, MutableSequence):
             return min(self._values, key=functools.cmp_to_key(f))
         return min(self._values)
 
-    def max(self, f=None):
+    def max_(self, f=None):
         """Get maximum value"""
         if len(self._values) == 0:
             return None
@@ -955,8 +955,8 @@ class List(Obj, MutableSequence):
         """Join elements into string"""
         from .ObjUtil import ObjUtil
         if converter is not None:
-            return sep.join(converter(ObjUtil.toStr(x)) for x in self._values)
-        return sep.join(ObjUtil.toStr(x) for x in self._values)
+            return sep.join(converter(ObjUtil.to_str(x)) for x in self._values)
+        return sep.join(ObjUtil.to_str(x) for x in self._values)
 
     #################################################################
     # Sort/Order Methods
@@ -964,7 +964,7 @@ class List(Obj, MutableSequence):
 
     def sort(self, f=None, *, key=None, reverse=False):
         """Sort list in place"""
-        self._checkReadonly()
+        self._check_readonly()
         if key is not None or reverse:
             self._values.sort(key=key, reverse=reverse)
         elif f is not None:
@@ -995,14 +995,14 @@ class List(Obj, MutableSequence):
 
     def reverse(self):
         """Reverse list in place"""
-        self._checkReadonly()
+        self._check_readonly()
         self._values.reverse()
         self._roView = None
         return self
 
     def shuffle(self):
         """Randomly shuffle list"""
-        self._checkReadonly()
+        self._check_readonly()
         import random
         random.shuffle(self._values)
         self._roView = None
@@ -1010,14 +1010,14 @@ class List(Obj, MutableSequence):
 
     def swap(self, a, b):
         """Swap elements at indices a and b"""
-        self._checkReadonly()
+        self._check_readonly()
         self._values[a], self._values[b] = self._values[b], self._values[a]
         self._roView = None
         return self
 
-    def moveTo(self, item, index):
+    def move_to(self, item, index):
         """Move item to target index"""
-        self._checkReadonly()
+        self._check_readonly()
         from .ObjUtil import ObjUtil
         old_index = None
         for i, x in enumerate(self._values):
@@ -1052,7 +1052,7 @@ class List(Obj, MutableSequence):
             if not found:
                 seen.append(item)
                 result.append(item)
-        return List.fromLiteral(result, self._elementType if self._elementType else "sys::Obj")
+        return List.from_literal(result, self._elementType if self._elementType else "sys::Obj")
 
     def union(self, that):
         """Return union of two lists"""
@@ -1068,9 +1068,9 @@ class List(Obj, MutableSequence):
         for item in self._values:
             if item in that and item not in result:
                 result.append(item)
-        return List.fromLiteral(result, self._elementType if self._elementType else "sys::Obj")
+        return List.from_literal(result, self._elementType if self._elementType else "sys::Obj")
 
-    def groupBy(self, f):
+    def group_by(self, f):
         """Group elements by a key function"""
         from .Map import Map
         from .Func import Func
@@ -1082,20 +1082,20 @@ class List(Obj, MutableSequence):
             ret = f.returns()
             if ret is not None:
                 keyTypeSig = ret.signature() if hasattr(ret, 'signature') else str(ret)
-        result = Map.fromLiteral([], [], keyTypeSig, elemTypeSig + "[]")
+        result = Map.from_literal([], [], keyTypeSig, elemTypeSig + "[]")
         param_count = List._get_param_count(f)
         for i, item in enumerate(self._values):
             if param_count >= 2:
                 key = f(item, i)
             else:
                 key = f(item)
-            if result.containsKey(key):
+            if result.contains_key(key):
                 result.get(key).add(item)
             else:
-                result.set(key, List.fromLiteral([item], elemTypeSig))
+                result.set_(key, List.from_literal([item], elemTypeSig))
         return result
 
-    def groupByInto(self, map_, f):
+    def group_by_into(self, map_, f):
         """Group elements into an existing Map"""
         param_count = List._get_param_count(f)
         for i, item in enumerate(self._values):
@@ -1103,17 +1103,17 @@ class List(Obj, MutableSequence):
                 key = f(item, i)
             else:
                 key = f(item)
-            if map_.containsKey(key):
+            if map_.contains_key(key):
                 map_.get(key).add(item)
             else:
-                map_.set(key, List.fromLiteral([item], "sys::Obj"))
+                map_.set_(key, List.from_literal([item], "sys::Obj"))
         return map_
 
     #################################################################
     # Binary Search
     #################################################################
 
-    def binarySearch(self, key, f=None):
+    def binary_search(self, key, f=None):
         """Binary search for key"""
         from .ObjUtil import ObjUtil
         lo = 0
@@ -1133,7 +1133,7 @@ class List(Obj, MutableSequence):
                 return mid
         return -(lo + 1)
 
-    def binaryFind(self, f):
+    def binary_find(self, f):
         """Binary search using comparison function"""
         lo = 0
         hi = len(self._values) - 1
@@ -1156,15 +1156,15 @@ class List(Obj, MutableSequence):
     # Conversion Methods
     #################################################################
 
-    def toStr(self):
+    def to_str(self):
         """Convert list to string"""
         from .ObjUtil import ObjUtil
         if len(self._values) == 0:
             return "[,]"
-        items = [ObjUtil.toStr(x) for x in self._values]
+        items = [ObjUtil.to_str(x) for x in self._values]
         return "[" + ", ".join(items) + "]"
 
-    def toCode(self):
+    def to_code(self):
         """Convert list to Fantom code literal"""
         from .ObjUtil import ObjUtil
         typeSig = None
@@ -1175,13 +1175,13 @@ class List(Obj, MutableSequence):
         if len(self._values) == 0:
             elemType = typeSig[:-2] if typeSig.endswith("[]") else "sys::Obj?"
             return f"{elemType}[,]"
-        items = [ObjUtil.toCode(x) for x in self._values]
+        items = [ObjUtil.to_code(x) for x in self._values]
         elemType = typeSig[:-2] if typeSig.endswith("[]") else "sys::Obj?"
         return f"{elemType}[" + ", ".join(items) + "]"
 
-    def literalEncode(self, out):
+    def literal_encode(self, out):
         """Encode for serialization"""
-        out.writeList(self)
+        out.write_list(self)
 
     def hash_(self):
         """Return hash code"""
@@ -1241,21 +1241,21 @@ class ImmutableList(List):
         super().__init__(of_type, items)
         self._immutable = True
 
-    def _checkReadonly(self):
+    def _check_readonly(self):
         """Throw ReadonlyErr on any mutation attempt"""
         from .Err import ReadonlyErr
         raise ReadonlyErr("List is immutable")
 
-    def isRO(self):
+    def is_ro(self):
         return True
 
-    def isRW(self):
+    def is_rw(self):
         return False
 
-    def isImmutable(self):
+    def is_immutable(self):
         return True
 
-    def toImmutable(self):
+    def to_immutable(self):
         """Already immutable - return self"""
         return self
 
@@ -1293,18 +1293,18 @@ class ReadOnlyList(List):
             super().__init__(None, source)
             self._source = source
 
-    def _checkReadonly(self):
+    def _check_readonly(self):
         """Throw ReadonlyErr on any mutation attempt"""
         from .Err import ReadonlyErr
         raise ReadonlyErr("List is read-only")
 
-    def isRO(self):
+    def is_ro(self):
         return True
 
-    def isRW(self):
+    def is_rw(self):
         return False
 
-    def isImmutable(self):
+    def is_immutable(self):
         return False
 
     def ro(self):
@@ -1315,17 +1315,17 @@ class ReadOnlyList(List):
         """Return the original mutable source"""
         return self._source
 
-    def toImmutable(self):
+    def to_immutable(self):
         """Convert to fully immutable list"""
         from .ObjUtil import ObjUtil
         immutable_items = []
         for item in self._values:
             if item is None:
                 immutable_items.append(None)
-            elif ObjUtil.isImmutable(item):
+            elif ObjUtil.is_immutable(item):
                 immutable_items.append(item)
-            elif hasattr(item, 'toImmutable') and callable(item.toImmutable):
-                immutable_items.append(item.toImmutable())
+            elif hasattr(item, 'to_immutable') and callable(item.to_immutable):
+                immutable_items.append(item.to_immutable())
             else:
                 immutable_items.append(item)
         result = ImmutableList(self._elementType, immutable_items)

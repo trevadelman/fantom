@@ -10,11 +10,11 @@ class Bool(Obj):
     """Boolean type - uses static methods on native bool"""
 
     @staticmethod
-    def defVal():
+    def def_val():
         return False
 
     @staticmethod
-    def isImmutable(self):
+    def is_immutable(self):
         return True
 
     @staticmethod
@@ -62,20 +62,20 @@ class Bool(Obj):
         return 1 if self else -1
 
     @staticmethod
-    def toStr(self):
+    def to_str(self):
         return "true" if self else "false"
 
     @staticmethod
-    def toCode(self):
+    def to_code(self):
         return "true" if self else "false"
 
     @staticmethod
-    def toLocale(self):
+    def to_locale(self):
         # Simplified for bootstrap
         return "True" if self else "False"
 
     @staticmethod
-    def fromStr(s, checked=True):
+    def from_str(s, checked=True):
         if s == "true":
             return True
         if s == "false":
@@ -83,4 +83,4 @@ class Bool(Obj):
         if not checked:
             return None
         from .Err import ParseErr
-        raise ParseErr.makeStr("Bool", s)
+        raise ParseErr.make_str("Bool", s)

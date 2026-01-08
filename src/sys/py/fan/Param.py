@@ -40,11 +40,11 @@ class Param(Obj):
         """Alias for type() - Fantom compatible."""
         return self._type
 
-    def hasDefault(self):
+    def has_default(self):
         """Check if parameter has a default value."""
         return self._has_default
 
-    def toStr(self):
+    def to_str(self):
         """String representation."""
         return f"{self._type.signature() if self._type else '?'} {self._name}"
 
@@ -52,6 +52,6 @@ class Param(Obj):
         return f"Param({self._name}, {self._type})"
 
     @staticmethod
-    def noParams():
+    def no_params():
         """Return an empty immutable list of params."""
         return []

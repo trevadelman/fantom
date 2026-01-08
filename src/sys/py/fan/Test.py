@@ -37,7 +37,7 @@ class Test(Obj):
         else:
             self._verbose = val
 
-    def curTestMethod(self, val=None):
+    def cur_test_method(self, val=None):
         """Get or set current test method"""
         if val is None:
             return self._curTestMethod
@@ -52,7 +52,7 @@ class Test(Obj):
         """
         return CvarWrapper(val)
 
-    def verifyCount(self):
+    def verify_count(self):
         return self._verifyCount
 
     def verify(self, cond, msg=None):
@@ -60,60 +60,60 @@ class Test(Obj):
             self.fail(msg)
         self._verifyCount += 1
 
-    def verifyTrue(self, cond, msg=None):
+    def verify_true(self, cond, msg=None):
         return self.verify(cond, msg)
 
-    def verifyFalse(self, cond, msg=None):
+    def verify_false(self, cond, msg=None):
         if cond:
             self.fail(msg)
         self._verifyCount += 1
 
-    def verifyNull(self, a, msg=None):
+    def verify_null(self, a, msg=None):
         if a is not None:
             if msg is None:
-                msg = f"{ObjUtil.toStr(a)} is not null"
+                msg = f"{ObjUtil.to_str(a)} is not null"
             self.fail(msg)
         self._verifyCount += 1
 
-    def verifyNotNull(self, a, msg=None):
+    def verify_not_null(self, a, msg=None):
         if a is None:
             if msg is None:
                 msg = "null"
             self.fail(msg)
         self._verifyCount += 1
 
-    def verifyEq(self, expected, actual, msg=None):
+    def verify_eq(self, expected, actual, msg=None):
         if not ObjUtil.equals(expected, actual):
             if msg is None:
-                msg = f"{ObjUtil.toStr(expected)} != {ObjUtil.toStr(actual)}"
+                msg = f"{ObjUtil.to_str(expected)} != {ObjUtil.to_str(actual)}"
             self.fail(msg)
         self._verifyCount += 1
 
-    def verifyNotEq(self, expected, actual, msg=None):
+    def verify_not_eq(self, expected, actual, msg=None):
         if ObjUtil.equals(expected, actual):
             if msg is None:
-                msg = f"{ObjUtil.toStr(expected)} == {ObjUtil.toStr(actual)}"
+                msg = f"{ObjUtil.to_str(expected)} == {ObjUtil.to_str(actual)}"
             self.fail(msg)
         self._verifyCount += 1
 
-    def verifySame(self, expected, actual, msg=None):
+    def verify_same(self, expected, actual, msg=None):
         if not ObjUtil.same(expected, actual):
             if msg is None:
-                msg = f"{ObjUtil.toStr(expected)} !== {ObjUtil.toStr(actual)}"
+                msg = f"{ObjUtil.to_str(expected)} !== {ObjUtil.to_str(actual)}"
             self.fail(msg)
         self._verifyCount += 1
 
-    def verifyNotSame(self, expected, actual, msg=None):
+    def verify_not_same(self, expected, actual, msg=None):
         if ObjUtil.same(expected, actual):
             if msg is None:
-                msg = f"{ObjUtil.toStr(expected)} === {ObjUtil.toStr(actual)}"
+                msg = f"{ObjUtil.to_str(expected)} === {ObjUtil.to_str(actual)}"
             self.fail(msg)
         self._verifyCount += 1
 
-    def verifyType(self, obj, t):
-        self.verifyEq(ObjUtil.typeof(obj), t)
+    def verify_type(self, obj, t):
+        self.verify_eq(ObjUtil.typeof(obj), t)
 
-    def verifyErr(self, errType, func):
+    def verify_err(self, errType, func):
         try:
             func()
         except Exception as e:
@@ -123,14 +123,14 @@ class Test(Obj):
             return
         self.fail(f"No err thrown, expected {errType}")
 
-    def verifyErrMsg(self, errType, errMsg, func):
+    def verify_err_msg(self, errType, errMsg, func):
         try:
             func()
         except Exception as e:
             # Verify error message matches
             self._verifyCount += 1
             actual_msg = str(e) if not hasattr(e, "msg") else e.msg()
-            self.verifyEq(errMsg, actual_msg)
+            self.verify_eq(errMsg, actual_msg)
             return
         self.fail(f"No err thrown, expected {errType}")
 
@@ -148,7 +148,7 @@ class Test(Obj):
         """Called after each test method"""
         pass
 
-    def tempDir(self):
+    def temp_dir(self):
         """Get/create temporary test directory.
 
         Returns a File representing a clean temporary directory

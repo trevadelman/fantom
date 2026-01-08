@@ -31,7 +31,7 @@ class FutureStatus(Obj):
     def ordinal(self):
         return self._ordinal
 
-    def toStr(self):
+    def to_str(self):
         return self._name
 
     def __str__(self):
@@ -50,23 +50,23 @@ class FutureStatus(Obj):
 
     # Helper methods matching Fantom API
 
-    def isPending(self):
+    def is_pending(self):
         """Return if pending state"""
         return self._ordinal == 0
 
-    def isComplete(self):
+    def is_complete(self):
         """Return if in any completed state: ok, err, or cancelled"""
         return self._ordinal != 0
 
-    def isOk(self):
+    def is_ok(self):
         """Return if the ok state"""
         return self._ordinal == 1
 
-    def isErr(self):
+    def is_err(self):
         """Return if the err state"""
         return self._ordinal == 2
 
-    def isCancelled(self):
+    def is_cancelled(self):
         """Return if the cancelled state"""
         return self._ordinal == 3
 

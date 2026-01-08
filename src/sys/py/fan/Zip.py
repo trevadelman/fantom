@@ -30,7 +30,7 @@ class Zip(Obj):
     # =========================================================================
 
     @staticmethod
-    def open(file):
+    def open_(file):
         """
         Open a zip file for reading.
         Returns a Zip instance with file and contents accessible.
@@ -44,7 +44,7 @@ class Zip(Obj):
         z._mode = 'open'
 
         # Get the OS path from the file
-        os_path = file.osPath()
+        os_path = file.os_path()
         if os_path is None:
             from .Err import IOErr
             raise IOErr("Cannot get OS path for file")
@@ -60,10 +60,10 @@ class Zip(Obj):
         for name in z._zip_file.namelist():
             # Create Uri with leading slash
             uri_str = '/' + name if not name.startswith('/') else name
-            uri = Uri.fromStr(uri_str)
+            uri = Uri.from_str(uri_str)
             # Create a ZipEntryFile for each entry
             entry_file = ZipEntryFile(z._zip_file, name, uri)
-            contents.set(uri, entry_file)
+            contents.set_(uri, entry_file)
 
         z._contents = Map.ro(contents)  # Make readonly as per Fantom spec
         return z
@@ -115,7 +115,7 @@ class Zip(Obj):
     # =========================================================================
 
     @staticmethod
-    def gzipOutStream(out):
+    def gzip_out_stream(out):
         """
         Wrap an output stream with gzip compression.
         Returns a GzipOutStream that compresses data written to it.
@@ -123,7 +123,7 @@ class Zip(Obj):
         return GzipOutStream(out)
 
     @staticmethod
-    def gzipInStream(in_stream):
+    def gzip_in_stream(in_stream):
         """
         Wrap an input stream with gzip decompression.
         Returns a GzipInStream that decompresses data read from it.
@@ -131,7 +131,7 @@ class Zip(Obj):
         return GzipInStream(in_stream)
 
     @staticmethod
-    def deflateOutStream(out, opts=None):
+    def deflate_out_stream(out, opts=None):
         """
         Wrap an output stream with deflate compression.
         Options:
@@ -147,7 +147,7 @@ class Zip(Obj):
         return DeflateOutStream(out, nowrap, level)
 
     @staticmethod
-    def deflateInStream(in_stream, opts=None):
+    def deflate_in_stream(in_stream, opts=None):
         """
         Wrap an input stream with deflate decompression.
         Options: nowrap (bool) - if true, expect raw deflate without zlib header
@@ -158,13 +158,13 @@ class Zip(Obj):
         return DeflateInStream(in_stream, nowrap)
 
     @staticmethod
-    def unzipInto(zip_file, target_dir):
+    def unzip_into(zip_file, target_dir):
         """
         Unzip all entries from zip_file into target_dir.
         Returns the count of entries extracted.
         """
-        os_path = zip_file.osPath()
-        target_path = target_dir.osPath()
+        os_path = zip_file.os_path()
+        target_path = target_dir.os_path()
 
         with zipfile.ZipFile(os_path, 'r') as zf:
             entries = zf.namelist()
@@ -206,7 +206,7 @@ class Zip(Obj):
     # Read mode methods
     # =========================================================================
 
-    def readNext(self):
+    def read_next(self):
         """
         Read the next entry in the zip as a File.
         Returns null at end of entries.
@@ -223,17 +223,17 @@ class Zip(Obj):
             name = next(self._zip_entries)
             from .Uri import Uri
             uri_str = '/' + name if not name.startswith('/') else name
-            uri = Uri.fromStr(uri_str)
+            uri = Uri.from_str(uri_str)
             return ZipEntryFile(self._zip_file, name, uri)
         except StopIteration:
             return None
 
-    def readEach(self, func):
+    def read_each(self, func):
         """
         Iterate through all entries calling func for each.
         """
         while True:
-            entry = self.readNext()
+            entry = self.read_next()
             if entry is None:
                 break
             func(entry)
@@ -242,7 +242,7 @@ class Zip(Obj):
     # Write mode methods
     # =========================================================================
 
-    def writeNext(self, uri, modified=None):
+    def write_next(self, uri, modified=None):
         """
         Write the next entry with the given URI path.
         Returns an OutStream to write the entry contents.
@@ -287,7 +287,7 @@ class Zip(Obj):
             self._out_stream.write(byte)
         self._out_stream.flush()
 
-    def _finishEntry(self, entry_buffer, name, modified):
+    def _finish_entry(self, entry_buffer, name, modified):
         """Internal: finish writing an entry to the zip."""
         import time as time_mod
         import os
@@ -301,7 +301,7 @@ class Zip(Obj):
         if modified is not None:
             # Convert Fantom DateTime to epoch millis then to local time tuple
             # This preserves the instant in time for round-trip
-            epoch_millis = modified.toJava()
+            epoch_millis = modified.to_java()
             epoch_secs = epoch_millis / 1000.0
             local_time = time_mod.localtime(epoch_secs)
             info.date_time = (local_time.tm_year, local_time.tm_mon, local_time.tm_mday,
@@ -333,14 +333,14 @@ class Zip(Obj):
             self._zip_out = None
         return True
 
-    def toStr(self):
+    def to_str(self):
         """String representation."""
         if self._file is not None:
             return str(self._file.uri())
         return "Zip"
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()
 
 
 # =============================================================================
@@ -364,7 +364,7 @@ class ZipEntryFile:
     def parent(self):
         return None
 
-    def osPath(self):
+    def os_path(self):
         return None
 
     def size(self):
@@ -382,7 +382,7 @@ class ZipEntryFile:
             local_time_tuple = (dt[0], dt[1], dt[2], dt[3], dt[4], dt[5], 0, 0, -1)
             epoch_secs = time_mod.mktime(local_time_tuple)
             epoch_millis = int(epoch_secs * 1000)
-            return DateTime.fromJava(epoch_millis)
+            return DateTime.from_java(epoch_millis)
         return None
 
     def in_(self, bufSize=4096):
@@ -395,7 +395,7 @@ class ZipEntryFile:
         buf.flip()
         return buf.in_()
 
-    def readAllStr(self, normalizeNewlines=True):
+    def read_all_str(self, normalizeNewlines=True):
         """Read entire entry as string."""
         data = self._zip_file.read(self._name)
         text = data.decode('utf-8')
@@ -403,7 +403,7 @@ class ZipEntryFile:
             text = text.replace('\r\n', '\n').replace('\r', '\n')
         return text
 
-    def readAllBuf(self):
+    def read_all_buf(self):
         """Read entire entry as Buf."""
         data = self._zip_file.read(self._name)
         from .Buf import Buf
@@ -413,7 +413,7 @@ class ZipEntryFile:
         buf.flip()
         return buf
 
-    def copyInto(self, target_dir, options=None):
+    def copy_into(self, target_dir, options=None):
         """Copy this entry into the target directory."""
         from .File import File
         target = target_dir.plus(self._uri.name())
@@ -438,11 +438,11 @@ class ZipEntryFile:
         from .Err import IOErr
         raise IOErr("Cannot delete zip entry")
 
-    def deleteOnExit(self):
+    def delete_on_exit(self):
         from .Err import IOErr
         raise IOErr("Cannot deleteOnExit zip entry")
 
-    def moveTo(self, target):
+    def move_to(self, target):
         from .Err import IOErr
         raise IOErr("Cannot move zip entry")
 
@@ -470,7 +470,7 @@ class ZipEntryOutStream:
         self._buffer.write(bytes([byte & 0xFF]))
         return self
 
-    def writeBuf(self, buf, n=None):
+    def write_buf(self, buf, n=None):
         if self._closed:
             from .Err import IOErr
             raise IOErr("Stream closed")
@@ -483,7 +483,7 @@ class ZipEntryOutStream:
             self._buffer.write(bytes([b & 0xFF]))
         return self
 
-    def writeI4(self, val):
+    def write_i4(self, val):
         """Write 4-byte integer in big-endian."""
         self._buffer.write(bytes([
             (val >> 24) & 0xFF,
@@ -493,13 +493,13 @@ class ZipEntryOutStream:
         ]))
         return self
 
-    def print(self, obj):
+    def print_(self, obj):
         """Print string."""
         s = str(obj) if obj is not None else ""
         self._buffer.write(s.encode('utf-8'))
         return self
 
-    def printLine(self, obj=""):
+    def print_line(self, obj=""):
         """Print string with newline."""
         s = str(obj) if obj is not None else ""
         self._buffer.write((s + "\n").encode('utf-8'))
@@ -513,7 +513,7 @@ class ZipEntryOutStream:
             self._closed = True
             # Finish this entry
             name, modified, buffer = self._zip._current_entry
-            self._zip._finishEntry(buffer, name, modified)
+            self._zip._finish_entry(buffer, name, modified)
         return True
 
 
@@ -533,7 +533,7 @@ class GzipOutStream:
         self._gzip.write(bytes([byte & 0xFF]))
         return self
 
-    def writeBuf(self, buf, n=None):
+    def write_buf(self, buf, n=None):
         if n is None:
             n = buf.remaining()
         data = bytearray()
@@ -545,22 +545,22 @@ class GzipOutStream:
         self._gzip.write(bytes(data))
         return self
 
-    def print(self, obj):
+    def print_(self, obj):
         s = str(obj) if obj is not None else ""
         self._gzip.write(s.encode('utf-8'))
         return self
 
-    def printLine(self, obj=""):
+    def print_line(self, obj=""):
         s = str(obj) if obj is not None else ""
         self._gzip.write((s + "\n").encode('utf-8'))
         return self
 
     def flush(self):
         self._gzip.flush()
-        self._flushToOut()
+        self._flush_to_out()
         return self
 
-    def _flushToOut(self):
+    def _flush_to_out(self):
         """Flush buffered data to underlying stream."""
         data = self._buffer.getvalue()
         self._buffer.seek(0)
@@ -570,7 +570,7 @@ class GzipOutStream:
 
     def close(self):
         self._gzip.close()
-        self._flushToOut()
+        self._flush_to_out()
         return True
 
 
@@ -600,7 +600,7 @@ class GzipInStream:
             return None
         return b[0]
 
-    def readBuf(self, buf, n):
+    def read_buf(self, buf, n):
         data = self._buffer.read(n)
         if not data:
             return None
@@ -608,7 +608,7 @@ class GzipInStream:
             buf.write(b)
         return len(data)
 
-    def readAllStr(self, normalizeNewlines=True):
+    def read_all_str(self, normalizeNewlines=True):
         data = self._buffer.read()
         text = data.decode('utf-8')
         if normalizeNewlines:
@@ -641,7 +641,7 @@ class DeflateOutStream:
         self._buffer.append(byte & 0xFF)
         return self
 
-    def writeBuf(self, buf, n=None):
+    def write_buf(self, buf, n=None):
         if n is None:
             n = buf.remaining()
         for _ in range(n):
@@ -651,12 +651,12 @@ class DeflateOutStream:
             self._buffer.append(b & 0xFF)
         return self
 
-    def print(self, obj):
+    def print_(self, obj):
         s = str(obj) if obj is not None else ""
         self._buffer.extend(s.encode('utf-8'))
         return self
 
-    def printLine(self, obj=""):
+    def print_line(self, obj=""):
         s = str(obj) if obj is not None else ""
         self._buffer.extend((s + "\n").encode('utf-8'))
         return self
@@ -713,7 +713,7 @@ class DeflateInStream:
             return None
         return b[0]
 
-    def readBuf(self, buf, n):
+    def read_buf(self, buf, n):
         data = self._buffer.read(n)
         if not data:
             return None
@@ -721,7 +721,7 @@ class DeflateInStream:
             buf.write(b)
         return len(data)
 
-    def readAllStr(self, normalizeNewlines=True):
+    def read_all_str(self, normalizeNewlines=True):
         data = self._buffer.read()
         text = data.decode('utf-8')
         if normalizeNewlines:

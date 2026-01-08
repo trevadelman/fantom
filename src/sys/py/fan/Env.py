@@ -29,10 +29,10 @@ class Env(Obj):
         from .List import List
         # sys.argv[0] is script name, sys.argv[1:] are args
         args_list = sys.argv[1:] if len(sys.argv) > 1 else []
-        result = List.fromLiteral(args_list, "sys::Str")
-        return result.toImmutable()
+        result = List.from_literal(args_list, "sys::Str")
+        return result.to_immutable()
 
-    def idHash(self, obj):
+    def id_hash(self, obj):
         """Get identity hash code for object.
 
         Returns the same value for the lifetime of the object.
@@ -49,14 +49,14 @@ class Env(Obj):
         """
         from .List import List
         # Default path is workDir then homeDir
-        work = self.workDir()
-        home = self.homeDir()
+        work = self.work_dir()
+        home = self.home_dir()
         # workDir and homeDir might be the same
         if work == home:
-            result = List.fromLiteral([work], "sys::File")
+            result = List.from_literal([work], "sys::File")
         else:
-            result = List.fromLiteral([work, home], "sys::File")
-        return result.toImmutable()
+            result = List.from_literal([work, home], "sys::File")
+        return result.to_immutable()
 
     def os(self):
         """Get operating system name.
@@ -105,7 +105,7 @@ class Env(Obj):
         """Get platform string as os-arch."""
         return f"{self.os()}-{self.arch()}"
 
-    def isBrowser(self):
+    def is_browser(self):
         """Return if running in a browser environment. Always False for Python."""
         return False
 
@@ -117,7 +117,7 @@ class Env(Obj):
         import os
         return os.environ.get("USER", "unknown")
 
-    def homeDir(self):
+    def home_dir(self):
         """Get Fantom installation home directory as File.
 
         This is the root directory containing bin/, lib/, etc/ subdirectories.
@@ -151,20 +151,20 @@ class Env(Obj):
         # Final fallback: use current working directory
         return File.os(os.getcwd() + os.sep)
 
-    def workDir(self):
+    def work_dir(self):
         """Get current working directory as File."""
         import os
         from .File import File
         return File.os(os.getcwd() + os.sep)
 
-    def tempDir(self):
+    def temp_dir(self):
         """Get temp directory as File."""
         import os
         import tempfile
         from .File import File
         return File.os(tempfile.gettempdir() + os.sep)
 
-    def vars(self):
+    def vars_(self):
         """Return environment variables as a Map[Str,Str].
 
         Returns an immutable, case-insensitive Map containing environment variables.
@@ -175,12 +175,12 @@ class Env(Obj):
         from .Map import Map
 
         # Create a case-insensitive map with proper type signature
-        env_map = Map.makeWithType("sys::Str", "sys::Str")
+        env_map = Map.make_with_type("sys::Str", "sys::Str")
         env_map.caseInsensitive = True
 
         # Add Python environment variables
         for key, value in os.environ.items():
-            env_map.set(key, value)
+            env_map.set_(key, value)
 
         # Add Java-compatible system properties that tests expect
         # os.name - OS name
@@ -191,20 +191,20 @@ class Env(Obj):
             os_name = 'Windows'
         else:
             os_name = sys_name
-        env_map.set("os.name", os_name)
+        env_map.set_("os.name", os_name)
 
         # os.version - OS version
-        env_map.set("os.version", platform.release())
+        env_map.set_("os.version", platform.release())
 
         # user.name - Current user
-        env_map.set("user.name", os.environ.get("USER", os.environ.get("USERNAME", "unknown")))
+        env_map.set_("user.name", os.environ.get("USER", os.environ.get("USERNAME", "unknown")))
 
         # user.home - User home directory
-        env_map.set("user.home", os.path.expanduser("~"))
+        env_map.set_("user.home", os.path.expanduser("~"))
 
-        return env_map.toImmutable()
+        return env_map.to_immutable()
 
-    def findFile(self, uri, checked=True):
+    def find_file(self, uri, checked=True):
         """Find a file in the environment path.
 
         Searches workDir then homeDir for the given URI.
@@ -221,10 +221,10 @@ class Env(Obj):
 
         # Convert to Uri if string
         if isinstance(uri, str):
-            uri = Uri.fromStr(uri)
+            uri = Uri.from_str(uri)
 
         # Must be relative URI
-        if uri.isAbs():
+        if uri.is_abs():
             raise ArgErr.make(f"Uri must be relative: {uri}")
 
         # Search path directories
@@ -241,7 +241,7 @@ class Env(Obj):
             raise UnresolvedErr.make(f"File not found in path: {uri}")
         return None
 
-    def findAllFiles(self, uri):
+    def find_all_files(self, uri):
         """Find all files matching URI in the environment path.
 
         Args:
@@ -256,10 +256,10 @@ class Env(Obj):
 
         # Convert to Uri if string
         if isinstance(uri, str):
-            uri = Uri.fromStr(uri)
+            uri = Uri.from_str(uri)
 
         # Must be relative URI
-        if uri.isAbs():
+        if uri.is_abs():
             raise ArgErr.make(f"Uri must be relative: {uri}")
 
         result = []
@@ -272,7 +272,7 @@ class Env(Obj):
             except:
                 continue
 
-        return List.fromLiteral(result, "sys::File")
+        return List.from_literal(result, "sys::File")
 
     def props(self, pod, uri, maxAge):
         """Load props file with caching.
@@ -301,23 +301,23 @@ class Env(Obj):
         now = time.time()
         if cache_key in self._propsCache:
             cached_time, cached_props = self._propsCache[cache_key]
-            max_age_secs = maxAge.toMillis() / 1000.0 if hasattr(maxAge, 'toMillis') else float(maxAge) / 1e9
+            max_age_secs = maxAge.to_millis() / 1000.0 if hasattr(maxAge, 'to_millis') else float(maxAge) / 1e9
             if now - cached_time < max_age_secs:
                 return cached_props
 
         # Build file path: etc/{pod}/{uri}
-        etc_dir = self.workDir().plus(f"etc/{pod_name}/", False)
+        etc_dir = self.work_dir().plus(f"etc/{pod_name}/", False)
         props_file = etc_dir.plus(uri, False)
 
         # Load props - create properly typed empty map if file not found
-        props = Map.makeWithType("sys::Str", "sys::Str")
+        props = Map.make_with_type("sys::Str", "sys::Str")
         if props_file.exists():
-            loaded = props_file.readProps()
+            loaded = props_file.read_props()
             for k, v in loaded.items():
-                props.set(k, v)
+                props.set_(k, v)
 
         # Make immutable and cache
-        result = props.toImmutable()
+        result = props.to_immutable()
         self._propsCache[cache_key] = (now, result)
 
         return result
@@ -335,10 +335,10 @@ class Env(Obj):
         """
         # Load from etc/{pod}/config.props
         pod_name = pod.name() if hasattr(pod, 'name') else str(pod)
-        etc_file = self.workDir().plus(f"etc/{pod_name}/config.props", False)
+        etc_file = self.work_dir().plus(f"etc/{pod_name}/config.props", False)
 
         if etc_file.exists():
-            props = etc_file.readProps()
+            props = etc_file.read_props()
             val = props.get(key, None)
             if val is not None:
                 return val
@@ -381,13 +381,13 @@ class Env(Obj):
         files_to_check = []
 
         # Check etc/{pod}/locale/ first (overrides)
-        etc_locale = self.workDir().plus(f"etc/{pod_name}/locale/", False)
+        etc_locale = self.work_dir().plus(f"etc/{pod_name}/locale/", False)
         if country:
             files_to_check.append(etc_locale.plus(f"{lang}-{country}.props", False))
         files_to_check.append(etc_locale.plus(f"{lang}.props", False))
 
         # Check pod's bundled locale files (fan/src/{pod}/locale/)
-        home = self.homeDir()
+        home = self.home_dir()
         pod_locale = home.plus(f"src/{pod_name}/locale/", False)
         if country:
             files_to_check.append(pod_locale.plus(f"{lang}-{country}.props", False))
@@ -401,7 +401,7 @@ class Env(Obj):
         for props_file in files_to_check:
             try:
                 if props_file.exists():
-                    props = props_file.readProps()
+                    props = props_file.read_props()
                     val = props.get(key, None)
                     if val is not None:
                         return val
@@ -419,7 +419,7 @@ class Env(Obj):
     # Pod Index System
     #################################################################
 
-    def _loadIndex(self):
+    def _load_index(self):
         """Load index.props from all pods and build index cache.
 
         The index maps keys to a dict of {pod_name: [values]}.
@@ -434,7 +434,7 @@ class Env(Obj):
         self._indexKeysCache = None
 
         # Find all pod files in lib/fan/
-        home = self.homeDir()
+        home = self.home_dir()
         lib_fan = home._path / "lib" / "fan"
         if not lib_fan.exists():
             return
@@ -480,7 +480,7 @@ class Env(Obj):
             except Exception as e:
                 continue
 
-    def indexKeys(self):
+    def index_keys(self):
         """Get all index keys as an immutable Str list.
 
         Returns:
@@ -488,11 +488,11 @@ class Env(Obj):
         """
         from .List import List
 
-        self._loadIndex()
+        self._load_index()
 
         if self._indexKeysCache is None:
             keys = sorted(self._indexCache.keys())
-            self._indexKeysCache = List.fromLiteral(keys, "sys::Str").toImmutable()
+            self._indexKeysCache = List.from_literal(keys, "sys::Str").to_immutable()
 
         return self._indexKeysCache
 
@@ -507,7 +507,7 @@ class Env(Obj):
         """
         from .List import List
 
-        self._loadIndex()
+        self._load_index()
 
         # Check cache
         if not hasattr(self, '_indexResultCache'):
@@ -520,11 +520,11 @@ class Env(Obj):
             for pod_name, pod_values in self._indexCache[key].items():
                 values.extend(pod_values)
 
-        result = List.fromLiteral(values, "sys::Str").toImmutable()
+        result = List.from_literal(values, "sys::Str").to_immutable()
         self._indexResultCache[key] = result
         return result
 
-    def indexPodNames(self, key):
+    def index_pod_names(self, key):
         """Get names of all pods that have the given index key.
 
         Args:
@@ -535,7 +535,7 @@ class Env(Obj):
         """
         from .List import List
 
-        self._loadIndex()
+        self._load_index()
 
         # Check cache
         if not hasattr(self, '_indexPodNamesCache'):
@@ -547,11 +547,11 @@ class Env(Obj):
         if key in self._indexCache:
             pod_names = sorted(self._indexCache[key].keys())
 
-        result = List.fromLiteral(pod_names, "sys::Str").toImmutable()
+        result = List.from_literal(pod_names, "sys::Str").to_immutable()
         self._indexPodNamesCache[key] = result
         return result
 
-    def indexByPodName(self, key):
+    def index_by_pod_name(self, key):
         """Get values for an index key grouped by pod name.
 
         Args:
@@ -563,7 +563,7 @@ class Env(Obj):
         from .List import List
         from .Map import Map
 
-        self._loadIndex()
+        self._load_index()
 
         # Check cache
         if not hasattr(self, '_indexByPodNameCache'):
@@ -571,13 +571,13 @@ class Env(Obj):
         if key in self._indexByPodNameCache:
             return self._indexByPodNameCache[key]
 
-        result = Map.makeWithType("sys::Str", "sys::Str[]")
+        result = Map.make_with_type("sys::Str", "sys::Str[]")
         if key in self._indexCache:
             for pod_name, pod_values in self._indexCache[key].items():
-                values_list = List.fromLiteral(pod_values, "sys::Str").toImmutable()
-                result.set(pod_name, values_list)
+                values_list = List.from_literal(pod_values, "sys::Str").to_immutable()
+                result.set_(pod_name, values_list)
 
-        result = result.toImmutable()
+        result = result.to_immutable()
         self._indexByPodNameCache[key] = result
         return result
 
@@ -612,7 +612,7 @@ class SysOutStream:
         sys.stdout.buffer.write(bytes([b & 0xFF]))
         return self
 
-    def writeChars(self, s, off=0, length=None):
+    def write_chars(self, s, off=0, length=None):
         import sys
         if length is None:
             sys.stdout.write(str(s)[off:])
@@ -627,7 +627,7 @@ class SysOutStream:
 
     print = print_
 
-    def printLine(self, obj=None):
+    def print_line(self, obj=None):
         import sys
         if obj is not None:
             sys.stdout.write(str(obj))
@@ -651,7 +651,7 @@ class SysErrStream:
         sys.stderr.buffer.write(bytes([b & 0xFF]))
         return self
 
-    def writeChars(self, s, off=0, length=None):
+    def write_chars(self, s, off=0, length=None):
         import sys
         if length is None:
             sys.stderr.write(str(s)[off:])
@@ -666,7 +666,7 @@ class SysErrStream:
 
     print = print_
 
-    def printLine(self, obj=None):
+    def print_line(self, obj=None):
         import sys
         if obj is not None:
             sys.stderr.write(str(obj))
@@ -692,7 +692,7 @@ class SysInStream:
             return None
         return b[0]
 
-    def readLine(self, max_chars=None):
+    def read_line(self, max_chars=None):
         import sys
         line = sys.stdin.readline()
         if not line:
@@ -700,7 +700,7 @@ class SysInStream:
         # Remove trailing newline
         return line.rstrip('\n\r')
 
-    def readAllStr(self):
+    def read_all_str(self):
         import sys
         return sys.stdin.read()
 

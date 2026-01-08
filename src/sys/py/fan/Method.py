@@ -34,7 +34,7 @@ class Method(Slot):
         self._func = func  # Optional direct callable
         self._method_func = None  # Cached MethodFunc wrapper for identity
 
-    def isMethod(self):
+    def is_method(self):
         return True
 
     def returns(self):
@@ -55,7 +55,7 @@ class Method(Slot):
             self._method_func = MethodFunc(self)
         return self._method_func
 
-    def hasFacet(self, facetType):
+    def has_facet(self, facetType):
         """Check if this method has a facet.
 
         Args:
@@ -103,7 +103,7 @@ class Method(Slot):
             facet_type = Type.find(facet_qname, True)
             result.append(FacetInstance(facet_type, facet_data))
         # Return immutable Fantom List with Facet element type
-        self._facets_list = FanList.fromLiteral(result, "sys::Facet").toImmutable()
+        self._facets_list = FanList.from_literal(result, "sys::Facet").to_immutable()
         return self._facets_list
 
     def call(self, *args):
@@ -114,7 +114,7 @@ class Method(Slot):
         """
         return self._invoke(None, list(args), from_call=True)
 
-    def callOn(self, target, args=None):
+    def call_on(self, target, args=None):
         """Call method on a specific target object.
 
         Args:
@@ -128,7 +128,7 @@ class Method(Slot):
             args = list(args._list)
         return self._invoke(target, list(args), from_call_on=True)
 
-    def callList(self, args):
+    def call_list(self, args):
         """Call method with args from a list.
 
         For instance methods, first arg should be the target.
@@ -154,11 +154,11 @@ class Method(Slot):
         """
         # Get parameter info for validation and trimming
         params = self._params if self._params else []
-        is_static = self.isStatic()
-        is_ctor = self.isCtor()
+        is_static = self.is_static()
+        is_ctor = self.is_ctor()
 
         # Calculate min required args (params without defaults)
-        min_args = sum(1 for p in params if not p.hasDefault())
+        min_args = sum(1 for p in params if not p.has_default())
         max_args = len(params)
 
         # For call/callList: instance methods expect target as first arg
@@ -301,7 +301,7 @@ class Method(Slot):
 
         return None
 
-    def toStr(self):
+    def to_str(self):
         return self.qname()
 
     @staticmethod
@@ -342,7 +342,7 @@ class MethodFunc:
         method_params = self._method.params()
 
         # For instance methods, prepend 'this' parameter
-        if not self._method.isStatic():
+        if not self._method.is_static():
             from .Param import Param
             this_param = Param("this", self._method.parent(), False)
             return [this_param] + list(method_params)
@@ -361,19 +361,19 @@ class MethodFunc:
         """Make MethodFunc callable like a regular function."""
         return self._method.call(*args)
 
-    def callOn(self, target, args=None):
+    def call_on(self, target, args=None):
         """Call the underlying method on target."""
-        return self._method.callOn(target, args)
+        return self._method.call_on(target, args)
 
-    def callList(self, args):
+    def call_list(self, args):
         """Call the underlying method with args list."""
-        return self._method.callList(args)
+        return self._method.call_list(args)
 
     def arity(self):
         """Number of parameters."""
         return len(self.params())
 
-    def isImmutable(self):
+    def is_immutable(self):
         """Funcs are always immutable."""
         return True
 
@@ -444,11 +444,11 @@ class MethodFunc:
         from .ObjUtil import ObjUtil
         all_immutable = True
         for arg in bound_args:
-            if not ObjUtil.isImmutable(arg):
+            if not ObjUtil.is_immutable(arg):
                 all_immutable = False
                 break
 
-        # Set _bound_immutable (checked by Func.isImmutable())
+        # Set _bound_immutable (checked by Func.is_immutable())
         result._bound_immutable = all_immutable
 
         return result
@@ -457,7 +457,7 @@ class MethodFunc:
         """Return the underlying Method."""
         return self._method
 
-    def toImmutable(self):
+    def to_immutable(self):
         """Return immutable version - MethodFuncs are already immutable."""
         return self
 
@@ -474,7 +474,7 @@ class MethodFunc:
         # Unwrap nullable types - |Int->Str|? is a nullable FuncType
         inner_type = t
         if isinstance(t, NullableType):
-            inner_type = t.toNonNullable()
+            inner_type = t.to_non_nullable()
 
         # Get returns and params from the target type
         new_returns = None

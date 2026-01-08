@@ -49,7 +49,7 @@ class Buf(Obj):
         return Buf(data)
 
     @staticmethod
-    def fromHex(s):
+    def from_hex(s):
         """Create Buf from hex string."""
         # Filter non-hex chars
         hex_chars = ''.join(c for c in str(s) if c in '0123456789abcdefABCDEF')
@@ -60,7 +60,7 @@ class Buf(Obj):
         return Buf(data)
 
     @staticmethod
-    def fromBase64(s):
+    def from_base64(s):
         """Create Buf from base64 string."""
         s = str(s)
         # Filter to only valid base64 characters (strip whitespace, non-ASCII, etc.)
@@ -76,7 +76,7 @@ class Buf(Obj):
         return Buf(data)
 
     @staticmethod
-    def fromBytes(data):
+    def from_bytes(data):
         """Create Buf from bytes."""
         return Buf(data)
 
@@ -88,16 +88,16 @@ class Buf(Obj):
         from .Type import Type
         return Type.find("sys::Buf")
 
-    def toStr(self):
+    def to_str(self):
         return f"Buf(pos={self._pos} size={self._size})"
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()
 
     def equals(self, other):
         return self is other
 
-    def bytesEqual(self, other):
+    def bytes_equal(self, other):
         """Compare bytes content."""
         if self is other:
             return True
@@ -113,7 +113,7 @@ class Buf(Obj):
     # Access
     #################################################################
 
-    def isEmpty(self):
+    def is_empty(self):
         return self._size == 0
 
     def size(self, val=None):
@@ -145,7 +145,7 @@ class Buf(Obj):
         if val is None:
             if is_file_backed:
                 from .Int import Int
-                return Int.maxVal()
+                return Int.max_val()
             return self._capacity
 
         # Ignore capacity changes for file-backed Bufs
@@ -202,7 +202,7 @@ class Buf(Obj):
     def __getitem__(self, pos):
         return self.get(pos)
 
-    def getRange(self, r):
+    def get_range(self, r):
         """Get slice as new Buf."""
         s = r.start_(self._size)
         e = r.end_(self._size)
@@ -222,7 +222,7 @@ class Buf(Obj):
         data = self._get_data()
         return Buf(data)
 
-    def toImmutable(self):
+    def to_immutable(self):
         """Return an immutable copy of this Buf."""
         # In Python, we just return a copy with immutable flag
         data = self._get_data()
@@ -230,7 +230,7 @@ class Buf(Obj):
         buf._immutable = True
         return buf
 
-    def isImmutable(self):
+    def is_immutable(self):
         """Return true if this Buf is immutable."""
         return getattr(self, '_immutable', False)
 
@@ -238,7 +238,7 @@ class Buf(Obj):
     # Modification
     #################################################################
 
-    def set(self, pos, b):
+    def set_(self, pos, b):
         """Set byte at position."""
         pos = int(pos)
         if pos < 0:
@@ -251,7 +251,7 @@ class Buf(Obj):
         return self
 
     def __setitem__(self, pos, b):
-        self.set(pos, b)
+        self.set_(pos, b)
 
     def clear(self):
         """Clear buffer."""
@@ -339,7 +339,7 @@ class Buf(Obj):
             self._size = self._pos
         return self
 
-    def writeBuf(self, other, n=None):
+    def write_buf(self, other, n=None):
         """Write from another Buf."""
         if n is None:
             n = other.remaining()
@@ -354,7 +354,7 @@ class Buf(Obj):
             self._size = self._pos
         return self
 
-    def writeI2(self, x):
+    def write_i2(self, x):
         """Write 16-bit int (handles full unsigned range)."""
         x = int(x) & 0xFFFF  # Mask to 16-bit
         if self._is_big_endian():
@@ -365,7 +365,7 @@ class Buf(Obj):
             self.write((x >> 8) & 0xFF)
         return self
 
-    def writeI4(self, x):
+    def write_i4(self, x):
         """Write 32-bit int (handles full unsigned range)."""
         x = int(x) & 0xFFFFFFFF  # Mask to 32-bit
         if self._is_big_endian():
@@ -380,37 +380,37 @@ class Buf(Obj):
             self.write((x >> 24) & 0xFF)
         return self
 
-    def writeI8(self, x):
+    def write_i8(self, x):
         """Write 64-bit signed int."""
         fmt = '>q' if self._is_big_endian() else '<q'
         self._write_struct(fmt, int(x))
         return self
 
-    def writeF4(self, x):
+    def write_f4(self, x):
         """Write 32-bit float."""
         fmt = '>f' if self._is_big_endian() else '<f'
         self._write_struct(fmt, float(x))
         return self
 
-    def writeF8(self, x):
+    def write_f8(self, x):
         """Write 64-bit float."""
         fmt = '>d' if self._is_big_endian() else '<d'
         self._write_struct(fmt, float(x))
         return self
 
-    def writeBool(self, x):
+    def write_bool(self, x):
         """Write boolean as byte."""
         return self.write(1 if x else 0)
 
-    def writeDecimal(self, x):
+    def write_decimal(self, x):
         """Write decimal as string (Fantom serialization)."""
         s = str(float(x))
-        return self.writeUtf(s)
+        return self.write_utf(s)
 
-    def writeUtf(self, s):
+    def write_utf(self, s):
         """Write modified UTF-8 string."""
         data = str(s).encode('utf-8')
-        self.writeI2(len(data))
+        self.write_i2(len(data))
         self._bytes.seek(self._pos)
         self._bytes.write(data)
         self._pos += len(data)
@@ -418,7 +418,7 @@ class Buf(Obj):
             self._size = self._pos
         return self
 
-    def writeChar(self, c):
+    def write_char(self, c):
         """Write character using charset."""
         ch = chr(int(c))
         charset_name = self._get_python_encoding()
@@ -430,7 +430,7 @@ class Buf(Obj):
             self._size = self._pos
         return self
 
-    def writeChars(self, s, off=0, length=None):
+    def write_chars(self, s, off=0, length=None):
         """Write string chars."""
         s = str(s)
         if length is None:
@@ -449,19 +449,19 @@ class Buf(Obj):
     def print_(self, obj):
         """Print object as string."""
         from .ObjUtil import ObjUtil
-        s = "null" if obj is None else ObjUtil.toStr(obj)
-        return self.writeChars(s)
+        s = "null" if obj is None else ObjUtil.to_str(obj)
+        return self.write_chars(s)
 
     # Alias for transpiled code
     print = print_
 
-    def printLine(self, obj=None):
+    def print_line(self, obj=None):
         """Print with newline."""
         if obj is not None:
             self.print_(obj)
-        return self.writeChar(ord('\n'))
+        return self.write_char(ord('\n'))
 
-    def writeXml(self, s, mask=0):
+    def write_xml(self, s, mask=0):
         """Write XML-escaped string.
 
         Args:
@@ -481,54 +481,54 @@ class Buf(Obj):
 
             # Control chars (except tab=9, lf=10, cr=13)
             if code < 32 and code not in (9, 10, 13):
-                self._writeXmlEsc(code)
+                self._write_xml_esc(code)
             # Newlines
             elif ch == '\n' or ch == '\r':
                 if not escNewlines:
-                    self.writeChar(code)
+                    self.write_char(code)
                 else:
-                    self._writeXmlEsc(code)
+                    self._write_xml_esc(code)
             # XML special chars
             elif ch == '<':
-                self.writeChars("&lt;")
+                self.write_chars("&lt;")
             elif ch == '>':
                 if i > 0 and s[i-1] != ']':
-                    self.writeChar(code)
+                    self.write_char(code)
                 else:
-                    self.writeChars("&gt;")
+                    self.write_chars("&gt;")
             elif ch == '&':
-                self.writeChars("&amp;")
+                self.write_chars("&amp;")
             elif ch == '"':
                 if not escQuotes:
-                    self.writeChar(code)
+                    self.write_char(code)
                 else:
-                    self.writeChars("&quot;")
+                    self.write_chars("&quot;")
             elif ch == "'":
                 if not escQuotes:
-                    self.writeChar(code)
+                    self.write_char(code)
                 else:
-                    self.writeChars("&#39;")
+                    self.write_chars("&#39;")
             # Unicode chars > 0xf7
             elif code > 0xf7 and escUnicode:
-                self._writeXmlEsc(code)
+                self._write_xml_esc(code)
             # Normal chars
             else:
-                self.writeChar(code)
+                self.write_char(code)
 
         return self
 
-    def _writeXmlEsc(self, ch):
+    def _write_xml_esc(self, ch):
         """Write XML numeric character escape."""
         hex_chars = "0123456789abcdef"
-        self.writeChars("&#x")
+        self.write_chars("&#x")
         if ch > 0xff:
-            self.writeChar(ord(hex_chars[(ch >> 12) & 0xf]))
-            self.writeChar(ord(hex_chars[(ch >> 8) & 0xf]))
-        self.writeChar(ord(hex_chars[(ch >> 4) & 0xf]))
-        self.writeChar(ord(hex_chars[ch & 0xf]))
-        self.writeChars(";")
+            self.write_char(ord(hex_chars[(ch >> 12) & 0xf]))
+            self.write_char(ord(hex_chars[(ch >> 8) & 0xf]))
+        self.write_char(ord(hex_chars[(ch >> 4) & 0xf]))
+        self.write_char(ord(hex_chars[ch & 0xf]))
+        self.write_chars(";")
 
-    def writeObj(self, obj, options=None):
+    def write_obj(self, obj, options=None):
         """Write serialized object representation using Fantom serialization format.
 
         Args:
@@ -539,10 +539,10 @@ class Buf(Obj):
             self for chaining
         """
         from fanx.ObjEncoder import ObjEncoder
-        ObjEncoder(self.out(), options).writeObj(obj)
+        ObjEncoder(self.out(), options).write_obj(obj)
         return self
 
-    def readObj(self, options=None):
+    def read_obj(self, options=None):
         """Read a serialized object from this buffer.
 
         Args:
@@ -552,7 +552,7 @@ class Buf(Obj):
             Deserialized object
         """
         from fanx.ObjDecoder import ObjDecoder
-        return ObjDecoder(self.in_(), options).readObj()
+        return ObjDecoder(self.in_(), options).read_obj()
 
     #################################################################
     # InStream Operations (read)
@@ -578,7 +578,7 @@ class Buf(Obj):
         self._pos += 1
         return b[0]
 
-    def readBuf(self, other, n):
+    def read_buf(self, other, n):
         """Read into another Buf."""
         n = int(n)
         avail = self._size - self._pos
@@ -600,19 +600,19 @@ class Buf(Obj):
         self._unread_stack.append(int(b) & 0xFF)
         return self
 
-    def readAllBuf(self):
+    def read_all_buf(self):
         """Read remaining as new Buf."""
         self._bytes.seek(self._pos)
         data = self._bytes.read(self._size - self._pos)
         self._pos = self._size
         return Buf(data)
 
-    def readBufFully(self, buf, n):
+    def read_buf_fully(self, buf, n):
         """Read exactly n bytes into buf, then flip buf for reading."""
         n = int(n)
         if buf is None:
             buf = Buf.make(n)
-        result = self.readBuf(buf, n)
+        result = self.read_buf(buf, n)
         if result is None or result < n:
             from .Err import IOErr
             raise IOErr.make("Unexpected end of stream")
@@ -630,7 +630,7 @@ class Buf(Obj):
         b = self._bytes.read(1)
         return b[0] if b else None
 
-    def readU1(self):
+    def read_u1(self):
         """Read unsigned 8-bit."""
         b = self.read()
         if b is None:
@@ -638,59 +638,67 @@ class Buf(Obj):
             raise IOErr.make("Unexpected end of stream")
         return b
 
-    def readS1(self):
+    def read_s1(self):
         """Read signed 8-bit."""
-        b = self.readU1()
+        b = self.read_u1()
         return b if b < 128 else b - 256
 
-    def readU2(self):
+    def read_u2(self):
         """Read unsigned 16-bit."""
         fmt = '>H' if self._is_big_endian() else '<H'
         return self._read_struct(fmt)
 
-    def readS2(self):
+    def read_s2(self):
         """Read signed 16-bit."""
         fmt = '>h' if self._is_big_endian() else '<h'
         return self._read_struct(fmt)
 
-    def readU4(self):
+    def read_u4(self):
         """Read unsigned 32-bit."""
         fmt = '>I' if self._is_big_endian() else '<I'
         return self._read_struct(fmt)
 
-    def readS4(self):
+    def read_s4(self):
         """Read signed 32-bit."""
         fmt = '>i' if self._is_big_endian() else '<i'
         return self._read_struct(fmt)
 
-    def readS8(self):
+    def read_s8(self):
         """Read signed 64-bit."""
         fmt = '>q' if self._is_big_endian() else '<q'
         return self._read_struct(fmt)
 
-    def readF4(self):
+    def read_f4(self):
         """Read 32-bit float."""
         fmt = '>f' if self._is_big_endian() else '<f'
         return self._read_struct(fmt)
 
-    def readF8(self):
+    def read_f8(self):
         """Read 64-bit float."""
         fmt = '>d' if self._is_big_endian() else '<d'
         return self._read_struct(fmt)
 
-    def readBool(self):
+    def read_bool(self):
         """Read boolean."""
-        return self.readU1() != 0
+        return self.read_u1() != 0
 
-    def readUtf(self):
+    def read_utf(self):
         """Read modified UTF-8 string."""
-        length = self.readU2()
+        length = self.read_u2()
         self._bytes.seek(self._pos)
         data = self._bytes.read(length)
         self._pos += len(data)
         return data.decode('utf-8')
 
-    def readChar(self):
+    def read_decimal(self):
+        """Read decimal serialized as UTF string."""
+        return self.in_().read_decimal()
+
+    def read_str_token(self, max_chars=None, func=None):
+        """Read string token until whitespace or func returns true."""
+        return self.in_().read_str_token(max_chars, func)
+
+    def read_char(self):
         """Read character using charset."""
         # Check unread char stack first
         if self._unread_char_stack:
@@ -714,22 +722,22 @@ class Buf(Obj):
                 continue
         return None
 
-    def unreadChar(self, c):
+    def unread_char(self, c):
         """Push character to be read next (stack behavior)."""
         self._unread_char_stack.append(int(c))
         return self
 
-    def peekChar(self):
+    def peek_char(self):
         """Peek character without advancing."""
         # Check unread char stack first
         if self._unread_char_stack:
             return self._unread_char_stack[-1]  # peek top of stack without pop
         old_pos = self._pos
-        ch = self.readChar()
+        ch = self.read_char()
         self._pos = old_pos
         return ch
 
-    def readChars(self, n):
+    def read_chars(self, n):
         """Read exactly n characters.
 
         Throws IOErr if fewer than n characters are available.
@@ -739,14 +747,14 @@ class Buf(Obj):
             raise ArgErr.make(f"readChars n < 0: {n}")
         chars = []
         for _ in range(int(n)):
-            ch = self.readChar()
+            ch = self.read_char()
             if ch is None:
                 from .Err import IOErr
                 raise IOErr.make("Unexpected end of stream")
             chars.append(chr(ch))
         return ''.join(chars)
 
-    def readLine(self, max_chars=None):
+    def read_line(self, max_chars=None):
         """Read line of text."""
         if self._pos >= self._size:
             return None
@@ -755,16 +763,16 @@ class Buf(Obj):
         while self._pos < self._size:
             if max_chars is not None and count >= max_chars:
                 break
-            ch = self.readChar()
+            ch = self.read_char()
             if ch is None:
                 break
             if ch == ord('\n'):
                 break
             if ch == ord('\r'):
                 # Check for \r\n
-                next_ch = self.peekChar()
+                next_ch = self.peek_char()
                 if next_ch == ord('\n'):
-                    self.readChar()
+                    self.read_char()
                 break
             chars.append(chr(ch))
             count += 1
@@ -772,7 +780,7 @@ class Buf(Obj):
             return None
         return ''.join(chars)
 
-    def readAllStr(self, normalize=True):
+    def read_all_str(self, normalize=True):
         """Read all remaining as string."""
         self._bytes.seek(self._pos)
         data = self._bytes.read(self._size - self._pos)
@@ -783,21 +791,21 @@ class Buf(Obj):
             s = s.replace('\r\n', '\n').replace('\r', '\n')
         return s
 
-    def readAllLines(self):
+    def read_all_lines(self):
         """Read all lines."""
         from .List import List
         lines = []
         while True:
-            line = self.readLine()
+            line = self.read_line()
             if line is None:
                 break
             lines.append(line)
-        return List.fromLiteral(lines, "sys::Str")
+        return List.from_literal(lines, "sys::Str")
 
-    def eachLine(self, f):
+    def each_line(self, f):
         """Iterate each line."""
         while True:
-            line = self.readLine()
+            line = self.read_line()
             if line is None:
                 break
             f.call(line)
@@ -806,19 +814,19 @@ class Buf(Obj):
     # Conversion
     #################################################################
 
-    def toHex(self):
+    def to_hex(self):
         """Convert to hex string."""
         return self._get_data().hex()
 
-    def toBase64(self):
+    def to_base64(self):
         """Convert to base64 string."""
         return base64.b64encode(self._get_data()).decode('ascii')
 
-    def toBase64Uri(self):
+    def to_base64uri(self):
         """Convert to URL-safe base64."""
         return base64.urlsafe_b64encode(self._get_data()).decode('ascii').rstrip('=')
 
-    def toFile(self, uri):
+    def to_file(self, uri):
         """Write buffer contents to a file.
 
         Args:
@@ -831,13 +839,13 @@ class Buf(Obj):
         from .Uri import Uri
 
         if isinstance(uri, str):
-            uri = Uri.fromStr(uri)
+            uri = Uri.from_str(uri)
         f = File(uri)
         f._path.parent.mkdir(parents=True, exist_ok=True)
         f._path.write_bytes(self._get_data())
         return f
 
-    def toDigest(self, algorithm):
+    def to_digest(self, algorithm):
         """Compute digest hash."""
         alg_map = {
             'MD5': 'md5',
@@ -997,48 +1005,48 @@ class BufOutStream:
         self._buf.write(b)
         return self
 
-    def writeBuf(self, other, n=None):
-        self._buf.writeBuf(other, n)
+    def write_buf(self, other, n=None):
+        self._buf.write_buf(other, n)
         return self
 
-    def writeI2(self, x):
-        self._buf.writeI2(x)
+    def write_i2(self, x):
+        self._buf.write_i2(x)
         return self
 
-    def writeI4(self, x):
-        self._buf.writeI4(x)
+    def write_i4(self, x):
+        self._buf.write_i4(x)
         return self
 
-    def writeI8(self, x):
-        self._buf.writeI8(x)
+    def write_i8(self, x):
+        self._buf.write_i8(x)
         return self
 
-    def writeF4(self, x):
-        self._buf.writeF4(x)
+    def write_f4(self, x):
+        self._buf.write_f4(x)
         return self
 
-    def writeF8(self, x):
-        self._buf.writeF8(x)
+    def write_f8(self, x):
+        self._buf.write_f8(x)
         return self
 
-    def writeBool(self, x):
-        self._buf.writeBool(x)
+    def write_bool(self, x):
+        self._buf.write_bool(x)
         return self
 
-    def writeDecimal(self, x):
-        self._buf.writeDecimal(x)
+    def write_decimal(self, x):
+        self._buf.write_decimal(x)
         return self
 
-    def writeUtf(self, s):
-        self._buf.writeUtf(s)
+    def write_utf(self, s):
+        self._buf.write_utf(s)
         return self
 
-    def writeChar(self, c):
-        self._buf.writeChar(c)
+    def write_char(self, c):
+        self._buf.write_char(c)
         return self
 
-    def writeChars(self, s, off=0, length=None):
-        self._buf.writeChars(s, off, length)
+    def write_chars(self, s, off=0, length=None):
+        self._buf.write_chars(s, off, length)
         return self
 
     def print_(self, obj):
@@ -1047,11 +1055,11 @@ class BufOutStream:
 
     print = print_
 
-    def printLine(self, obj=None):
-        self._buf.printLine(obj)
+    def print_line(self, obj=None):
+        self._buf.print_line(obj)
         return self
 
-    def writeBits(self, val, num):
+    def write_bits(self, val, num):
         """Write bits to stream.
 
         Args:
@@ -1091,26 +1099,26 @@ class BufOutStream:
         self._bitsBuf = (bufSize << 8) | bufByte
         return self
 
-    def numPendingBits(self):
+    def num_pending_bits(self):
         """Return number of bits buffered but not yet written."""
         return (self._bitsBuf >> 8) & 0xff
 
-    def _flushBits(self):
+    def _flush_bits(self):
         """Flush any pending bits to stream (pads with zeros)."""
         if self._bitsBuf != 0:
             self._buf.write(self._bitsBuf & 0xff)
             self._bitsBuf = 0
 
     def flush(self):
-        self._flushBits()
+        self._flush_bits()
         return self
 
-    def writeXml(self, s, mask=0):
+    def write_xml(self, s, mask=0):
         """Write XML-escaped string."""
-        self._buf.writeXml(s, mask)
+        self._buf.write_xml(s, mask)
         return self
 
-    def writeProps(self, props):
+    def write_props(self, props):
         """Write map as props file format.
 
         Props files are always UTF-8 encoded.
@@ -1125,17 +1133,17 @@ class BufOutStream:
         try:
             for key, val in props.items():
                 # Escape key
-                escaped_key = self._escapePropsKey(str(key))
+                escaped_key = self._escape_props_key(str(key))
                 # Escape value
-                escaped_val = self._escapePropsVal(str(val))
+                escaped_val = self._escape_props_val(str(val))
                 # Write line
-                self._buf.writeChars(f"{escaped_key}={escaped_val}\n")
+                self._buf.write_chars(f"{escaped_key}={escaped_val}\n")
         finally:
             self._buf.charset(origCharset)
 
         return self
 
-    def _escapePropsKey(self, s):
+    def _escape_props_key(self, s):
         """Escape special characters in props key."""
         result = []
         for ch in s:
@@ -1157,7 +1165,7 @@ class BufOutStream:
                 result.append(ch)
         return ''.join(result)
 
-    def _escapePropsVal(self, s):
+    def _escape_props_val(self, s):
         """Escape special characters in props value.
 
         Must escape / as \\u002f to avoid // being treated as comment when read back.
@@ -1205,62 +1213,62 @@ class BufInStream:
     def read(self):
         return self._buf.read()
 
-    def readBuf(self, other, n):
-        return self._buf.readBuf(other, n)
+    def read_buf(self, other, n):
+        return self._buf.read_buf(other, n)
 
     def unread(self, n):
         self._buf.unread(n)
         return self
 
-    def readAllBuf(self):
-        return self._buf.readAllBuf()
+    def read_all_buf(self):
+        return self._buf.read_all_buf()
 
-    def readBufFully(self, buf, n):
-        return self._buf.readBufFully(buf, n)
+    def read_buf_fully(self, buf, n):
+        return self._buf.read_buf_fully(buf, n)
 
     def peek(self):
         return self._buf.peek()
 
-    def readU1(self):
-        return self._buf.readU1()
+    def read_u1(self):
+        return self._buf.read_u1()
 
-    def readS1(self):
-        return self._buf.readS1()
+    def read_s1(self):
+        return self._buf.read_s1()
 
-    def readU2(self):
-        return self._buf.readU2()
+    def read_u2(self):
+        return self._buf.read_u2()
 
-    def readS2(self):
-        return self._buf.readS2()
+    def read_s2(self):
+        return self._buf.read_s2()
 
-    def readU4(self):
-        return self._buf.readU4()
+    def read_u4(self):
+        return self._buf.read_u4()
 
-    def readS4(self):
-        return self._buf.readS4()
+    def read_s4(self):
+        return self._buf.read_s4()
 
-    def readS8(self):
-        return self._buf.readS8()
+    def read_s8(self):
+        return self._buf.read_s8()
 
-    def readF4(self):
-        return self._buf.readF4()
+    def read_f4(self):
+        return self._buf.read_f4()
 
-    def readF8(self):
-        return self._buf.readF8()
+    def read_f8(self):
+        return self._buf.read_f8()
 
-    def readBool(self):
-        return self._buf.readBool()
+    def read_bool(self):
+        return self._buf.read_bool()
 
-    def readUtf(self):
-        return self._buf.readUtf()
+    def read_utf(self):
+        return self._buf.read_utf()
 
-    def readDecimal(self):
+    def read_decimal(self):
         """Read decimal serialized as UTF string."""
-        s = self._buf.readUtf()
+        s = self._buf.read_utf()
         from .Decimal import Decimal
-        return Decimal.fromStr(s, True)
+        return Decimal.from_str(s, True)
 
-    def readBits(self, num):
+    def read_bits(self, num):
         """Read bits from stream.
 
         Args:
@@ -1307,11 +1315,11 @@ class BufInStream:
 
         return result
 
-    def numPendingBits(self):
+    def num_pending_bits(self):
         """Return number of bits buffered but not yet read."""
         return (self._bitsBuf >> 8) & 0xff
 
-    def readProps(self):
+    def read_props(self):
         """Read a properties file format and return as a Map.
 
         Props files are always UTF-8 encoded, so we temporarily switch charset.
@@ -1327,42 +1335,42 @@ class BufInStream:
 
         try:
             # Read remaining buffer as string (don't normalize - props parser handles newlines)
-            content = self.readAllStr(normalize=False)
+            content = self.read_all_str(normalize=False)
 
             # Use StrInStream's full props parser
-            return StrInStream(content).readProps()
+            return StrInStream(content).read_props()
         finally:
             self._buf.charset(origCharset)
 
-    def readChar(self):
-        return self._buf.readChar()
+    def read_char(self):
+        return self._buf.read_char()
 
-    def rChar(self):
+    def r_char(self):
         """Read character as int code point for Tokenizer compatibility."""
-        c = self.readChar()
+        c = self.read_char()
         return c if c is not None else None
 
-    def unreadChar(self, c):
-        self._buf.unreadChar(c)
+    def unread_char(self, c):
+        self._buf.unread_char(c)
         return self
 
-    def peekChar(self):
-        return self._buf.peekChar()
+    def peek_char(self):
+        return self._buf.peek_char()
 
-    def readChars(self, n):
-        return self._buf.readChars(n)
+    def read_chars(self, n):
+        return self._buf.read_chars(n)
 
-    def readLine(self, max_chars=None):
-        return self._buf.readLine(max_chars)
+    def read_line(self, max_chars=None):
+        return self._buf.read_line(max_chars)
 
-    def readAllStr(self, normalize=True):
-        return self._buf.readAllStr(normalize)
+    def read_all_str(self, normalize=True):
+        return self._buf.read_all_str(normalize)
 
-    def readAllLines(self):
-        return self._buf.readAllLines()
+    def read_all_lines(self):
+        return self._buf.read_all_lines()
 
-    def eachLine(self, f):
-        self._buf.eachLine(f)
+    def each_line(self, f):
+        self._buf.each_line(f)
 
     def pipe(self, out, n=None, close=True):
         """Pipe data from this InStream to an OutStream.
@@ -1403,7 +1411,7 @@ class BufInStream:
             if close:
                 self.close()
 
-    def readStrToken(self, max_chars=None, func=None):
+    def read_str_token(self, max_chars=None, func=None):
         """Read string token until whitespace or func returns true.
 
         Args:
@@ -1420,7 +1428,7 @@ class BufInStream:
             return ""
 
         # Read first char
-        c = self._buf.readChar()
+        c = self._buf.read_char()
         if c is None:
             return None
 
@@ -1428,25 +1436,25 @@ class BufInStream:
         while True:
             # Check termination condition
             if func is None:
-                terminate = Int.isSpace(c)
+                terminate = Int.is_space(c)
             else:
                 terminate = func.call(c)
 
             if terminate:
-                self._buf.unreadChar(c)
+                self._buf.unread_char(c)
                 break
 
             chars.append(chr(c))
             if len(chars) >= max_len:
                 break
 
-            c = self._buf.readChar()
+            c = self._buf.read_char()
             if c is None:
                 break
 
         return ''.join(chars)
 
-    def readNullTerminatedStr(self, max_chars=None):
+    def read_null_terminated_str(self, max_chars=None):
         """Read string until null byte or max chars.
 
         Args:
@@ -1460,7 +1468,7 @@ class BufInStream:
             return ""
 
         # Read first char
-        c = self._buf.readChar()
+        c = self._buf.read_char()
         if c is None:
             return None
 
@@ -1473,7 +1481,7 @@ class BufInStream:
             if len(chars) >= max_len:
                 break
 
-            c = self._buf.readChar()
+            c = self._buf.read_char()
             if c is None:
                 break
 

@@ -20,11 +20,11 @@ class Range(Obj):
         return Range(start, end, exclusive)
 
     @staticmethod
-    def makeInclusive(start, end):
+    def make_inclusive(start, end):
         return Range(start, end, False)
 
     @staticmethod
-    def makeExclusive(start, end):
+    def make_exclusive(start, end):
         return Range(start, end, True)
 
     def start(self):
@@ -39,7 +39,7 @@ class Range(Obj):
     def exclusive(self):
         return self._exclusive
 
-    def isEmpty(self):
+    def is_empty(self):
         # For upward ranges (start <= end)
         if self._start <= self._end:
             if self._exclusive:
@@ -51,27 +51,27 @@ class Range(Obj):
                 return self._start <= self._end
             return False  # inclusive range always has at least one element
 
-    def min(self):
-        if self.isEmpty():
+    def min_(self):
+        if self.is_empty():
             return None
-        return min(self._start, self._lastVal())
+        return min(self._start, self._last_val())
 
-    def max(self):
-        if self.isEmpty():
+    def max_(self):
+        if self.is_empty():
             return None
-        return max(self._start, self._lastVal())
+        return max(self._start, self._last_val())
 
     def first(self):
-        if self.isEmpty():
+        if self.is_empty():
             return None
         return self._start
 
     def last(self):
-        if self.isEmpty():
+        if self.is_empty():
             return None
-        return self._lastVal()
+        return self._last_val()
 
-    def _lastVal(self):
+    def _last_val(self):
         """Internal method to get last value without null check"""
         if self._exclusive:
             if self._start <= self._end:
@@ -105,7 +105,7 @@ class Range(Obj):
             for i in range(self._start, end, -1):
                 f(i)
 
-    def eachWhile(self, f):
+    def each_while(self, f):
         if self._start <= self._end:
             end = self._end if self._exclusive else self._end + 1
             for i in range(self._start, end):
@@ -120,22 +120,18 @@ class Range(Obj):
                     return result
         return None
 
-    def map(self, f):
+    def map_(self, f):
         """Map each element using function"""
         result = []
         self.each(lambda i: result.append(f(i)))
         return result
-
-    def map_(self, f):
-        """Alias for map to match List.map_ naming convention"""
-        return self.map(f)
 
     def offset(self, n):
         """Return new range shifted by n"""
         return Range(self._start + n, self._end + n, self._exclusive)
 
     @staticmethod
-    def fromStr(s, checked=True):
+    def from_str(s, checked=True):
         """Parse range from string like '2..5' or '2..<5'"""
         if s is None:
             if checked:
@@ -175,27 +171,27 @@ class Range(Obj):
             raise ParseErr(f"Invalid Range: {s}")
         return None
 
-    def toList(self):
+    def to_list(self):
         from .List import List
         result = []
         self.each(lambda i: result.append(i))
-        return List.fromLiteral(result, "sys::Int")
+        return List.from_literal(result, "sys::Int")
 
     def random(self):
         """Return a random integer within this range."""
         import random
-        if self.isEmpty():
+        if self.is_empty():
             return None
         # Calculate first and last values
         first = self._start
-        last = self._lastVal()
+        last = self._last_val()
         # Ensure first <= last for randint
         if first <= last:
             return random.randint(first, last)
         else:
             return random.randint(last, first)
 
-    def toStr(self):
+    def to_str(self):
         if self._exclusive:
             return f"{self._start}..<{self._end}"
         return f"{self._start}..{self._end}"
@@ -212,7 +208,7 @@ class Range(Obj):
 
     def __iter__(self):
         """Allow Python iteration"""
-        return iter(self.toList())
+        return iter(self.to_list())
 
     def __len__(self):
         """Allow Python len()"""

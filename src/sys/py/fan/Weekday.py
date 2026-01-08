@@ -56,7 +56,7 @@ class Weekday(Obj):
         """Get all weekday values"""
         from fan.sys.List import List
         if Weekday._vals is None:
-            Weekday._vals = List.toImmutable(List.fromList([
+            Weekday._vals = List.to_immutable(List.from_list([
                 Weekday._make_enum(0, "sun"),
                 Weekday._make_enum(1, "mon"),
                 Weekday._make_enum(2, "tue"),
@@ -73,7 +73,7 @@ class Weekday(Obj):
         return Weekday.vals().get(ordinal)
 
     @staticmethod
-    def localeStartOfWeek():
+    def locale_start_of_week():
         """Get locale-specific start of week (Sunday in US, Monday in Europe)"""
         from .Locale import Locale
         cur = Locale.cur()
@@ -88,20 +88,20 @@ class Weekday(Obj):
         return Weekday.mon()
 
     @staticmethod
-    def localeVals():
+    def locale_vals():
         """Get weekdays in locale-specific order starting from localeStartOfWeek"""
         from fan.sys.List import List
-        start = Weekday.localeStartOfWeek().ordinal()
+        start = Weekday.locale_start_of_week().ordinal()
         # Cache per start day for identity (verifySame requirement)
         if start not in Weekday._localeValsCache:
             result = []
             for i in range(7):
                 result.append(Weekday.vals().get((start + i) % 7))
-            Weekday._localeValsCache[start] = List.toImmutable(List.fromList(result))
+            Weekday._localeValsCache[start] = List.to_immutable(List.from_list(result))
         return Weekday._localeValsCache[start]
 
     @staticmethod
-    def fromStr(s, checked=True):
+    def from_str(s, checked=True):
         """Parse Weekday from string"""
         if Weekday._byName is None:
             Weekday._byName = {
@@ -139,16 +139,16 @@ class Weekday(Obj):
         new_ord = (self._ordinal - days) % 7
         return Weekday.vals().get(new_ord)
 
-    def localeAbbr(self):
+    def locale_abbr(self):
         """Abbreviated locale name"""
         return self._name[:3].title()
 
-    def localeFull(self):
+    def locale_full(self):
         """Full locale name"""
         names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
         return names[self._ordinal]
 
-    def toLocale(self, pattern=None, locale=None):
+    def to_locale(self, pattern=None, locale=None):
         """Format weekday for locale"""
         if pattern is None:
             pattern = "WWW"
@@ -165,7 +165,7 @@ class Weekday(Obj):
         else:
             return abbr_names[self._ordinal]
 
-    def toStr(self):
+    def to_str(self):
         return self._name
 
     def __str__(self):

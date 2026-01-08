@@ -27,12 +27,12 @@ class ObjEncoder:
         self.out = out
         self.level = 0
         self.indent = 0
-        self.skipDefaults = False
-        self.skipErrors = False
-        self.curFieldType = None
+        self.skip_defaults = False
+        self.skip_errors = False
+        self.cur_field_type = None
 
         if options is not None:
-            self._initOptions(options)
+            self._init_options(options)
 
     @staticmethod
     def encode(obj):
@@ -47,10 +47,10 @@ class ObjEncoder:
         from fan.sys.StrBuf import StrBuf
         buf = StrBuf.make()
         out = buf.out()
-        ObjEncoder(out, None).writeObj(obj)
-        return buf.toStr()
+        ObjEncoder(out, None).write_obj(obj)
+        return buf.to_str()
 
-    def writeObj(self, obj):
+    def write_obj(self, obj):
         """Write object to output stream.
 
         Args:
@@ -73,33 +73,33 @@ class ObjEncoder:
             return
 
         if t is str:
-            self.wStrLiteral(obj, '"')
+            self.w_str_literal(obj, '"')
             return
 
         if t is float:
-            self._writeFloat(obj)
+            self._write_float(obj)
             return
 
-        # Check for Fantom objects with literalEncode method
-        if hasattr(obj, 'literalEncode'):
-            obj.literalEncode(self)
+        # Check for Fantom objects with literal_encode method
+        if hasattr(obj, 'literal_encode'):
+            obj.literal_encode(self)
             return
 
         # Check for Fantom Float wrapper (from Float.make)
         if hasattr(obj, 'fanType_') and obj.fanType_ == 'sys::Float':
-            self._writeFloat(float(obj))
+            self._write_float(float(obj))
             return
 
         # Check for Fantom List
         from fan.sys.List import List
         if isinstance(obj, List):
-            self.writeList(obj)
+            self.write_list(obj)
             return
 
         # Check for Fantom Map
         from fan.sys.Map import Map
         if isinstance(obj, Map):
-            self.writeMap(obj)
+            self.write_map(obj)
             return
 
         # Check for @Serializable facet
@@ -113,17 +113,17 @@ class ObjEncoder:
                     if ser is not None:
                         # Check if simple serialization
                         # Get simple field - default is False if not set
-                        is_simple = self._getFacetBool(ser, 'simple', False)
+                        is_simple = self._get_facet_bool(ser, 'simple', False)
                         if is_simple:
-                            self._writeSimple(obj_type, obj)
+                            self._write_simple(obj_type, obj)
                         else:
-                            self._writeComplex(obj_type, obj, ser)
+                            self._write_complex(obj_type, obj, ser)
                         return
                 except Exception:
                     pass
 
         # Not serializable
-        if self.skipErrors:
+        if self.skip_errors:
             self.w("null /* Not serializable: ")
             if hasattr(obj, 'typeof'):
                 self.w(obj.typeof().qname())
@@ -135,7 +135,7 @@ class ObjEncoder:
             type_name = obj.typeof().qname() if hasattr(obj, 'typeof') else type(obj).__name__
             raise IOErr.make(f"Not serializable: {type_name}")
 
-    def _writeFloat(self, val):
+    def _write_float(self, val):
         """Write float value with proper encoding."""
         if math.isnan(val):
             self.w('sys::Float("NaN")')
@@ -152,28 +152,28 @@ class ObjEncoder:
             self.w(s)
             self.w("f")
 
-    def _writeSimple(self, obj_type, obj):
+    def _write_simple(self, obj_type, obj):
         """Write @Serializable{simple=true} type.
 
         Simple types serialize as: Type("toStrValue")
         """
-        self.wType(obj_type)
+        self.w_type(obj_type)
         self.w('(')
-        # Get string value via toStr
+        # Get string value via to_str
         s = str(obj)
-        if hasattr(obj, 'toStr'):
-            s = obj.toStr()
-        self.wStrLiteral(s, '"')
+        if hasattr(obj, 'to_str'):
+            s = obj.to_str()
+        self.w_str_literal(s, '"')
         self.w(')')
 
-    def _writeComplex(self, obj_type, obj, ser):
+    def _write_complex(self, obj_type, obj, ser):
         """Write complex @Serializable type with fields."""
-        self.wType(obj_type)
+        self.w_type(obj_type)
 
         first = True
         defObj = None
 
-        if self.skipDefaults:
+        if self.skip_defaults:
             # Try to create default instance for comparison
             try:
                 defObj = obj_type.make()
@@ -187,14 +187,14 @@ class ObjEncoder:
             f = fields.get(i) if callable(getattr(fields, 'get', None)) else fields[i]
 
             # Skip static, transient, and synthetic fields
-            if f.isStatic() or f.isSynthetic():
+            if f.is_static() or f.is_synthetic():
                 continue
 
             # Check for @Transient facet
-            if hasattr(f, 'hasFacet'):
+            if hasattr(f, 'has_facet'):
                 from fan.sys.Type import Type
                 try:
-                    if f.hasFacet(Type.find("sys::Transient")):
+                    if f.has_facet(Type.find("sys::Transient")):
                         continue
                 except Exception:
                     pass
@@ -216,13 +216,13 @@ class ObjEncoder:
             # Open braces on first field
             if first:
                 self.w('\n')
-                self.wIndent()
+                self.w_indent()
                 self.w('{\n')
                 self.level += 1
                 first = False
 
             # Write field name and value
-            self.wIndent()
+            self.w_indent()
             self.w(f.name())
             self.w('=')
 
@@ -232,26 +232,26 @@ class ObjEncoder:
                 ft = f.type_()
             elif hasattr(f, 'type'):
                 ft = f.type() if callable(f.type) else f.type
-            if ft is not None and hasattr(ft, 'toNonNullable'):
-                ft = ft.toNonNullable()
-            self.curFieldType = ft
-            self.writeObj(val)
-            self.curFieldType = None
+            if ft is not None and hasattr(ft, 'to_non_nullable'):
+                ft = ft.to_non_nullable()
+            self.cur_field_type = ft
+            self.write_obj(val)
+            self.cur_field_type = None
 
             self.w('\n')
 
         # Handle @collection
-        is_collection = self._getFacetBool(ser, 'collection', False)
+        is_collection = self._get_facet_bool(ser, 'collection', False)
         if is_collection:
-            first = self._writeCollectionItems(obj_type, obj, first)
+            first = self._write_collection_items(obj_type, obj, first)
 
         # Close braces if we opened them
         if not first:
             self.level -= 1
-            self.wIndent()
+            self.w_indent()
             self.w('}')
 
-    def _writeCollectionItems(self, obj_type, obj, first):
+    def _write_collection_items(self, obj_type, obj, first):
         """Write collection items for @Serializable{collection=true}."""
         # Look up each method
         m = obj_type.method("each", False)
@@ -265,19 +265,19 @@ class ObjEncoder:
             nonlocal first
             if first:
                 enc.w('\n')
-                enc.wIndent()
+                enc.w_indent()
                 enc.w('{\n')
                 enc.level += 1
                 first = False
-            enc.wIndent()
-            enc.writeObj(item)
+            enc.w_indent()
+            enc.write_obj(item)
             enc.w(',\n')
             return None
 
-        m.callOn(obj, [write_item])
+        m.call_on(obj, [write_item])
         return first
 
-    def writeList(self, lst):
+    def write_list(self, lst):
         """Write Fantom List.
 
         Args:
@@ -293,25 +293,25 @@ class ObjEncoder:
             of = List.of(lst)
 
         # Decide single or multi-line format
-        nl = self._isMultiLine(of)
+        nl = self._is_multi_line(of)
 
         # Check if we can use inferred type
         inferred = False
-        if self.curFieldType is not None:
+        if self.cur_field_type is not None:
             from fan.sys.Type import Type
-            if hasattr(self.curFieldType, 'fits'):
+            if hasattr(self.cur_field_type, 'fits'):
                 try:
-                    if self.curFieldType.fits(Type.find("sys::List")):
+                    if self.cur_field_type.fits(Type.find("sys::List")):
                         inferred = True
                 except:
                     pass
 
         # Clear field type
-        self.curFieldType = None
+        self.cur_field_type = None
 
         # Write type prefix if not inferred (like JS does)
         if not inferred and of is not None:
-            self.wType(of)
+            self.w_type(of)
 
         # Handle empty list - size may be method or property
         size = lst.size() if callable(getattr(lst, 'size', None)) else len(lst)
@@ -322,7 +322,7 @@ class ObjEncoder:
         # Write items
         if nl:
             self.w('\n')
-            self.wIndent()
+            self.w_indent()
         self.w('[')
         self.level += 1
 
@@ -331,16 +331,16 @@ class ObjEncoder:
                 self.w(',')
             if nl:
                 self.w('\n')
-                self.wIndent()
-            self.writeObj(lst.get(i))
+                self.w_indent()
+            self.write_obj(lst.get(i))
 
         self.level -= 1
         if nl:
             self.w('\n')
-            self.wIndent()
+            self.w_indent()
         self.w(']')
 
-    def writeMap(self, m):
+    def write_map(self, m):
         """Write Fantom Map.
 
         Args:
@@ -352,24 +352,24 @@ class ObjEncoder:
         # Decide single or multi-line format
         nl = False
         if hasattr(t, 'k') and hasattr(t, 'v'):
-            nl = self._isMultiLine(t.k) or self._isMultiLine(t.v)
+            nl = self._is_multi_line(t.k) or self._is_multi_line(t.v)
 
         # Check if we can use inferred type (like JS: curFieldType instanceof MapType)
         inferred = False
-        if self.curFieldType is not None:
+        if self.cur_field_type is not None:
             from fan.sys.Type import Type, MapType
-            if isinstance(self.curFieldType, MapType):
+            if isinstance(self.cur_field_type, MapType):
                 inferred = True
 
         # Clear field type so it doesn't get used for inference again
-        self.curFieldType = None
+        self.cur_field_type = None
 
         # If we don't have an inferred type, then prefix with type (matching JS pattern)
         if not inferred:
-            self.wType(t)
+            self.w_type(t)
 
         # Handle empty map
-        if m.isEmpty():
+        if m.is_empty():
             self.w("[:]")
             return
 
@@ -385,8 +385,8 @@ class ObjEncoder:
         val_type = None
         if hasattr(t, 'v'):
             val_type = t.v
-            if val_type is not None and hasattr(val_type, 'toNonNullable'):
-                val_type = val_type.toNonNullable()
+            if val_type is not None and hasattr(val_type, 'to_non_nullable'):
+                val_type = val_type.to_non_nullable()
 
         for i in range(key_count):
             if first:
@@ -395,20 +395,20 @@ class ObjEncoder:
                 self.w(',')
             if nl:
                 self.w('\n')
-                self.wIndent()
+                self.w_indent()
             # Handle both Fantom List.get() and Python list indexing
             key = keys.get(i) if callable(getattr(keys, 'get', None)) else keys[i]
             val = m.get(key)
-            self.writeObj(key)
+            self.write_obj(key)
             self.w(':')
             # Set curFieldType for value type inference
-            self.curFieldType = val_type
-            self.writeObj(val)
-            self.curFieldType = None
+            self.cur_field_type = val_type
+            self.write_obj(val)
+            self.cur_field_type = None
         self.w(']')
         self.level -= 1
 
-    def _isMultiLine(self, t):
+    def _is_multi_line(self, t):
         """Check if type should use multi-line format."""
         if t is None:
             return False
@@ -420,7 +420,7 @@ class ObjEncoder:
                 return False
         return False
 
-    def wType(self, t):
+    def w_type(self, t):
         """Write type signature.
 
         Args:
@@ -434,7 +434,7 @@ class ObjEncoder:
             self.w(sig)
         return self
 
-    def wStrLiteral(self, s, quote):
+    def w_str_literal(self, s, quote):
         """Write escaped string literal.
 
         Args:
@@ -467,7 +467,7 @@ class ObjEncoder:
         self.w(quote)
         return self
 
-    def wIndent(self):
+    def w_indent(self):
         """Write indentation.
 
         Returns:
@@ -488,10 +488,10 @@ class ObjEncoder:
             self for chaining
         """
         for c in str(s):
-            self.out.writeChar(ord(c))
+            self.out.write_char(ord(c))
         return self
 
-    def _initOptions(self, options):
+    def _init_options(self, options):
         """Initialize from options map."""
         indent = options.get("indent")
         if indent is not None:
@@ -499,13 +499,13 @@ class ObjEncoder:
 
         skipDefaults = options.get("skipDefaults")
         if skipDefaults is not None:
-            self.skipDefaults = bool(skipDefaults)
+            self.skip_defaults = bool(skipDefaults)
 
         skipErrors = options.get("skipErrors")
         if skipErrors is not None:
-            self.skipErrors = bool(skipErrors)
+            self.skip_errors = bool(skipErrors)
 
-    def _getFacetBool(self, facet, name, default):
+    def _get_facet_bool(self, facet, name, default):
         """Get a boolean field from a facet, with default if not set.
 
         Args:

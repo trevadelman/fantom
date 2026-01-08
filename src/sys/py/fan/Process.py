@@ -38,15 +38,15 @@ class Process(Obj):
         """Get or set the command list."""
         if val is None:
             return self._command
-        self._checkNotStarted()
+        self._check_not_started()
         self._command = list(val)
         return self
 
-    def dir(self, val=None):
+    def dir_(self, val=None):
         """Get or set the working directory."""
         if val is None:
             return self._dir
-        self._checkNotStarted()
+        self._check_not_started()
         self._dir = val
         return self
 
@@ -56,14 +56,14 @@ class Process(Obj):
             from .Map import Map
             self._env = Map()
             for k, v in os.environ.items():
-                self._env.set(k, v)
+                self._env.set_(k, v)
         return self._env
 
-    def mergeErr(self, val=None):
+    def merge_err(self, val=None):
         """Get or set whether stderr merges with stdout."""
         if val is None:
             return self._mergeErr
-        self._checkNotStarted()
+        self._check_not_started()
         self._mergeErr = val
         return self
 
@@ -74,7 +74,7 @@ class Process(Obj):
                 from .Env import Env
                 return Env.cur().out()
             return self._out
-        self._checkNotStarted()
+        self._check_not_started()
         self._out = val
         self._out_explicit = True
         return self
@@ -86,7 +86,7 @@ class Process(Obj):
                 from .Env import Env
                 return Env.cur().err()
             return self._err
-        self._checkNotStarted()
+        self._check_not_started()
         self._err = val
         self._err_explicit = True
         return self
@@ -95,15 +95,15 @@ class Process(Obj):
         """Get or set stdin InStream."""
         if val is None:
             return self._in
-        self._checkNotStarted()
+        self._check_not_started()
         self._in = val
         return self
 
     # Alias for transpiled code that uses 'in' which is Python keyword
-    def setIn(self, val):
+    def set_in(self, val):
         return self.in_(val)
 
-    def getIn(self):
+    def get_in(self):
         return self.in_()
 
     def run(self):
@@ -124,7 +124,7 @@ class Process(Obj):
         # Get working directory
         cwd = None
         if self._dir is not None:
-            cwd = self._dir.osPath()
+            cwd = self._dir.os_path()
 
         # Determine stream handling
         stdin_pipe = subprocess.PIPE if self._in is not None else None
@@ -149,7 +149,7 @@ class Process(Obj):
 
             # Read stdin data for later use in communicate()
             if self._in is not None:
-                self._stdin_data = self._readAllFromStream(self._in)
+                self._stdin_data = self._read_all_from_stream(self._in)
             else:
                 self._stdin_data = None
 
@@ -182,11 +182,11 @@ class Process(Obj):
 
         # Write stdout
         if stdout_data and out_stream is not None:
-            self._writeToStream(out_stream, stdout_data)
+            self._write_to_stream(out_stream, stdout_data)
 
         # Write stderr (if not merged)
         if stderr_data and err_stream is not None:
-            self._writeToStream(err_stream, stderr_data)
+            self._write_to_stream(err_stream, stderr_data)
 
         return self._process.returncode
 
@@ -196,13 +196,13 @@ class Process(Obj):
             self._process.kill()
         return self
 
-    def _checkNotStarted(self):
+    def _check_not_started(self):
         """Raise error if already started."""
         if self._started:
             from .Err import Err
             raise Err.make("Process already running")
 
-    def _readAllFromStream(self, stream):
+    def _read_all_from_stream(self, stream):
         """Read all data from a Fantom InStream."""
         data = bytearray()
         while True:
@@ -212,7 +212,7 @@ class Process(Obj):
             data.append(b)
         return bytes(data)
 
-    def _writeToStream(self, stream, data):
+    def _write_to_stream(self, stream, data):
         """Write bytes to a Fantom OutStream."""
         for b in data:
             stream.write(b)
@@ -223,8 +223,8 @@ class Process(Obj):
         from .Type import Type
         return Type.find("sys::Process")
 
-    def toStr(self):
+    def to_str(self):
         return f"Process({self._command})"
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()

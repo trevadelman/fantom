@@ -18,18 +18,18 @@ class Duration(Obj):
         self._ticks = ticks  # nanoseconds
 
     @staticmethod
-    def defVal():
+    def def_val():
         if Duration._defVal is None:
             Duration._defVal = Duration(0)
         return Duration._defVal
 
     @staticmethod
-    def minVal():
+    def min_val():
         """Minimum duration value"""
         return Duration(-9223372036854775808)
 
     @staticmethod
-    def maxVal():
+    def max_val():
         """Maximum duration value"""
         return Duration(9223372036854775807)
 
@@ -38,19 +38,19 @@ class Duration(Obj):
         """Make from nanoseconds - caches common values"""
         # Return cached singleton for 0
         if ticks == 0:
-            return Duration.defVal()
+            return Duration.def_val()
         # Cache small whole-unit durations for identity semantics
         if ticks in Duration._cache:
             return Duration._cache[ticks]
         # Create new and potentially cache it
         d = Duration(ticks)
         # Cache common unit values (1ms, 1sec, 1min, etc up to reasonable size)
-        if Duration._shouldCache(ticks):
+        if Duration._should_cache(ticks):
             Duration._cache[ticks] = d
         return d
 
     @staticmethod
-    def _shouldCache(ticks):
+    def _should_cache(ticks):
         """Determine if this duration should be cached for identity semantics"""
         # Cache durations that are whole units up to 1 day
         if ticks < 0:
@@ -68,7 +68,7 @@ class Duration(Obj):
         return Duration(int(time.time_ns()))
 
     @staticmethod
-    def nowTicks():
+    def now_ticks():
         """Return current time as nanoseconds since epoch"""
         import time
         return time.time_ns()
@@ -87,7 +87,7 @@ class Duration(Obj):
         return Duration.now().minus(Duration.boot())
 
     @staticmethod
-    def fromStr(s, checked=True):
+    def from_str(s, checked=True):
         """Parse duration string like '5sec', '3min', '100ms', '0.5hr'"""
         try:
             s = s.strip()
@@ -109,28 +109,28 @@ class Duration(Obj):
             if not checked:
                 return None
             from .Err import ParseErr
-            raise ParseErr.makeStr("Duration", s)
+            raise ParseErr.make_str("Duration", s)
 
     def ticks(self):
         """Get nanoseconds"""
         return self._ticks
 
-    def toNanos(self):
+    def to_nanos(self):
         return self._ticks
 
-    def toMillis(self):
+    def to_millis(self):
         return self._ticks // 1_000_000
 
-    def toSec(self):
+    def to_sec(self):
         return self._ticks // 1_000_000_000
 
-    def toMin(self):
+    def to_min(self):
         return self._ticks // 60_000_000_000
 
-    def toHour(self):
+    def to_hour(self):
         return self._ticks // 3_600_000_000_000
 
-    def toDay(self):
+    def to_day(self):
         return self._ticks // 86_400_000_000_000
 
     # Arithmetic
@@ -155,19 +155,19 @@ class Duration(Obj):
     def negate(self):
         return Duration(-self._ticks)
 
-    def abs(self):
+    def abs_(self):
         """Return absolute value"""
         if self._ticks >= 0:
             return self
         return Duration(-self._ticks)
 
-    def min(self, that):
+    def min_(self, that):
         """Return lesser of this and that"""
         if self._ticks <= that._ticks:
             return self
         return that
 
-    def max(self, that):
+    def max_(self, that):
         """Return greater of this and that"""
         if self._ticks >= that._ticks:
             return self
@@ -214,7 +214,7 @@ class Duration(Obj):
     def __hash__(self):
         return self._ticks
 
-    def toStr(self):
+    def to_str(self):
         """Convert to string representation"""
         ticks = abs(self._ticks)
         neg = "-" if self._ticks < 0 else ""
@@ -251,9 +251,9 @@ class Duration(Obj):
         return f"{neg}{day}day"
 
     def __repr__(self):
-        return self.toStr()
+        return self.to_str()
 
-    def toCode(self):
+    def to_code(self):
         """Return Fantom code representation"""
         ticks = abs(self._ticks)
         neg = "-" if self._ticks < 0 else ""
@@ -273,7 +273,7 @@ class Duration(Obj):
         else:
             return f"{neg}{ticks}ns"
 
-    def toLocale(self):
+    def to_locale(self):
         """Return locale string representation"""
         ticks = abs(self._ticks)
         neg = "-" if self._ticks < 0 else ""
@@ -329,7 +329,7 @@ class Duration(Obj):
 
             return neg + " ".join(parts)
 
-    def toIso(self):
+    def to_iso(self):
         """Return ISO 8601 duration string"""
         ticks = self._ticks
         neg = "-" if ticks < 0 else ""
@@ -383,7 +383,7 @@ class Duration(Obj):
         return neg + "".join(parts)
 
     @staticmethod
-    def fromIso(s, checked=True):
+    def from_iso(s, checked=True):
         """Parse ISO 8601 duration string"""
         try:
             orig = s
@@ -439,9 +439,9 @@ class Duration(Obj):
             if not checked:
                 return None
             from .Err import ParseErr
-            raise ParseErr.makeStr("Duration", orig)
+            raise ParseErr.make_str("Duration", orig)
 
-    def isImmutable(self):
+    def is_immutable(self):
         return True
 
     # Python operator overloads for convenience
@@ -478,13 +478,13 @@ class Duration(Obj):
     def __ge__(self, other):
         return self.compare(other) >= 0
 
-    def literalEncode(self, out):
+    def literal_encode(self, out):
         """Encode for serialization.
 
         Duration literals are written directly as their string representation.
         For example: 5sec, 3min, 100ms
         """
-        out.w(self.toStr())
+        out.w(self.to_str())
 
     def typeof(self):
         """Return Fantom Type for Duration"""

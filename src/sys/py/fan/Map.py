@@ -35,7 +35,7 @@ class Map(Obj, MutableMapping):
     # ABC Required Methods (MutableMapping)
     #################################################################
 
-    def _findKey(self, key):
+    def _find_key(self, key):
         """Find the actual key in the map, handling case-insensitivity"""
         if key in self._map:
             return key
@@ -48,7 +48,7 @@ class Map(Obj, MutableMapping):
 
     def __getitem__(self, key):
         """Get value by key, return default/null if not found"""
-        actual_key = self._findKey(key)
+        actual_key = self._find_key(key)
         if actual_key is not None:
             return self._map[actual_key]
         # Return default if set, otherwise return None (Fantom null semantics)
@@ -56,10 +56,10 @@ class Map(Obj, MutableMapping):
 
     def __setitem__(self, key, value):
         """Set value by key"""
-        self._checkReadonly()
+        self._check_readonly()
         # Check if key is immutable (required for Map keys)
         from .ObjUtil import ObjUtil
-        if not ObjUtil.isImmutable(key):
+        if not ObjUtil.is_immutable(key):
             from .Err import NotImmutableErr
             from .Type import Type
             raise NotImmutableErr.make(f"Map key is not immutable: {Type.of(key)}")
@@ -67,7 +67,7 @@ class Map(Obj, MutableMapping):
         self._roView = None
         # Handle case-insensitive keys
         if self._caseInsensitive and isinstance(key, str):
-            actual_key = self._findKey(key)
+            actual_key = self._find_key(key)
             if actual_key is not None:
                 self._map[actual_key] = value
                 return
@@ -75,9 +75,9 @@ class Map(Obj, MutableMapping):
 
     def __delitem__(self, key):
         """Delete by key"""
-        self._checkReadonly()
+        self._check_readonly()
         self._roView = None
-        actual_key = self._findKey(key)
+        actual_key = self._find_key(key)
         if actual_key is not None:
             del self._map[actual_key]
         else:
@@ -93,7 +93,7 @@ class Map(Obj, MutableMapping):
 
     def __contains__(self, key):
         """Check if key exists, handling case-insensitivity"""
-        return self._findKey(key) is not None
+        return self._find_key(key) is not None
 
     #################################################################
     # Additional Python Protocol Methods
@@ -103,7 +103,7 @@ class Map(Obj, MutableMapping):
         return f"Map({self._map})"
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()
 
     def __eq__(self, other):
         """Equality comparison"""
@@ -145,7 +145,7 @@ class Map(Obj, MutableMapping):
     # Read-only Check
     #################################################################
 
-    def _checkReadonly(self):
+    def _check_readonly(self):
         """Check if map is readonly - override in subclasses"""
         if self._ro:
             from .Err import ReadonlyErr
@@ -190,7 +190,7 @@ class Map(Obj, MutableMapping):
         return result
 
     @staticmethod
-    def makeWithType(keyType, valType):
+    def make_with_type(keyType, valType):
         """Create a Map with explicit key and value types.
 
         Args:
@@ -212,7 +212,7 @@ class Map(Obj, MutableMapping):
         return result
 
     @staticmethod
-    def fromLiteral(keys, vals, keyType, valueType):
+    def from_literal(keys, vals, keyType, valueType):
         """Create map from parallel key/value arrays."""
         from .Type import Type, MapType
         result = Map()
@@ -228,7 +228,7 @@ class Map(Obj, MutableMapping):
         return result
 
     @staticmethod
-    def fromDict(d):
+    def from_dict(d):
         """Create a Map from a Python dict"""
         result = Map()
         if d is not None:
@@ -244,7 +244,7 @@ class Map(Obj, MutableMapping):
         """Return number of entries"""
         return len(self._map)
 
-    def isEmpty(self):
+    def is_empty(self):
         """Return true if map is empty"""
         return len(self._map) == 0
 
@@ -256,10 +256,10 @@ class Map(Obj, MutableMapping):
     @def_.setter
     def def_(self, val):
         """Set default value - must be immutable"""
-        self._checkReadonly()
+        self._check_readonly()
         if val is not None:
             from .ObjUtil import ObjUtil
-            if not ObjUtil.isImmutable(val):
+            if not ObjUtil.is_immutable(val):
                 from .Err import NotImmutableErr
                 raise NotImmutableErr.make("Map default value is not immutable")
         self._def = val
@@ -272,16 +272,16 @@ class Map(Obj, MutableMapping):
     @ordered.setter
     def ordered(self, val):
         """Set ordered flag"""
-        self._checkReadonly()
+        self._check_readonly()
         self._ordered = val
 
     @property
-    def caseInsensitive(self):
+    def case_insensitive(self):
         """Get case-insensitive flag"""
         return self._caseInsensitive
 
-    @caseInsensitive.setter
-    def caseInsensitive(self, val):
+    @case_insensitive.setter
+    def case_insensitive(self, val):
         """Set case-insensitive flag"""
         if len(self._map) > 0:
             from .Err import UnsupportedErr
@@ -291,7 +291,7 @@ class Map(Obj, MutableMapping):
             if sig != "sys::Str":
                 from .Err import UnsupportedErr
                 raise UnsupportedErr("caseInsensitive requires Str keys")
-        self._checkReadonly()
+        self._check_readonly()
         self._caseInsensitive = val
 
     #################################################################
@@ -300,21 +300,21 @@ class Map(Obj, MutableMapping):
 
     def get(self, key, default=None):
         """Get value by key, return default if not found"""
-        actual_key = self._findKey(key)
+        actual_key = self._find_key(key)
         if actual_key is not None:
             return self._map[actual_key]
         if default is not None:
             return default
         return self._def
 
-    def getOrThrow(self, key):
+    def get_or_throw(self, key):
         """Get value or throw if not found"""
         if key in self:
             return self[key]
         from .Err import UnknownKeyErr
         raise UnknownKeyErr(f"Key not found: {key}")
 
-    def getChecked(self, key, checked=True):
+    def get_checked(self, key, checked=True):
         """Get value, throw UnknownKeyErr if not found and checked=True"""
         if key in self:
             return self[key]
@@ -323,25 +323,25 @@ class Map(Obj, MutableMapping):
             raise UnknownKeyErr(f"Key not found: {key}")
         return None
 
-    def containsKey(self, key):
+    def contains_key(self, key):
         """Check if map contains key"""
         return key in self
 
     def keys(self):
         """Return keys as List"""
         from .List import List
-        return List.fromLiteral(list(self._map.keys()), self._keyType or "sys::Obj")
+        return List.from_literal(list(self._map.keys()), self._keyType or "sys::Obj")
 
     def vals(self):
         """Return values as List"""
         from .List import List
-        return List.fromLiteral(list(self._map.values()), self._valueType or "sys::Obj")
+        return List.from_literal(list(self._map.values()), self._valueType or "sys::Obj")
 
     #################################################################
     # Modification Methods
     #################################################################
 
-    def set(self, key, val):
+    def set_(self, key, val):
         """Set key-value pair, return self"""
         self[key] = val
         return self
@@ -354,13 +354,13 @@ class Map(Obj, MutableMapping):
         self[key] = val
         return self
 
-    def addNotNull(self, key, val):
+    def add_not_null(self, key, val):
         """Add entry only if value is not null"""
         if val is not None:
             self[key] = val
         return self
 
-    def setNotNull(self, key, val):
+    def set_not_null(self, key, val):
         """Set entry only if value is not null"""
         if val is not None:
             self[key] = val
@@ -368,7 +368,7 @@ class Map(Obj, MutableMapping):
 
     def remove(self, key):
         """Remove key and return its value"""
-        self._checkReadonly()
+        self._check_readonly()
         if key in self:
             val = self[key]
             del self[key]
@@ -377,18 +377,18 @@ class Map(Obj, MutableMapping):
 
     def clear(self):
         """Clear all entries"""
-        self._checkReadonly()
+        self._check_readonly()
         self._map.clear()
         self._roView = None
         return self
 
-    def setAll(self, other):
+    def set_all(self, other):
         """Add all entries from another map"""
         for k, v in other.items():
             self[k] = v
         return self
 
-    def addAll(self, other):
+    def add_all(self, other):
         """Add all entries (throws if any key exists)"""
         for k in other:
             if k in self:
@@ -398,7 +398,7 @@ class Map(Obj, MutableMapping):
             self[k] = v
         return self
 
-    def getOrAdd(self, key, valFunc):
+    def get_or_add(self, key, valFunc):
         """Get value or add default if not present"""
         if key in self:
             return self[key]
@@ -406,7 +406,7 @@ class Map(Obj, MutableMapping):
         self[key] = val
         return val
 
-    def setList(self, list_val, f=None):
+    def set_list(self, list_val, f=None):
         """Set entries from list using optional key transform"""
         if f is None:
             for v in list_val:
@@ -418,7 +418,7 @@ class Map(Obj, MutableMapping):
                 self[k] = v
         return self
 
-    def addList(self, list_val, f=None):
+    def add_list(self, list_val, f=None):
         """Add entries from list (throws if any key exists)"""
         if f is None:
             for v in list_val:
@@ -464,7 +464,7 @@ class Map(Obj, MutableMapping):
             for v in self._map.values():
                 f(v)
 
-    def eachWhile(self, f):
+    def each_while(self, f):
         """Iterate until f returns non-null"""
         param_count = Map._get_param_count(f)
         if param_count >= 2:
@@ -492,7 +492,7 @@ class Map(Obj, MutableMapping):
                     return v
         return None
 
-    def findAll(self, f):
+    def find_all(self, f):
         """Find all values matching predicate, return as map"""
         result = Map()
         result._keyType = self._keyType
@@ -530,7 +530,7 @@ class Map(Obj, MutableMapping):
                     result._map[k] = v
         return result
 
-    def any(self, f):
+    def any_(self, f):
         """Return true if any entry matches"""
         param_count = Map._get_param_count(f)
         if param_count >= 2:
@@ -543,7 +543,7 @@ class Map(Obj, MutableMapping):
                     return True
         return False
 
-    def all(self, f):
+    def all_(self, f):
         """Return true if all entries match"""
         param_count = Map._get_param_count(f)
         if param_count >= 2:
@@ -587,7 +587,7 @@ class Map(Obj, MutableMapping):
                 result._map[k] = f(v)
         return result
 
-    def mapNotNull(self, f):
+    def map_not_null(self, f):
         """Transform values, excluding null results"""
         from .Type import MapType
         from .Func import Func
@@ -598,8 +598,8 @@ class Map(Obj, MutableMapping):
         if isinstance(f, Func) and hasattr(f, 'returns'):
             retType = f.returns()
             if retType is not None:
-                if hasattr(retType, 'toNonNullable'):
-                    result._valueType = retType.toNonNullable()
+                if hasattr(retType, 'to_non_nullable'):
+                    result._valueType = retType.to_non_nullable()
                 else:
                     result._valueType = retType
         else:
@@ -617,13 +617,13 @@ class Map(Obj, MutableMapping):
                     result._map[k] = mapped
         return result
 
-    def findNotNull(self):
+    def find_not_null(self):
         """Return map with non-null values only"""
         from .Type import MapType
         result = Map()
         result._keyType = self._keyType
-        if self._valueType is not None and hasattr(self._valueType, 'toNonNullable'):
-            result._valueType = self._valueType.toNonNullable()
+        if self._valueType is not None and hasattr(self._valueType, 'to_non_nullable'):
+            result._valueType = self._valueType.to_non_nullable()
         else:
             result._valueType = self._valueType
         if result._keyType is not None and result._valueType is not None:
@@ -651,14 +651,14 @@ class Map(Obj, MutableMapping):
         """Join values into string"""
         from .ObjUtil import ObjUtil
         if f is None:
-            items = [f"{ObjUtil.toStr(k)}: {ObjUtil.toStr(v)}" for k, v in self._map.items()]
+            items = [f"{ObjUtil.to_str(k)}: {ObjUtil.to_str(v)}" for k, v in self._map.items()]
         else:
             param_count = Map._get_param_count(f)
             if param_count >= 2:
                 items = [f(v, k) for k, v in self._map.items()]
             else:
                 items = [f(v) for v in self._map.values()]
-        return sep.join(ObjUtil.toStr(item) for item in items)
+        return sep.join(ObjUtil.to_str(item) for item in items)
 
     def dup(self):
         """Return a duplicate of this map"""
@@ -676,11 +676,11 @@ class Map(Obj, MutableMapping):
     # RO/Immutable Methods
     #################################################################
 
-    def isRO(self):
+    def is_ro(self):
         """Check if read-only"""
         return self._ro
 
-    def isRW(self):
+    def is_rw(self):
         """Check if read-write"""
         return not self._ro
 
@@ -706,11 +706,11 @@ class Map(Obj, MutableMapping):
         result._ro = False
         return result
 
-    def isImmutable(self):
+    def is_immutable(self):
         """Check if truly immutable"""
         return self._immutable
 
-    def toImmutable(self):
+    def to_immutable(self):
         """Return immutable copy"""
         from .ObjUtil import ObjUtil
         if self._immutable:
@@ -725,22 +725,22 @@ class Map(Obj, MutableMapping):
         result._ordered = self._ordered
         result._caseInsensitive = self._caseInsensitive
         for k, v in self._map.items():
-            result._map[k] = ObjUtil.toImmutable(v)
+            result._map[k] = ObjUtil.to_immutable(v)
         return result
 
     #################################################################
     # Utility Methods
     #################################################################
 
-    def toStr(self):
+    def to_str(self):
         """Format as Fantom-style string [k:v, k:v]"""
         from .ObjUtil import ObjUtil
         if len(self._map) == 0:
             return "[:]"
-        items = [f"{ObjUtil.toStr(k)}:{ObjUtil.toStr(v)}" for k, v in self._map.items()]
+        items = [f"{ObjUtil.to_str(k)}:{ObjUtil.to_str(v)}" for k, v in self._map.items()]
         return "[" + ", ".join(items) + "]"
 
-    def toCode(self):
+    def to_code(self):
         """Return code representation"""
         from .ObjUtil import ObjUtil
         mapType = self.typeof()
@@ -749,8 +749,8 @@ class Map(Obj, MutableMapping):
             return f"{typeSig}[:]"
         items = []
         for k, v in self._map.items():
-            kStr = f'"{k}"' if isinstance(k, str) else ObjUtil.toStr(k)
-            vStr = ObjUtil.toCode(v) if hasattr(ObjUtil, 'toCode') else ObjUtil.toStr(v)
+            kStr = f'"{k}"' if isinstance(k, str) else ObjUtil.to_str(k)
+            vStr = ObjUtil.to_code(v) if hasattr(ObjUtil, 'to_code') else ObjUtil.to_str(v)
             items.append(f"{kStr}:{vStr}")
         return f"{typeSig}[" + ", ".join(items) + "]"
 
@@ -792,9 +792,9 @@ class Map(Obj, MutableMapping):
         f(self)
         return self
 
-    def literalEncode(self, out):
+    def literal_encode(self, out):
         """Encode for serialization"""
-        out.writeMap(self)
+        out.write_map(self)
 
 
 #################################################################
@@ -817,14 +817,14 @@ class ReadOnlyMap(Map):
         self._caseInsensitive = source._caseInsensitive
         self._def = source._def
 
-    def _checkReadonly(self):
+    def _check_readonly(self):
         from .Err import ReadonlyErr
         raise ReadonlyErr("Map is read-only")
 
-    def isRO(self):
+    def is_ro(self):
         return True
 
-    def isRW(self):
+    def is_rw(self):
         return False
 
     def ro(self):

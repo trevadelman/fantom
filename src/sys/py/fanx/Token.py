@@ -45,7 +45,7 @@ class Token:
     JAVA_FFI = 28        # [java]
 
     @staticmethod
-    def isLiteral(type_):
+    def is_literal(type_):
         """Check if token type is a literal value."""
         return Token.BOOL_LITERAL <= type_ <= Token.NULL_LITERAL
 
@@ -53,11 +53,11 @@ class Token:
     def keyword(type_):
         """Get keyword string for keyword tokens."""
         if Token.AS <= type_ <= Token.USING:
-            return Token.toString(type_)
+            return Token.to_string(type_)
         return None
 
     @staticmethod
-    def toString(type_):
+    def to_string(type_):
         """Get string representation of token type."""
         names = {
             Token.EOF: "end of file",

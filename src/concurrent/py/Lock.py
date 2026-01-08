@@ -22,7 +22,7 @@ class Lock(Obj):
         return Lock()
 
     @staticmethod
-    def makeReentrant():
+    def make_reentrant():
         """Construct mutual exclusion lock (reentrant)."""
         return Lock()
 
@@ -38,7 +38,7 @@ class Lock(Obj):
             from fan.sys.Err import Err
             raise Err(f"Cannot unlock: {e}")
 
-    def tryLock(self, timeout=None):
+    def try_lock(self, timeout=None):
         """Acquire the lock if free, return True. Otherwise return False.
 
         If timeout is non-null, block up to timeout waiting for lock.
@@ -48,7 +48,7 @@ class Lock(Obj):
             return self._lock.acquire(blocking=False)
         else:
             # Block with timeout
-            timeout_secs = timeout.toMillis() / 1000.0 if hasattr(timeout, 'toMillis') else float(timeout) / 1000.0
+            timeout_secs = timeout.to_millis() / 1000.0 if hasattr(timeout, 'to_millis') else float(timeout) / 1000.0
             return self._lock.acquire(timeout=timeout_secs)
 
     def __enter__(self):
@@ -61,11 +61,11 @@ class Lock(Obj):
         self.unlock()
         return False  # Don't suppress exceptions
 
-    def toStr(self):
+    def to_str(self):
         return "Lock"
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()
 
 
 # Type metadata registration for reflection
@@ -74,7 +74,7 @@ from fan.sys.Param import Param
 
 _t = Type.find('concurrent::Lock')
 _t.tf_({'sys::Js': {}})
-_t.am_('makeReentrant', 265, 'concurrent::Lock', [], {})
+_t.am_('make_reentrant', 265, 'concurrent::Lock', [], {})
 _t.am_('lock', 1, 'sys::Void', [], {})
 _t.am_('unlock', 1, 'sys::Void', [], {})
-_t.am_('tryLock', 1, 'sys::Bool', [Param('timeout', Type.find('sys::Duration?'), True)], {})
+_t.am_('try_lock', 1, 'sys::Bool', [Param('timeout', Type.find('sys::Duration?'), True)], {})

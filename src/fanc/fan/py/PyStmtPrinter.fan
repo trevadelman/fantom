@@ -581,8 +581,8 @@ class PyStmtPrinter : PyPrinter
     unindent
     nl
 
-    // Wrap the closure with Func.makeClosure for proper Fantom Func methods
-    w("_closure_${closureId} = Func.makeClosure({")
+    // Wrap the closure with Func.make_closure for proper Fantom Func methods
+    w("_closure_${closureId} = Func.make_closure({")
 
     // Returns type
     retType := sig?.returns?.signature ?: "sys::Void"

@@ -27,7 +27,7 @@ class Err(Exception, Obj):
     def cause(self):
         return self._cause
 
-    def toStr(self):
+    def to_str(self):
         # Use Fantom qname format
         qname = self.typeof().qname()
         if self._msg:
@@ -37,28 +37,28 @@ class Err(Exception, Obj):
     def trace(self, out=None, options=None):
         """Print stack trace to output stream (default: Env.cur.out)"""
         from .ObjUtil import ObjUtil
-        trace_str = self.traceToStr()
+        trace_str = self.trace_to_str()
         if out is None:
             ObjUtil.echo(trace_str)
         else:
             # out is an OutStream - use writeChars or print
-            if hasattr(out, 'printLine'):
-                out.printLine(trace_str)
-            elif hasattr(out, 'writeChars'):
-                out.writeChars(trace_str + "\n")
+            if hasattr(out, 'print_line'):
+                out.print_line(trace_str)
+            elif hasattr(out, 'write_chars'):
+                out.write_chars(trace_str + "\n")
             elif hasattr(out, 'print'):
                 out.print(trace_str + "\n")
             else:
                 out.write(trace_str.encode('utf-8') + b'\n')
         return self
 
-    def traceToStr(self):
+    def trace_to_str(self):
         """Return stack trace as string"""
         import traceback
         import sys
 
         # Build trace string
-        s = self.toStr()
+        s = self.to_str()
 
         # Add Python stack trace
         tb = getattr(self, '__traceback__', None)
@@ -68,18 +68,18 @@ class Err(Exception, Obj):
 
         # Add cause if present
         if self._cause:
-            if hasattr(self._cause, 'traceToStr'):
-                s += "\n  Caused by: " + self._cause.traceToStr()
+            if hasattr(self._cause, 'trace_to_str'):
+                s += "\n  Caused by: " + self._cause.trace_to_str()
             else:
                 s += f"\n  Caused by: {self._cause}"
 
         return s
 
-    def isImmutable(self):
+    def is_immutable(self):
         """Err objects are always immutable"""
         return True
 
-    def toImmutable(self):
+    def to_immutable(self):
         """Err objects are already immutable, return self"""
         return self
 
@@ -90,14 +90,14 @@ class Err(Exception, Obj):
         return -1 if self._msg < that._msg else (1 if self._msg > that._msg else 0)
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()
 
 
 class ParseErr(Err):
     """Parse error"""
 
     @staticmethod
-    def makeStr(type_name, s):
+    def make_str(type_name, s):
         return ParseErr(f"Invalid {type_name}: '{s}'")
 
 
@@ -168,7 +168,7 @@ class IOErr(Err):
     def make(msg=None, cause=None):
         return IOErr(msg, cause)
 
-    def isImmutable(self):
+    def is_immutable(self):
         return True
 
 

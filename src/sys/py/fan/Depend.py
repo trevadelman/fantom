@@ -28,7 +28,7 @@ class Depend(Obj):
         self._constraints = constraints or []
 
     @staticmethod
-    def fromStr(s, checked=True):
+    def from_str(s, checked=True):
         """Parse a Depend from string like 'foo 1.0-2.0'"""
         try:
             if not s or not s.strip():
@@ -77,23 +77,23 @@ class Depend(Obj):
                     if constraint_str.endswith('+'):
                         # Plus constraint: version or higher
                         ver_str = constraint_str[:-1].strip()
-                        Depend._validateVersionStr(ver_str)
-                        ver = Version.fromStr(ver_str)
+                        Depend._validate_version_str(ver_str)
+                        ver = Version.from_str(ver_str)
                         constraints.append((ver, None, Depend._PLUS))
                     elif '-' in constraint_str:
                         # Range constraint
                         parts = constraint_str.split('-', 1)
                         lo_str = parts[0].strip()
                         hi_str = parts[1].strip()
-                        Depend._validateVersionStr(lo_str)
-                        Depend._validateVersionStr(hi_str)
-                        lo = Version.fromStr(lo_str)
-                        hi = Version.fromStr(hi_str)
+                        Depend._validate_version_str(lo_str)
+                        Depend._validate_version_str(hi_str)
+                        lo = Version.from_str(lo_str)
+                        hi = Version.from_str(hi_str)
                         constraints.append((lo, hi, Depend._RANGE))
                     else:
                         # Simple constraint: exact version
-                        Depend._validateVersionStr(constraint_str)
-                        ver = Version.fromStr(constraint_str)
+                        Depend._validate_version_str(constraint_str)
+                        ver = Version.from_str(constraint_str)
                         constraints.append((ver, None, Depend._SIMPLE))
             else:
                 raise ValueError("Missing version")
@@ -109,7 +109,7 @@ class Depend(Obj):
             return None
 
     @staticmethod
-    def _validateVersionStr(s):
+    def _validate_version_str(s):
         """Validate version string format"""
         if not s:
             raise ValueError("Empty version")
@@ -133,7 +133,7 @@ class Depend(Obj):
             return None
         return self._constraints[index][0]
 
-    def endVersion(self, index=None):
+    def end_version(self, index=None):
         """Get end version at index (for range constraints), null for simple/plus"""
         if index is None:
             index = 0
@@ -144,7 +144,7 @@ class Depend(Obj):
             return constraint[1]
         return None
 
-    def isSimple(self, index=None):
+    def is_simple(self, index=None):
         """Check if constraint at index is a simple exact version"""
         if index is None:
             index = 0
@@ -152,7 +152,7 @@ class Depend(Obj):
             return False
         return self._constraints[index][2] == Depend._SIMPLE
 
-    def isPlus(self, index=None):
+    def is_plus(self, index=None):
         """Check if constraint at index is a plus (or higher) constraint"""
         if index is None:
             index = 0
@@ -160,7 +160,7 @@ class Depend(Obj):
             return False
         return self._constraints[index][2] == Depend._PLUS
 
-    def isRange(self, index=None):
+    def is_range(self, index=None):
         """Check if constraint at index is a range constraint"""
         if index is None:
             index = 0
@@ -168,7 +168,7 @@ class Depend(Obj):
             return False
         return self._constraints[index][2] == Depend._RANGE
 
-    def match(self, version):
+    def match_(self, version):
         """Check if version matches this dependency.
 
         For each constraint type:
@@ -184,20 +184,20 @@ class Depend(Obj):
         for start_ver, end_ver, ctype in self._constraints:
             if ctype == Depend._SIMPLE:
                 # Simple: version segments must match constraint as prefix
-                if Depend._versionMatchesPrefix(version, start_ver):
+                if Depend._version_matches_prefix(version, start_ver):
                     return True
             elif ctype == Depend._PLUS:
                 # Plus: version >= start (missing segments treated as 0)
-                if Depend._versionGtePlus(version, start_ver):
+                if Depend._version_gte_plus(version, start_ver):
                     return True
             elif ctype == Depend._RANGE:
                 # Range: version must satisfy start prefix AND be <= end
-                if Depend._versionGteRange(version, start_ver) and Depend._versionLte(version, end_ver):
+                if Depend._version_gte_range(version, start_ver) and Depend._version_lte(version, end_ver):
                     return True
         return False
 
     @staticmethod
-    def _versionMatchesPrefix(version, prefix):
+    def _version_matches_prefix(version, prefix):
         """Check if version matches prefix segments"""
         v_segs = version.segments()
         p_segs = prefix.segments()
@@ -211,7 +211,7 @@ class Depend(Obj):
         return True
 
     @staticmethod
-    def _versionGtePlus(version, other):
+    def _version_gte_plus(version, other):
         """Check if version >= other for Plus constraints.
 
         Missing segments are treated as 0.
@@ -230,7 +230,7 @@ class Depend(Obj):
         return True  # Equal
 
     @staticmethod
-    def _versionGteRange(version, other):
+    def _version_gte_range(version, other):
         """Check if version >= other for Range constraint start.
 
         If version's available segments are clearly greater, it matches.
@@ -260,7 +260,7 @@ class Depend(Obj):
         return True  # Equal or version has more segments
 
     @staticmethod
-    def _versionLte(version, other):
+    def _version_lte(version, other):
         """Check if version <= other (using prefix matching for ranges)"""
         v_segs = version.segments()
         o_segs = other.segments()
@@ -276,7 +276,7 @@ class Depend(Obj):
                 return False
         return True  # Equal up to prefix length
 
-    def toStr(self):
+    def to_str(self):
         """String representation"""
         if not self._constraints:
             return self._name
@@ -296,33 +296,33 @@ class Depend(Obj):
         """Test equality"""
         if not isinstance(other, Depend):
             return False
-        return self.toStr() == other.toStr()
+        return self.to_str() == other.to_str()
 
     def hash_(self):
         """Hash code"""
-        return hash(self.toStr())
+        return hash(self.to_str())
 
     @property
     def hash(self):
         """Hash property for Fantom compatibility"""
-        return self.toStr().__hash__()
+        return self.to_str().__hash__()
 
     def __hash__(self):
         """Python hash"""
-        return hash(self.toStr())
+        return hash(self.to_str())
 
     def typeof(self):
         """Return the Fantom type of this object."""
         from fan.sys.Type import Type
         return Type.find("sys::Depend")
 
-    def literalEncode(self, encoder):
+    def literal_encode(self, encoder):
         """Encode for serialization.
 
         Simple types serialize as: Type("toStr")
         Example: sys::Depend("foo 1.2-3.4")
         """
-        encoder.wType(self.typeof())
+        encoder.w_type(self.typeof())
         encoder.w('(')
-        encoder.wStrLiteral(self.toStr(), '"')
+        encoder.w_str_literal(self.to_str(), '"')
         encoder.w(')')

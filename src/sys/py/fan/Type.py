@@ -6,6 +6,76 @@
 from .Obj import Obj
 
 
+#########################################################################
+# Name Conversion Helpers (Two-Pass Lookup Approach)
+#########################################################################
+
+def _camel_to_snake(name):
+    """Convert camelCase to snake_case.
+
+    This is a Python port of PyUtil.toSnakeCase() from the transpiler.
+    Used by Type.slot() for two-pass lookup to accept both Fantom names
+    (camelCase) and Python names (snake_case).
+
+    Examples:
+        fromStr -> from_str
+        isEmpty -> is_empty
+        XMLParser -> xml_parser
+        getHTTPResponse -> get_http_response
+        utf16BE -> utf16_be
+    """
+    # Fast path: if no uppercase, return as-is
+    if not any(c.isupper() for c in name):
+        return name
+
+    result = []
+    prev = ''
+    for i, ch in enumerate(name):
+        if ch.isupper():
+            next_ch = name[i + 1] if i + 1 < len(name) else ''
+            prev_is_lower = prev.islower()
+            prev_is_digit = prev.isdigit()
+            next_is_lower = next_ch.islower()
+            # Add underscore before uppercase if:
+            # 1. Previous char was lowercase (camelCase boundary): toStr -> to_str
+            # 2. We're in an acronym and next char is lowercase (end of acronym): XMLParser -> xml_parser
+            # 3. Previous char was a digit (number to uppercase): utf16BE -> utf16_be
+            if i > 0 and (prev_is_lower or prev_is_digit or (prev.isupper() and next_is_lower)):
+                result.append('_')
+            result.append(ch.lower())
+        else:
+            result.append(ch)
+        prev = ch
+    return ''.join(result)
+
+
+def _snake_to_camel(name):
+    """Convert snake_case to camelCase.
+
+    Used by ObjEncoder for cross-platform serialization compatibility.
+    Reverses the _camel_to_snake() transformation.
+
+    Examples:
+        from_str -> fromStr
+        is_empty -> isEmpty
+        xml_parser -> xmlParser
+        hash_ -> hash (removes Python builtin escape)
+    """
+    # Handle trailing underscore (Python builtin escape)
+    # These are Python reserved words/builtins that got _ appended
+    _PYTHON_BUILTINS = {'hash', 'print', 'abs', 'min', 'max', 'set', 'map',
+                        'list', 'dir', 'oct', 'open', 'vars', 'match',
+                        'all', 'any', 'pow', 'round'}
+    if name.endswith('_') and name[:-1] in _PYTHON_BUILTINS:
+        name = name[:-1]
+
+    # Split by underscore and capitalize each part except first
+    parts = name.split('_')
+    if len(parts) == 1:
+        return name
+    return parts[0] + ''.join(p.capitalize() for p in parts[1:] if p)
+
+
 class Type(Obj):
     """Type class - Fantom type reflection"""
 
@@ -150,7 +220,7 @@ class Type(Obj):
             base_type = Type.find(base_qname, checked)
             if base_type is None:
                 return None
-            nullable_type = base_type.toNullable()
+            nullable_type = base_type.to_nullable()
             Type._cache[qname] = nullable_type
             return nullable_type
 
@@ -171,7 +241,7 @@ class Type(Obj):
             param_types = []
             if params_str:
                 # Split by comma, but be careful with nested types
-                params = Type._splitParams(params_str)
+                params = Type._split_params(params_str)
                 for p in params:
                     p = p.strip()
                     if p:
@@ -272,7 +342,7 @@ class Type(Obj):
                 from .Pod import Pod
                 pod = Pod.find(pod_name, False)
                 if pod is not None:
-                    pod._registerType(t)
+                    pod._register_type(t)
 
         # Try to import the module to trigger tf_() metadata registration
         # This ensures that Type.find('pod::Name') has proper type flags
@@ -319,15 +389,15 @@ class Type(Obj):
         if self._qname in Type._BASE_TYPES:
             return Type.find(Type._BASE_TYPES[self._qname])
         # Check if this is an enum by looking up the class
-        if self.isEnum():
+        if self.is_enum():
             return Type.find("sys::Enum")
         # Check if this is an Err subclass
-        if self._qname != "sys::Err" and self.isErr():
+        if self._qname != "sys::Err" and self.is_err():
             # Find the immediate parent Err type
-            return self._findErrBase()
+            return self._find_err_base()
         return Type.find("sys::Obj")
 
-    def isErr(self):
+    def is_err(self):
         """Check if this type is Err or an Err subclass"""
         if self._qname == "sys::Err":
             return True
@@ -359,7 +429,7 @@ class Type(Obj):
             pass
         return False
 
-    def _findErrBase(self):
+    def _find_err_base(self):
         """Find the immediate Err parent type for an Err subclass"""
         try:
             if "::" in self._qname:
@@ -419,16 +489,16 @@ class Type(Obj):
             return ""
         if self._qname == "sys::Duration":
             from .Duration import Duration
-            return Duration.defVal()
+            return Duration.def_val()
         if self._qname == "sys::Date":
             from .DateTime import Date
-            return Date.defVal()
+            return Date.def_val()
         if self._qname == "sys::DateTime":
             from .DateTime import DateTime
-            return DateTime.defVal()
+            return DateTime.def_val()
         if self._qname == "sys::Time":
             from .DateTime import Time
-            return Time.defVal()
+            return Time.def_val()
 
         # Try to import and instantiate the class
         if "::" in self._qname:
@@ -502,21 +572,21 @@ class Type(Obj):
         return False
 
     # Nullable support
-    def isNullable(self):
+    def is_nullable(self):
         return False
 
-    def toNullable(self):
+    def to_nullable(self):
         """Return nullable version of this type"""
         if self._nullable is None:
             self._nullable = NullableType(self)
         return self._nullable
 
-    def toNonNullable(self):
+    def to_non_nullable(self):
         """Return non-nullable version of this type"""
         return self
 
     # Generic/List/Map support
-    def toListOf(self):
+    def to_list_of(self):
         """Return list type with this as element type (e.g., Int -> Int[])"""
         if self._listOf is None:
             self._listOf = ListType(self)
@@ -524,19 +594,19 @@ class Type(Obj):
             Type._cache[self._listOf.signature()] = self._listOf
         return self._listOf
 
-    def isGenericType(self):
+    def is_generic_type(self):
         return False
 
-    def isGenericInstance(self):
+    def is_generic_instance(self):
         return False
 
-    def isGenericParameter(self):
+    def is_generic_parameter(self):
         return False
 
-    def isImmutable(self):
+    def is_immutable(self):
         """Types are always immutable"""
 
-    def literalEncode(self, out):
+    def literal_encode(self, out):
         """Encode for serialization.
 
         Type literals are written as: sys::Str#
@@ -545,30 +615,30 @@ class Type(Obj):
         out.w("#")
         return True
 
-    def toImmutable(self):
+    def to_immutable(self):
         """Types are already immutable, return self"""
         return self
 
-    def toStr(self):
+    def to_str(self):
         return self.signature()
 
-    def toLocale(self):
+    def to_locale(self):
         """Return locale string for type - same as signature for now"""
         return self.signature()
 
     # Type flags
-    def isVal(self):
+    def is_val(self):
         """Check if value type (Bool, Int, Float)"""
-        base = self.toNonNullable()
+        base = self.to_non_nullable()
         return base._qname in Type._VAL_TYPES
 
-    def isAbstract(self):
+    def is_abstract(self):
         return self._qname in Type._ABSTRACT_TYPES
 
-    def isClass(self):
-        return not self.isMixin() and not self.isEnum()
+    def is_class(self):
+        return not self.is_mixin() and not self.is_enum()
 
-    def isEnum(self):
+    def is_enum(self):
         # Check if this is a known enum type
         if self._qname in Type._ENUM_TYPES:
             return True
@@ -596,24 +666,24 @@ class Type(Obj):
             pass
         return False
 
-    def isFacet(self):
+    def is_facet(self):
         """Check if this type is a facet. Uses transpiler flags if available."""
         # Check transpiler-provided flag (0x80000 = Facet)
         if self._type_flags & 0x80000:
             return True
         return False
 
-    def isFinal(self):
+    def is_final(self):
         return self._qname in Type._FINAL_TYPES
 
-    def isInternal(self):
+    def is_internal(self):
         """Check if this type is internal. Uses transpiler flags if available."""
         # Check transpiler-provided flag (0x8 = Internal)
         if self._type_flags & 0x00000008:
             return True
         return False
 
-    def isMixin(self):
+    def is_mixin(self):
         """Check if this type is a mixin. Uses transpiler flags if available."""
         # Check transpiler-provided flag (0x20000 = Mixin)
         if self._type_flags & 0x20000:
@@ -629,7 +699,7 @@ class Type(Obj):
         "sys::Float", "sys::Decimal", "sys::Num",
     }
 
-    def isConst(self):
+    def is_const(self):
         """Check if this type is a const class (immutable).
 
         Const classes are always immutable. This checks:
@@ -642,15 +712,15 @@ class Type(Obj):
         # For hand-written sys types, check known const types
         return self._qname in Type._CONST_TYPES
 
-    def isPublic(self):
+    def is_public(self):
         """Check if this type is public."""
         # Internal means not public
-        return not self.isInternal()
+        return not self.is_internal()
 
-    def isSynthetic(self):
+    def is_synthetic(self):
         return "$" in self._name
 
-    def isGeneric(self):
+    def is_generic(self):
         """Check if this is a generic type (List, Map, Func)"""
         return self._qname in Type._GENERIC_TYPES
 
@@ -664,7 +734,7 @@ class Type(Obj):
             t = Type.find(qname, False)
             if t is not None:
                 result.append(t)
-        return FanList.fromLiteral(result, "sys::Type").toImmutable()
+        return FanList.from_literal(result, "sys::Type").to_immutable()
 
     def inheritance(self):
         """Return inheritance chain from this type to Obj, including mixins.
@@ -678,7 +748,7 @@ class Type(Obj):
 
         # Handle Void as special case
         if self._qname == "sys::Void":
-            return FanList.fromLiteral([self], "sys::Type").toImmutable()
+            return FanList.from_literal([self], "sys::Type").to_immutable()
 
         seen = {self._qname}
         result = [self]
@@ -698,13 +768,13 @@ class Type(Obj):
                     seen.add(t._qname)
                     result.append(t)
 
-        return FanList.fromLiteral(result, "sys::Type").toImmutable()
+        return FanList.from_literal(result, "sys::Type").to_immutable()
 
     # Generic type support
     def params(self):
         """Return generic parameters map - empty by default, always read-only"""
         from .Map import Map
-        return Map.fromLiteral([], [], "sys::Str", "sys::Type").toImmutable()
+        return Map.from_literal([], [], "sys::Str", "sys::Type").to_immutable()
 
     def parameterize(self, params):
         """Create parameterized type from parameter map.
@@ -735,7 +805,7 @@ class Type(Obj):
             for key in params:
                 if key != "V":
                     raise ArgErr.make(f"Unknown parameter '{key}' for List")
-            return v_type.toListOf()
+            return v_type.to_list_of()
 
         elif self._qname == "sys::Map":
             # Map requires K and V parameters
@@ -780,12 +850,12 @@ class Type(Obj):
 
         raise UnsupportedErr.make("parameterize not supported on " + self._qname)
 
-    def emptyList(self):
+    def empty_list(self):
         """Return empty immutable list of this type (e.g., Str.emptyList returns Str[])"""
         if self._emptyList is None:
             from .List import List as FanList
             # Create empty list with this type as element type
-            self._emptyList = FanList.fromLiteral([], self._qname).toImmutable()
+            self._emptyList = FanList.from_literal([], self._qname).to_immutable()
         return self._emptyList
 
     #########################################################################
@@ -809,10 +879,10 @@ class Type(Obj):
     # In Python they're implemented as @staticmethod functions, but in Fantom they're fields
     _SYS_CONST_FIELDS = {
         "sys::Float": {"pi", "e", "posInf", "negInf", "nan"},
-        "sys::Int": {"maxVal", "minVal", "defVal"},
-        "sys::Duration": {"defVal", "minVal", "maxVal"},
-        "sys::Str": {"defVal"},
-        "sys::Bool": {"defVal"},
+        "sys::Int": {"maxVal", "minVal", "def_val"},
+        "sys::Duration": {"def_val", "minVal", "maxVal"},
+        "sys::Str": {"def_val"},
+        "sys::Bool": {"def_val"},
     }
 
     def _discover_sys_metadata(self):
@@ -1074,7 +1144,7 @@ class Type(Obj):
         # fromStr patterns (nullable)
         if name == 'fromstr':
             # Return nullable version of parent type
-            return self.toNullable()
+            return self.to_nullable()
 
         # defVal pattern
         if name == 'defval':
@@ -1125,7 +1195,7 @@ class Type(Obj):
 
         V = GenericParamType.get("V")
         L = GenericParamType.get("L")  # L represents "this list type"
-        V_nullable = V.toNullable()
+        V_nullable = V.to_nullable()
         methods = []
 
         # get(Int index): V
@@ -1164,11 +1234,11 @@ class Type(Obj):
 
         # map(|V,Int->R| f): R[]
         mapFuncType = FuncType([V, Type.find("sys::Int")], R)
-        methods.append(Method(self, "map", 0x0001, R.toListOf(), [Param("f", mapFuncType, False)], {}))
+        methods.append(Method(self, "map", 0x0001, R.to_list_of(), [Param("f", mapFuncType, False)], {}))
 
         # flatMap(|V,Int->R[]| f): R[]
-        flatMapFuncType = FuncType([V, Type.find("sys::Int")], R.toListOf())
-        methods.append(Method(self, "flatMap", 0x0001, R.toListOf(), [Param("f", flatMapFuncType, False)], {}))
+        flatMapFuncType = FuncType([V, Type.find("sys::Int")], R.to_list_of())
+        methods.append(Method(self, "flatMap", 0x0001, R.to_list_of(), [Param("f", flatMapFuncType, False)], {}))
 
         return methods
 
@@ -1185,7 +1255,7 @@ class Type(Obj):
         K = GenericParamType.get("K")
         V = GenericParamType.get("V")
         M = GenericParamType.get("M")  # M represents "this map type"
-        V_nullable = V.toNullable()
+        V_nullable = V.to_nullable()
         methods = []
 
         # get(K, V? def): V?
@@ -1205,9 +1275,9 @@ class Type(Obj):
         # isEmpty: Bool
         methods.append(Method(self, "isEmpty", 0x0001, Type.find("sys::Bool"), [], {}))
         # keys: K[]
-        methods.append(Method(self, "keys", 0x0001, K.toListOf(), [], {}))
+        methods.append(Method(self, "keys", 0x0001, K.to_list_of(), [], {}))
         # vals: V[]
-        methods.append(Method(self, "vals", 0x0001, V.toListOf(), [], {}))
+        methods.append(Method(self, "vals", 0x0001, V.to_list_of(), [], {}))
         # each(|V,K| f): Void - closure receives (val, key) - V not V?
         eachFuncType = FuncType([V, K], Type.find("sys::Void"))
         methods.append(Method(self, "each", 0x0001, Type.find("sys::Void"), [Param("f", eachFuncType, False)], {}))
@@ -1230,6 +1300,9 @@ class Type(Obj):
         - Bool isImmutable()
         - Type typeof()
         - static Void echo(Obj? x := "")
+
+        Note: Slot names use snake_case (Python convention) to match transpiled code.
+        Type.slot() lookup handles camelCase -> snake_case conversion.
         """
         from .Method import Method
         from .Param import Param
@@ -1249,28 +1322,28 @@ class Type(Obj):
         methods.append(Method(self, "compare", 0x1001, Type.find("sys::Int"),
                               [Param("that", Type.find("sys::Obj"), False)], {}))
 
-        # hash(): Int
-        methods.append(Method(self, "hash", 0x1001, Type.find("sys::Int"), [], {}))
+        # hash(): Int - uses hash_ because hash is a Python builtin
+        methods.append(Method(self, "hash_", 0x1001, Type.find("sys::Int"), [], {}))
 
-        # toStr(): Str
-        methods.append(Method(self, "toStr", 0x1001, Type.find("sys::Str"), [], {}))
+        # to_str(): Str
+        methods.append(Method(self, "to_str", 0x1001, Type.find("sys::Str"), [], {}))
 
         # trap(Str name, Obj?[]? args): Obj?
         methods.append(Method(self, "trap", 0x1001, Type.find("sys::Obj?"),
                               [Param("name", Type.find("sys::Str"), False),
                                Param("args", Type.find("sys::Obj?[]?"), True)], {}))
 
-        # isImmutable(): Bool
-        methods.append(Method(self, "isImmutable", 0x0001, Type.find("sys::Bool"), [], {}))
+        # is_immutable(): Bool
+        methods.append(Method(self, "is_immutable", 0x0001, Type.find("sys::Bool"), [], {}))
 
-        # toImmutable(): Obj
-        methods.append(Method(self, "toImmutable", 0x0001, self, [], {}))
+        # to_immutable(): Obj
+        methods.append(Method(self, "to_immutable", 0x0001, self, [], {}))
 
         # typeof(): Type
         methods.append(Method(self, "typeof", 0x0001, Type.find("sys::Type"), [], {}))
 
-        # with(|This| f): This
-        methods.append(Method(self, "with", 0x0001, self,
+        # with(|This| f): This - 'with' is a Python keyword so it's with_
+        methods.append(Method(self, "with_", 0x0001, self,
                               [Param("f", Type.find("sys::Func"), False)], {}))
 
         # echo(Obj? x): Void - static
@@ -1563,22 +1636,59 @@ class Type(Obj):
         """Return all slots as a read-only list."""
         self._reflect()
         from .List import List as FanList
-        return FanList.fromLiteral(self._slot_list, "sys::Slot").toImmutable()
+        return FanList.from_literal(self._slot_list, "sys::Slot").to_immutable()
 
     def slot(self, name, checked=True):
-        """Find slot by name.
+        """Find slot by name using two-pass lookup.
+
+        This method accepts both Fantom names (camelCase) and Python names
+        (snake_case) for slot lookup. This enables:
+        1. Serialization to work (ObjDecoder passes Fantom names from files)
+        2. Transpiled code to work (uses snake_case)
+        3. Existing code using camelCase to continue working
 
         Args:
-            name: Slot name to find
+            name: Slot name to find (camelCase or snake_case)
             checked: If True, raise UnknownSlotErr if not found
 
         Returns:
             Slot instance or None (if checked=False and not found)
         """
         self._reflect()
+
+        # First pass: exact match (works for both snake_case and camelCase if stored)
         slot = self._slots_by_name.get(name)
         if slot is not None:
             return slot
+
+        # Second pass: try camelCase -> snake_case conversion
+        # This handles the case where name is a Fantom name (e.g., "fromStr")
+        # but the slot is registered with Python name (e.g., "from_str")
+        snake_name = _camel_to_snake(name)
+        if snake_name != name:
+            slot = self._slots_by_name.get(snake_name)
+            if slot is not None:
+                return slot
+
+        # Third pass: try Python builtin escape (bidirectional)
+        # This handles both directions:
+        #   hash -> hash_ (Fantom name to Python name)
+        #   hash_ -> hash (Python name to Fantom name, for hand-written sys types)
+        # Python reserved words/builtins get _ appended in the transpiler
+        _PYTHON_BUILTINS = {'hash', 'print', 'abs', 'min', 'max', 'set', 'map',
+                            'list', 'dir', 'oct', 'open', 'vars', 'match',
+                            'all', 'any', 'pow', 'round', 'type', 'id', 'and', 'or', 'not'}
+        if name in _PYTHON_BUILTINS:
+            # Fantom name -> Python name (hash -> hash_)
+            slot = self._slots_by_name.get(name + '_')
+            if slot is not None:
+                return slot
+        elif name.endswith('_') and name[:-1] in _PYTHON_BUILTINS:
+            # Python name -> Fantom name (hash_ -> hash)
+            slot = self._slots_by_name.get(name[:-1])
+            if slot is not None:
+                return slot
+
         if checked:
             from .Err import UnknownSlotErr
             raise UnknownSlotErr.make(f"{self._qname}.{name}")
@@ -1588,7 +1698,7 @@ class Type(Obj):
         """Return all fields as a read-only list."""
         self._reflect()
         from .List import List as FanList
-        return FanList.fromLiteral(self._field_list, "sys::Field").toImmutable()
+        return FanList.from_literal(self._field_list, "sys::Field").to_immutable()
 
     def field(self, name, checked=True):
         """Find field by name.
@@ -1615,7 +1725,7 @@ class Type(Obj):
         """Return all methods as a read-only list."""
         self._reflect()
         from .List import List as FanList
-        return FanList.fromLiteral(self._method_list, "sys::Method").toImmutable()
+        return FanList.from_literal(self._method_list, "sys::Method").to_immutable()
 
     def method(self, name, checked=True):
         """Find method by name.
@@ -1638,7 +1748,7 @@ class Type(Obj):
             raise UnknownSlotErr.make(f"{self._qname}.{name} is not a method")
         return None
 
-    def hasFacet(self, facetType):
+    def has_facet(self, facetType):
         """Check if this type has a facet.
 
         Args:
@@ -1684,7 +1794,7 @@ class Type(Obj):
         facet_type = Type.find(facet_qname, True)
 
         # For marker facets (no values), return the singleton defVal() instance
-        # This ensures identity equality: type.facet(FacetM1#) === FacetM1.defVal()
+        # This ensures identity equality: type.facet(FacetM1#) === FacetM1.def_val()
         if not facet_data:
             # Try to import the facet class and get defVal()
             try:
@@ -1693,8 +1803,8 @@ class Type(Obj):
                     pod, name = parts
                     module = __import__(f'fan.{pod}.{name}', fromlist=[name])
                     cls = getattr(module, name, None)
-                    if cls is not None and hasattr(cls, 'defVal'):
-                        return cls.defVal()
+                    if cls is not None and hasattr(cls, 'def_val'):
+                        return cls.def_val()
             except:
                 pass
             # Fallback to FacetInstance
@@ -1774,7 +1884,7 @@ class Type(Obj):
             result.append(FacetInstance(facet_type, facet_data))
 
         # Return immutable Fantom List with Facet element type
-        self._facets_list = FanList.fromLiteral(result, "sys::Facet").toImmutable()
+        self._facets_list = FanList.from_literal(result, "sys::Facet").to_immutable()
         return self._facets_list
 
     def _collect_inherited_facets(self, facet_map, visited):
@@ -1864,7 +1974,7 @@ class Type(Obj):
         return f"Type({self._qname})"
 
     @staticmethod
-    def _splitParams(s):
+    def _split_params(s):
         """Split comma-separated parameter types, handling nested generics"""
         result = []
         depth = 0
@@ -1912,13 +2022,13 @@ class NullableType(Type):
     def base(self):
         return self._root.base()
 
-    def isNullable(self):
+    def is_nullable(self):
         return True
 
-    def toNullable(self):
+    def to_nullable(self):
         return self
 
-    def toNonNullable(self):
+    def to_non_nullable(self):
         return self._root
 
     def is_(self, that):
@@ -1927,13 +2037,13 @@ class NullableType(Type):
     def fits(self, that):
         return self._root.fits(that)
 
-    def isGenericParameter(self):
-        return self._root.isGenericParameter()
+    def is_generic_parameter(self):
+        return self._root.is_generic_parameter()
 
-    def isVal(self):
-        return self._root.isVal()
+    def is_val(self):
+        return self._root.is_val()
 
-    def toListOf(self):
+    def to_list_of(self):
         """Return list type with this as element type"""
         return ListType(self)
 
@@ -1968,24 +2078,24 @@ class ListType(Type):
     def base(self):
         return Type.find("sys::List")
 
-    def isNullable(self):
+    def is_nullable(self):
         return False
 
-    def toNullable(self):
+    def to_nullable(self):
         if self._nullable is None:
             self._nullable = NullableType(self)
         return self._nullable
 
-    def toNonNullable(self):
+    def to_non_nullable(self):
         return self
 
-    def isGenericInstance(self):
+    def is_generic_instance(self):
         return True
 
     def params(self):
         """Return generic parameters map for List<V>: {V: elem_type, L: this}"""
         from .Map import Map
-        return Map.fromLiteral(["V", "L"], [self._v, self], "sys::Str", "sys::Type").toImmutable()
+        return Map.from_literal(["V", "L"], [self._v, self], "sys::Str", "sys::Type").to_immutable()
 
     def is_(self, that):
         """Check if this list type is assignable to that type"""
@@ -2040,7 +2150,7 @@ class ParameterizedListMethod:
         self._v = elemType  # V (value/element type)
         self._owner = owner
 
-    def _substituteType(self, t):
+    def _substitute_type(self, t):
         """Substitute V, L, and R in a type signature.
 
         V -> element type (value type)
@@ -2056,7 +2166,7 @@ class ParameterizedListMethod:
         if sig == "sys::V" or sig == "V":
             return self._v
         if sig == "sys::V?" or sig == "V?":
-            return self._v.toNullable() if hasattr(self._v, 'toNullable') else self._v
+            return self._v.to_nullable() if hasattr(self._v, 'to_nullable') else self._v
 
         # Check for L (list type itself)
         if sig == "sys::L" or sig == "L":
@@ -2072,13 +2182,13 @@ class ParameterizedListMethod:
         if isinstance(t, FuncType):
             new_params = []
             for p in t._params:
-                new_params.append(self._substituteType(p))
-            new_ret = self._substituteType(t._ret)
+                new_params.append(self._substitute_type(p))
+            new_ret = self._substitute_type(t._ret)
             return FuncType(new_params, new_ret)
 
         # Handle ListType - substitute V/R in element type
         if isinstance(t, ListType):
-            new_elem = self._substituteType(t._v)
+            new_elem = self._substitute_type(t._v)
             if new_elem != t._v:
                 return ListType(new_elem)
             return t
@@ -2094,7 +2204,7 @@ class ParameterizedListMethod:
     def returns(self):
         """Return type with V substituted"""
         baseRet = self._base.returns()
-        return self._substituteType(baseRet)
+        return self._substitute_type(baseRet)
 
     def params(self):
         """Parameters with V substituted"""
@@ -2104,11 +2214,11 @@ class ParameterizedListMethod:
         # Return wrapper params that substitute types
         return [ParameterizedListParam(p, self) for p in baseParams]
 
-    def isStatic(self):
-        return self._base.isStatic() if hasattr(self._base, 'isStatic') else False
+    def is_static(self):
+        return self._base.is_static() if hasattr(self._base, 'is_static') else False
 
-    def isPublic(self):
-        return self._base.isPublic() if hasattr(self._base, 'isPublic') else True
+    def is_public(self):
+        return self._base.is_public() if hasattr(self._base, 'is_public') else True
 
     def call(self, *args):
         return self._base.call(*args)
@@ -2127,7 +2237,7 @@ class ParameterizedListParam:
     def type_(self):
         """Type with V substituted"""
         baseType = self._base.type_()
-        return self._method._substituteType(baseType)
+        return self._method._substitute_type(baseType)
 
 
 class MapType(Type):
@@ -2166,24 +2276,24 @@ class MapType(Type):
     def base(self):
         return Type.find("sys::Map")
 
-    def isNullable(self):
+    def is_nullable(self):
         return False
 
-    def toNullable(self):
+    def to_nullable(self):
         if self._nullable is None:
             self._nullable = NullableType(self)
         return self._nullable
 
-    def toNonNullable(self):
+    def to_non_nullable(self):
         return self
 
-    def isGenericInstance(self):
+    def is_generic_instance(self):
         return True
 
     def params(self):
         """Return generic parameters map for Map<K,V>: {K: key_type, V: val_type, M: this}"""
         from .Map import Map
-        return Map.fromLiteral(["K", "V", "M"], [self._k, self._v, self], "sys::Str", "sys::Type").toImmutable()
+        return Map.from_literal(["K", "V", "M"], [self._k, self._v, self], "sys::Str", "sys::Type").to_immutable()
 
     def is_(self, that):
         """Check if this map type is assignable to that type"""
@@ -2262,7 +2372,7 @@ class ParameterizedMethod:
         self._v = valType
         self._owner = owner
 
-    def _substituteType(self, t):
+    def _substitute_type(self, t):
         """Substitute K and V in a type signature"""
         if t is None:
             return t
@@ -2275,9 +2385,9 @@ class ParameterizedMethod:
         if sig == "sys::V" or sig == "V":
             return self._v
         if sig == "sys::K?" or sig == "K?":
-            return self._k.toNullable() if hasattr(self._k, 'toNullable') else self._k
+            return self._k.to_nullable() if hasattr(self._k, 'to_nullable') else self._k
         if sig == "sys::V?" or sig == "V?":
-            return self._v.toNullable() if hasattr(self._v, 'toNullable') else self._v
+            return self._v.to_nullable() if hasattr(self._v, 'to_nullable') else self._v
 
         # Check for M (map type itself)
         if sig == "sys::M" or sig == "M":
@@ -2287,13 +2397,13 @@ class ParameterizedMethod:
         if isinstance(t, FuncType):
             new_params = []
             for p in t._params:
-                new_params.append(self._substituteType(p))
-            new_ret = self._substituteType(t._ret)
+                new_params.append(self._substitute_type(p))
+            new_ret = self._substitute_type(t._ret)
             return FuncType(new_params, new_ret)
 
         # Handle ListType - substitute K/V in element type (e.g., K[] -> Int[])
         if isinstance(t, ListType):
-            new_elem = self._substituteType(t._v)
+            new_elem = self._substitute_type(t._v)
             if new_elem != t._v:
                 return ListType(new_elem)
             return t
@@ -2310,7 +2420,7 @@ class ParameterizedMethod:
     def returns(self):
         """Return type with K/V substituted"""
         baseRet = self._base.returns()
-        return self._substituteType(baseRet)
+        return self._substitute_type(baseRet)
 
     def params(self):
         """Parameters with K/V substituted"""
@@ -2320,11 +2430,11 @@ class ParameterizedMethod:
         # Return wrapper params that substitute types
         return [ParameterizedParam(p, self) for p in baseParams]
 
-    def isStatic(self):
-        return self._base.isStatic() if hasattr(self._base, 'isStatic') else False
+    def is_static(self):
+        return self._base.is_static() if hasattr(self._base, 'is_static') else False
 
-    def isPublic(self):
-        return self._base.isPublic() if hasattr(self._base, 'isPublic') else True
+    def is_public(self):
+        return self._base.is_public() if hasattr(self._base, 'is_public') else True
 
     def call(self, *args):
         return self._base.call(*args)
@@ -2343,7 +2453,7 @@ class ParameterizedParam:
     def type_(self):
         """Type with K/V substituted"""
         baseType = self._base.type_()
-        return self._method._substituteType(baseType)
+        return self._method._substitute_type(baseType)
 
 
 class ParameterizedField:
@@ -2358,7 +2468,7 @@ class ParameterizedField:
         self._v = valType
         self._owner = owner
 
-    def _substituteType(self, t):
+    def _substitute_type(self, t):
         """Substitute K and V in a type signature"""
         if t is None:
             return t
@@ -2371,9 +2481,9 @@ class ParameterizedField:
         if sig == "sys::V" or sig == "V":
             return self._v
         if sig == "sys::K?" or sig == "K?":
-            return self._k.toNullable() if hasattr(self._k, 'toNullable') else self._k
+            return self._k.to_nullable() if hasattr(self._k, 'to_nullable') else self._k
         if sig == "sys::V?" or sig == "V?":
-            return self._v.toNullable() if hasattr(self._v, 'toNullable') else self._v
+            return self._v.to_nullable() if hasattr(self._v, 'to_nullable') else self._v
 
         # Check for M (map type itself)
         if sig == "sys::M" or sig == "M":
@@ -2390,13 +2500,13 @@ class ParameterizedField:
     def type_(self):
         """Type with K/V substituted"""
         baseType = self._base.type_()
-        return self._substituteType(baseType)
+        return self._substitute_type(baseType)
 
-    def isStatic(self):
-        return self._base.isStatic() if hasattr(self._base, 'isStatic') else False
+    def is_static(self):
+        return self._base.is_static() if hasattr(self._base, 'is_static') else False
 
-    def isPublic(self):
-        return self._base.isPublic() if hasattr(self._base, 'isPublic') else True
+    def is_public(self):
+        return self._base.is_public() if hasattr(self._base, 'is_public') else True
 
 
 class FuncType(Type):
@@ -2406,10 +2516,10 @@ class FuncType(Type):
         """params is list of parameter types, ret is return type"""
         self._params = params  # List of Type
         self._ret = ret  # Return Type
-        sig = self._buildSignature()
+        sig = self._build_signature()
         super().__init__(sig)
 
-    def _buildSignature(self):
+    def _build_signature(self):
         """Build the function type signature like |sys::Int,sys::Str->sys::Bool|"""
         params_sig = ",".join(p.signature() for p in self._params)
         return f"|{params_sig}->{self._ret.signature()}|"
@@ -2425,7 +2535,7 @@ class FuncType(Type):
         return self._ret
 
     def signature(self):
-        return self._buildSignature()
+        return self._build_signature()
 
     def name(self):
         return "Func"
@@ -2440,18 +2550,18 @@ class FuncType(Type):
     def base(self):
         return Type.find("sys::Func")
 
-    def isNullable(self):
+    def is_nullable(self):
         return False
 
-    def toNullable(self):
+    def to_nullable(self):
         if self._nullable is None:
             self._nullable = NullableType(self)
         return self._nullable
 
-    def toNonNullable(self):
+    def to_non_nullable(self):
         return self
 
-    def isGenericInstance(self):
+    def is_generic_instance(self):
         return True
 
     def returns(self):
@@ -2474,7 +2584,7 @@ class FuncType(Type):
                 vals.append(pt)
         keys.append("R")
         vals.append(self._ret)
-        return Map.fromLiteral(keys, vals, "sys::Str", "sys::Type").toImmutable()
+        return Map.from_literal(keys, vals, "sys::Str", "sys::Type").to_immutable()
 
     def is_(self, that):
         """Check if this func type is assignable to that type.
@@ -2582,14 +2692,14 @@ class FuncType(Type):
 
         # Parameterize return type
         ret = method._returns
-        if ret is not None and hasattr(ret, 'isGenericParameter') and ret.isGenericParameter():
+        if ret is not None and hasattr(ret, 'is_generic_parameter') and ret.is_generic_parameter():
             ret = self._parameterize_type(ret)
 
         # Parameterize params
         new_params = []
         for p in method._params:
             p_type = p._type if hasattr(p, '_type') else None
-            if p_type is not None and hasattr(p_type, 'isGenericParameter') and p_type.isGenericParameter():
+            if p_type is not None and hasattr(p_type, 'is_generic_parameter') and p_type.is_generic_parameter():
                 p_type = self._parameterize_type(p_type)
             new_params.append(Param(p._name, p_type, p._hasDefault if hasattr(p, '_hasDefault') else False))
 
@@ -2607,13 +2717,13 @@ class FuncType(Type):
             return t
 
         # Handle nullable types - we need to get the root to check if it's generic
-        is_nullable = t.isNullable() if hasattr(t, 'isNullable') else False
+        is_nullable = t.is_nullable() if hasattr(t, 'is_nullable') else False
         root = t
-        if is_nullable and hasattr(t, 'toNonNullable'):
-            root = t.toNonNullable()
+        if is_nullable and hasattr(t, 'to_non_nullable'):
+            root = t.to_non_nullable()
 
         # Check if this is a generic param (sys::A, sys::B, sys::R, etc.)
-        if not (hasattr(root, 'isGenericParameter') and root.isGenericParameter()):
+        if not (hasattr(root, 'is_generic_parameter') and root.is_generic_parameter()):
             # Not a generic param - return as-is
             return t
 
@@ -2629,8 +2739,8 @@ class FuncType(Type):
             if idx < len(self._params):
                 result = self._params[idx]
                 # Apply original nullability to result ONLY if we found an actual param
-                if is_nullable and hasattr(result, 'toNullable'):
-                    return result.toNullable()
+                if is_nullable and hasattr(result, 'to_nullable'):
+                    return result.to_nullable()
                 return result
             else:
                 # No such param - use Obj as fallback (without original nullability)
@@ -2697,12 +2807,12 @@ class GenericParamType(Type):
     def base(self):
         return Type.find("sys::Obj")
 
-    def isGenericParameter(self):
+    def is_generic_parameter(self):
         return True
 
     def mixins(self):
         from .List import List as FanList
-        return FanList.fromLiteral([], "sys::Type").toImmutable()
+        return FanList.from_literal([], "sys::Type").to_immutable()
 
 
 class FacetInstance(Obj):
@@ -2733,8 +2843,8 @@ class FacetInstance(Obj):
                     pod, name = parts
                     module = __import__(f'fan.{pod}.{name}', fromlist=[name])
                     facet_cls = getattr(module, name, None)
-                    if facet_cls is not None and hasattr(facet_cls, 'defVal'):
-                        return facet_cls.defVal()
+                    if facet_cls is not None and hasattr(facet_cls, 'def_val'):
+                        return facet_cls.def_val()
             except:
                 pass
 
@@ -2873,13 +2983,13 @@ class FacetInstance(Obj):
             # Try fromStr for simple cases
             if type_qname == "sys::Version":
                 from .Version import Version
-                return Version.fromStr(args_str)
+                return Version.from_str(args_str)
             elif type_qname == "sys::Duration":
                 from .Duration import Duration
-                return Duration.fromStr(args_str)
+                return Duration.from_str(args_str)
             elif type_qname == "sys::Uri":
                 from .Uri import Uri
-                return Uri.fromStr(args_str)
+                return Uri.from_str(args_str)
 
             # Fallback - try make() with parsed args
             return t.make([args_str])
@@ -2909,7 +3019,7 @@ class FacetInstance(Obj):
             # Remove brackets
             inner = s[1:-1].strip()
             if not inner:
-                return FanList.fromLiteral([], "sys::Obj")
+                return FanList.from_literal([], "sys::Obj")
 
             # Split by comma and parse each element
             elements = []
@@ -2928,8 +3038,8 @@ class FacetInstance(Obj):
 
             # Determine element type
             if all(isinstance(e, int) for e in elements):
-                return FanList.fromLiteral(elements, "sys::Int")
-            return FanList.fromLiteral(elements, "sys::Obj")
+                return FanList.from_literal(elements, "sys::Int")
+            return FanList.from_literal(elements, "sys::Obj")
         except Exception as e:
             return s
 
@@ -2983,7 +3093,7 @@ class FacetInstance(Obj):
     def __hash__(self):
         return hash(self._facet_type.qname())
 
-    def toStr(self):
+    def to_str(self):
         return f"@{self._facet_type.qname()}"
 
 

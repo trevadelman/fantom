@@ -19,7 +19,7 @@ class Decimal(Obj):
             self._val = PyDecimal(str(val))
 
     @staticmethod
-    def fromStr(s, checked=True):
+    def from_str(s, checked=True):
         """Parse a Decimal from string"""
         try:
             return Decimal(PyDecimal(s))
@@ -35,7 +35,7 @@ class Decimal(Obj):
         return Decimal(val)
 
     @staticmethod
-    def defVal():
+    def def_val():
         """Default value (0)"""
         if Decimal._defVal is None:
             Decimal._defVal = Decimal(PyDecimal("0"))
@@ -83,17 +83,17 @@ class Decimal(Obj):
             return Decimal(self._val % other._val)
         return Decimal(self._val % PyDecimal(str(other)))
 
-    def abs(self):
+    def abs_(self):
         """Absolute value"""
         return Decimal(abs(self._val))
 
-    def min(self, other):
+    def min_(self, other):
         """Return minimum"""
         if isinstance(other, Decimal):
             return Decimal(min(self._val, other._val))
         return Decimal(min(self._val, PyDecimal(str(other))))
 
-    def max(self, other):
+    def max_(self, other):
         """Return maximum"""
         if isinstance(other, Decimal):
             return Decimal(max(self._val, other._val))
@@ -107,27 +107,27 @@ class Decimal(Obj):
         """Round toward positive infinity"""
         return Decimal(self._val.to_integral_value(rounding=ROUND_CEILING))
 
-    def round(self):
+    def round_(self):
         """Round to nearest integer"""
         return Decimal(self._val.to_integral_value(rounding=ROUND_HALF_UP))
 
-    def toInt(self):
+    def to_int(self):
         """Convert to Int"""
         return int(self._val)
 
-    def toFloat(self):
+    def to_float(self):
         """Convert to Float"""
         return float(self._val)
 
-    def toStr(self):
+    def to_str(self):
         """String representation"""
         return str(self._val)
 
-    def toCode(self):
+    def to_code(self):
         """Code representation"""
         return str(self._val) + "d"
 
-    def toLocale(self, pattern=None):
+    def to_locale(self, pattern=None):
         """Format with locale"""
         # Simple implementation - format with commas
         s = str(self._val)
@@ -270,7 +270,7 @@ class Decimal(Obj):
         """Hash for use in dicts/sets"""
         return hash(self._val)
 
-    def literalEncode(self, out):
+    def literal_encode(self, out):
         """Encode for serialization.
 
         Decimal literals are written with 'd' suffix: 123.456d

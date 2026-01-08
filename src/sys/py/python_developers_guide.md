@@ -5,6 +5,28 @@ A guide for Python developers using transpiled Fantom libraries (Haystack, Xeto,
 > **Note:** This guide is for Python developers *consuming* Fantom APIs.
 > For information on how the transpiler generates Python code, see `design.md`.
 
+## Naming Convention
+
+Fantom uses camelCase for method names, but the Python transpiler converts these to
+**snake_case** for a Pythonic developer experience:
+
+| Fantom | Python |
+|--------|--------|
+| `fromStr` | `from_str` |
+| `toStr` | `to_str` |
+| `isEmpty` | `is_empty` |
+| `findAll` | `find_all` |
+| `containsKey` | `contains_key` |
+
+Python reserved words and builtins get a trailing underscore:
+- `map` -> `map_`
+- `hash` -> `hash_`
+- `abs` -> `abs_`
+- `min` -> `min_`
+- `max` -> `max_`
+- `any` -> `any_`
+- `all` -> `all_`
+
 ## Quick Start
 
 ```python
@@ -15,7 +37,7 @@ from fan.sys.List import List
 from fan.sys.Map import Map
 
 # Create a Fantom list
-nums = List.fromLiteral([1, 2, 3], "sys::Int")
+nums = List.from_literal([1, 2, 3], "sys::Int")
 
 # Use instance methods (natural OO style)
 doubled = nums.map_(lambda it: it * 2)
@@ -34,9 +56,9 @@ Fantom methods that accept closures work with any Python callable:
 
 ### Lambda
 ```python
-List.map_(nums, lambda it: it * 2)
-List.findAll(nums, lambda it: it % 2 == 0)
-List.find(nums, lambda it: it > 3)
+nums.map_(lambda it: it * 2)
+nums.find_all(lambda it: it % 2 == 0)
+nums.find(lambda it: it > 3)
 ```
 
 ### Named Function
@@ -44,7 +66,7 @@ List.find(nums, lambda it: it > 3)
 def multiply_by_2(x):
     return x * 2
 
-List.map_(nums, multiply_by_2)
+nums.map_(multiply_by_2)
 ```
 
 ### Multi-line Logic
@@ -56,7 +78,7 @@ def complex_filter(item):
         return False
     return item % 2 == 0
 
-List.findAll(nums, complex_filter)
+nums.find_all(complex_filter)
 ```
 
 ## Type Interoperability
@@ -67,11 +89,11 @@ Fantom's `List` extends `Obj` and implements Python's `MutableSequence` protocol
 It wraps an internal Python list but is **not** a subclass of Python's `list`.
 
 ```python
-nums = List.fromLiteral([1, 2, 3], "sys::Int")
+nums = List.from_literal([1, 2, 3], "sys::Int")
 
 # Instance methods (preferred - natural OO style)
-nums.map_(lambda it: it * 2)           # [2, 4, 6]
-nums.findAll(lambda it: it > 1)        # [2, 3]
+nums.map_(lambda it: it * 2)              # [2, 4, 6]
+nums.find_all(lambda it: it > 1)          # [2, 3]
 nums.reduce(0, lambda acc, it: acc + it)  # 6
 
 # Python protocols work
@@ -95,12 +117,12 @@ It wraps an internal Python dict but is **not** a subclass of Python's `dict`.
 ```python
 from fan.sys.Map import Map
 
-m = Map.fromLiteral(["a", "b"], [1, 2], "sys::Str", "sys::Int")
+m = Map.from_literal(["a", "b"], [1, 2], "sys::Str", "sys::Int")
 
 # Instance methods
 m.each(lambda v, k: print(f"{k}={v}"))
-m.get("a")          # 1
-m.containsKey("a")  # True
+m.get("a")            # 1
+m.contains_key("a")   # True
 
 # Python protocols work
 len(m)              # 2
@@ -132,7 +154,7 @@ from fan.sys.Str import Str
 
 # Int methods
 Int.times(3, lambda i: print(i))  # 0, 1, 2
-Int.toHex(255)                     # "ff"
+Int.to_hex(255)                    # "ff"
 
 # Str methods
 Str.size("hello")                  # 5
@@ -141,32 +163,32 @@ Str.upper("hello")                 # "HELLO"
 
 ## Instance Methods (Recommended)
 
-Lists created with `List.fromLiteral()` support instance methods for a more natural OO style:
+Lists created with `List.from_literal()` support instance methods for a more natural OO style:
 
 ```python
 from fan.sys.List import List
 
-nums = List.fromLiteral([1, 2, 3, 4, 5], "sys::Int")
+nums = List.from_literal([1, 2, 3, 4, 5], "sys::Int")
 
 # Transform
-nums.map(lambda it: it * 2)              # [2, 4, 6, 8, 10]
-nums.flatMap(lambda it: [it, it * 2])    # flatten nested results
-nums.mapNotNull(lambda it: it if it > 2 else None)
+nums.map_(lambda it: it * 2)              # [2, 4, 6, 8, 10]
+nums.flat_map(lambda it: [it, it * 2])    # flatten nested results
+nums.map_not_null(lambda it: it if it > 2 else None)
 
 # Filter/Find
 nums.find(lambda it: it > 3)             # 4
-nums.findAll(lambda it: it % 2 == 0)     # [2, 4]
-nums.findIndex(lambda it: it > 3)        # 3
+nums.find_all(lambda it: it % 2 == 0)    # [2, 4]
+nums.find_index(lambda it: it > 3)       # 3
 nums.exclude(lambda it: it < 3)          # [3, 4, 5]
 
 # Predicates
-nums.any(lambda it: it > 4)              # True
-nums.all(lambda it: it > 0)              # True
+nums.any_(lambda it: it > 4)             # True
+nums.all_(lambda it: it > 0)             # True
 
 # Aggregate
 nums.reduce(0, lambda acc, it: acc + it) # 15
-nums.min()                                # 1
-nums.max()                                # 5
+nums.min_()                               # 1
+nums.max_()                               # 5
 nums.join(", ")                           # "1, 2, 3, 4, 5"
 
 # Sort
@@ -182,7 +204,7 @@ nums.each(lambda it, i: print(f"{i}: {it}"))
 # Accessors
 nums.first()                              # 1
 nums.last()                               # 5
-nums.isEmpty()                            # False
+nums.is_empty()                           # False
 nums.contains(3)                          # True
 nums.index(3)                             # 2
 
@@ -190,7 +212,7 @@ nums.index(3)                             # 2
 nums.add(6)                               # append
 nums.insert(0, 0)                         # insert at index
 nums.remove(3)                            # remove first occurrence
-nums.removeAt(0)                          # remove at index
+nums.remove_at(0)                         # remove at index
 
 # Stack operations
 nums.push(6)                              # same as add
@@ -207,19 +229,19 @@ Static methods are also available for all list operations:
 ```python
 from fan.sys.List import List
 
-nums = List.fromLiteral([1, 2, 3, 4, 5], "sys::Int")
+nums = List.from_literal([1, 2, 3, 4, 5], "sys::Int")
 
 # Transform
 List.map_(nums, lambda it: it * 2)           # [2, 4, 6, 8, 10]
 
 # Filter
-List.findAll(nums, lambda it: it % 2 == 0)   # [2, 4]
+List.find_all(nums, lambda it: it % 2 == 0)  # [2, 4]
 List.find(nums, lambda it: it > 3)           # 4
 
 # Aggregate
 List.reduce(nums, 0, lambda acc, it: acc + it)  # 15
-List.any(nums, lambda it: it > 4)            # True
-List.all(nums, lambda it: it > 0)            # True
+List.any_(nums, lambda it: it > 4)           # True
+List.all_(nums, lambda it: it > 0)           # True
 
 # Sort
 List.sort(nums, lambda a, b: b - a)          # descending
@@ -234,7 +256,7 @@ List.each(nums, lambda it, i: print(f"{i}: {it}"))  # with index
 ```python
 from fan.sys.Map import Map
 
-m = Map.fromLiteral(["a", "b", "c"], [1, 2, 3], "sys::Str", "sys::Int")
+m = Map.from_literal(["a", "b", "c"], [1, 2, 3], "sys::Str", "sys::Int")
 
 # Iterate
 m.each(lambda v, k: print(f"{k}={v}"))
@@ -243,7 +265,7 @@ m.each(lambda v, k: print(f"{k}={v}"))
 m.map_(lambda v, k: v * 2)
 
 # Filter
-m.findAll(lambda v, k: v > 1)
+m.find_all(lambda v, k: v > 1)
 ```
 
 ### Int Operations
@@ -264,10 +286,10 @@ Many Fantom methods support closures with both value and index:
 
 ```python
 # Value only
-List.each(nums, lambda it: print(it))
+nums.each(lambda it: print(it))
 
 # Value and index
-List.each(nums, lambda it, i: print(f"{i}: {it}"))
+nums.each(lambda it, i: print(f"{i}: {it}"))
 
 # Map: value and key
 m.each(lambda v, k: print(f"{k}={v}"))

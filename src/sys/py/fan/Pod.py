@@ -50,17 +50,17 @@ class Pod(Obj):
         """Get pod version"""
         if self._version is None:
             from .Version import Version
-            return Version.fromStr("1.0")
+            return Version.from_str("1.0")
         if isinstance(self._version, str):
             from .Version import Version
-            self._version = Version.fromStr(self._version)
+            self._version = Version.from_str(self._version)
         return self._version
 
     def uri(self):
         """Return the uri for this pod: fan://{name}"""
         if self._uri is None:
             from .Uri import Uri
-            self._uri = Uri.fromStr(f"fan://{self._name}")
+            self._uri = Uri.from_str(f"fan://{self._name}")
         return self._uri
 
     def meta(self):
@@ -98,12 +98,12 @@ class Pod(Obj):
                 meta["pod.depends"] = ""
 
             # Create immutable map
-            result = Map.fromLiteral(
+            result = Map.from_literal(
                 list(meta.keys()),
                 list(meta.values()),
                 "sys::Str", "sys::Str"
             )
-            self._meta = result.toImmutable()
+            self._meta = result.to_immutable()
         return self._meta
 
     def depends(self):
@@ -117,46 +117,46 @@ class Pod(Obj):
             if self._name == "sys":
                 pass  # sys has no dependencies
             elif self._name == "concurrent":
-                deps.append(Depend.fromStr("sys 1.0"))
+                deps.append(Depend.from_str("sys 1.0"))
             elif self._name == "testSys":
-                deps.append(Depend.fromStr("sys 1.0"))
-                deps.append(Depend.fromStr("concurrent 1.0"))
+                deps.append(Depend.from_str("sys 1.0"))
+                deps.append(Depend.from_str("concurrent 1.0"))
             elif self._name == "graphics":
-                deps.append(Depend.fromStr("sys 1.0"))
+                deps.append(Depend.from_str("sys 1.0"))
             elif self._name == "inet":
-                deps.append(Depend.fromStr("sys 1.0"))
-                deps.append(Depend.fromStr("concurrent 1.0"))
+                deps.append(Depend.from_str("sys 1.0"))
+                deps.append(Depend.from_str("concurrent 1.0"))
             elif self._name == "crypto":
-                deps.append(Depend.fromStr("sys 1.0"))
+                deps.append(Depend.from_str("sys 1.0"))
             elif self._name == "web":
-                deps.append(Depend.fromStr("sys 1.0"))
-                deps.append(Depend.fromStr("concurrent 1.0"))
-                deps.append(Depend.fromStr("inet 1.0"))
+                deps.append(Depend.from_str("sys 1.0"))
+                deps.append(Depend.from_str("concurrent 1.0"))
+                deps.append(Depend.from_str("inet 1.0"))
             elif self._name == "dom":
-                deps.append(Depend.fromStr("sys 1.0"))
-                deps.append(Depend.fromStr("concurrent 1.0"))
-                deps.append(Depend.fromStr("graphics 1.0"))
+                deps.append(Depend.from_str("sys 1.0"))
+                deps.append(Depend.from_str("concurrent 1.0"))
+                deps.append(Depend.from_str("graphics 1.0"))
             elif self._name == "domkit":
-                deps.append(Depend.fromStr("sys 1.0"))
-                deps.append(Depend.fromStr("concurrent 1.0"))
-                deps.append(Depend.fromStr("graphics 1.0"))
-                deps.append(Depend.fromStr("dom 1.0"))
-                deps.append(Depend.fromStr("web 1.0"))
-                deps.append(Depend.fromStr("inet 1.0"))
-                deps.append(Depend.fromStr("crypto 1.0"))
+                deps.append(Depend.from_str("sys 1.0"))
+                deps.append(Depend.from_str("concurrent 1.0"))
+                deps.append(Depend.from_str("graphics 1.0"))
+                deps.append(Depend.from_str("dom 1.0"))
+                deps.append(Depend.from_str("web 1.0"))
+                deps.append(Depend.from_str("inet 1.0"))
+                deps.append(Depend.from_str("crypto 1.0"))
             elif self._name == "util":
-                deps.append(Depend.fromStr("sys 1.0"))
-                deps.append(Depend.fromStr("concurrent 1.0"))
+                deps.append(Depend.from_str("sys 1.0"))
+                deps.append(Depend.from_str("concurrent 1.0"))
             elif self._name == "webmod":
-                deps.append(Depend.fromStr("sys 1.0"))
-                deps.append(Depend.fromStr("concurrent 1.0"))
-                deps.append(Depend.fromStr("inet 1.0"))
-                deps.append(Depend.fromStr("web 1.0"))
-                deps.append(Depend.fromStr("util 1.0"))
+                deps.append(Depend.from_str("sys 1.0"))
+                deps.append(Depend.from_str("concurrent 1.0"))
+                deps.append(Depend.from_str("inet 1.0"))
+                deps.append(Depend.from_str("web 1.0"))
+                deps.append(Depend.from_str("util 1.0"))
 
             # Create immutable list with proper type
-            result = List.fromLiteral(deps, "sys::Depend")
-            self._depends = result.toImmutable()
+            result = List.from_literal(deps, "sys::Depend")
+            self._depends = result.to_immutable()
         return self._depends
 
     def log(self):
@@ -187,8 +187,8 @@ class Pod(Obj):
 
         # In Python runtime, we can't read from pod files directly
         # Return empty immutable map as fallback
-        result = Map.fromLiteral([], [], "sys::Str", "sys::Str")
-        result = result.toImmutable()
+        result = Map.from_literal([], [], "sys::Str", "sys::Str")
+        result = result.to_immutable()
         self._propsCache[uri_str] = result
         return result
 
@@ -215,7 +215,7 @@ class Pod(Obj):
     def types(self):
         """Get list of types in this pod"""
         from .List import List
-        result = List.fromLiteral(list(self._types.values()), "sys::Type")
+        result = List.from_literal(list(self._types.values()), "sys::Type")
         return result
 
     def type(self, name, checked=True):
@@ -250,14 +250,14 @@ class Pod(Obj):
         from .Env import Env
         return Env.cur().config(self, key, def_)
 
-    def toStr(self):
+    def to_str(self):
         return self._name
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()
 
     def __repr__(self):
-        return self.toStr()
+        return self.to_str()
 
     def __eq__(self, other):
         """Pod equality is based on name"""
@@ -345,12 +345,12 @@ class Pod(Obj):
 
             # Create sorted list
             pods = sorted(Pod._pods.values(), key=lambda p: p._name)
-            result = List.fromLiteral(pods, "sys::Pod")
-            Pod._list = result.toImmutable()
+            result = List.from_literal(pods, "sys::Pod")
+            Pod._list = result.to_immutable()
         return Pod._list
 
     @staticmethod
-    def flattenDepends(pods):
+    def flatten_depends(pods):
         """Flatten dependencies for a list of pods.
 
         Returns all pods including transitive dependencies.
@@ -365,7 +365,7 @@ class Pod(Obj):
 
         result = set()
 
-        def addWithDepends(pod):
+        def add_with_depends(pod):
             if pod._name in [p._name for p in result]:
                 return
             result.add(pod)
@@ -380,10 +380,10 @@ class Pod(Obj):
             addWithDepends(pod)
 
         # Return as immutable list
-        return List.fromLiteral(list(result), "sys::Pod")
+        return List.from_literal(list(result), "sys::Pod")
 
     @staticmethod
-    def orderByDepends(pods):
+    def order_by_depends(pods):
         """Order pods by their dependencies (topological sort).
 
         Returns pods ordered so that a pod appears after all its dependencies.
@@ -425,7 +425,7 @@ class Pod(Obj):
                 result.append(pod_map[name])
                 remaining.remove(name)
 
-        return List.fromLiteral(result, "sys::Pod")
+        return List.from_literal(result, "sys::Pod")
 
     @staticmethod
     def load(inStream):
@@ -437,12 +437,12 @@ class Pod(Obj):
     # Internal Methods
     # ============================================================
 
-    def _registerType(self, type_obj):
+    def _register_type(self, type_obj):
         """Register a type with this pod"""
         self._types[type_obj.name()] = type_obj
 
     @staticmethod
-    def _createSysPod():
+    def _create_sys_pod():
         """Create the sys pod with its types"""
         if "sys" not in Pod._pods:
             pod = Pod("sys", "1.0")
@@ -460,8 +460,8 @@ class UnknownPodErr(Exception):
     def msg(self):
         return self._msg
 
-    def toStr(self):
+    def to_str(self):
         return f"sys::UnknownPodErr: {self._msg}"
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()

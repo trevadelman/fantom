@@ -10,7 +10,7 @@ class Num(Obj):
     """Abstract base class for numeric types (Int, Float, Decimal)"""
 
     @staticmethod
-    def toInt(val):
+    def to_int(val):
         """Convert to Int"""
         import math
         if val is None:
@@ -28,14 +28,14 @@ class Num(Obj):
         return int(val)
 
     @staticmethod
-    def toFloat(val):
+    def to_float(val):
         """Convert to Float"""
         if val is None:
             return None
         return float(val)
 
     @staticmethod
-    def toDecimal(val):
+    def to_decimal(val):
         """Convert to Decimal - stub returns float for now"""
         if val is None:
             return None
@@ -44,36 +44,36 @@ class Num(Obj):
         return float(val)
 
     @staticmethod
-    def localeDecimal():
+    def locale_decimal():
         """Get locale decimal separator"""
         return "."
 
     @staticmethod
-    def localeGrouping():
+    def locale_grouping():
         """Get locale grouping separator"""
         return ","
 
     @staticmethod
-    def localeMinus():
+    def locale_minus():
         """Get locale minus sign"""
         return "-"
 
     @staticmethod
-    def localePercent():
+    def locale_percent():
         """Get locale percent sign"""
         return "%"
 
     @staticmethod
-    def localePosInf():
+    def locale_pos_inf():
         """Get locale positive infinity symbol"""
         return "INF"
 
     @staticmethod
-    def localeNegInf():
+    def locale_neg_inf():
         """Get locale negative infinity symbol"""
         return "-INF"
 
     @staticmethod
-    def localeNaN():
+    def locale_na_n():
         """Get locale NaN symbol"""
         return "NaN"

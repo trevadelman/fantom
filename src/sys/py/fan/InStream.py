@@ -35,7 +35,7 @@ class StrInStream:
             self._charset = val
             return self
 
-    def _rChar(self):
+    def _r_char(self):
         """Read char as int code point, or -1 at end"""
         if self._pushback:
             return self._pushback.pop()
@@ -50,7 +50,7 @@ class StrInStream:
         from .Err import UnsupportedErr
         raise UnsupportedErr.make("Binary read on Str.in")
 
-    def readBuf(self, buf, n):
+    def read_buf(self, buf, n):
         """Binary read - not supported on string stream"""
         from .Err import UnsupportedErr
         raise UnsupportedErr.make("Binary read on Str.in")
@@ -60,24 +60,24 @@ class StrInStream:
         from .Err import UnsupportedErr
         raise UnsupportedErr.make("Binary read on Str.in")
 
-    def readChar(self):
+    def read_char(self):
         """Read a single character as Int code point, or None at end"""
-        c = self._rChar()
+        c = self._r_char()
         return None if c < 0 else c
 
-    def unreadChar(self, c):
+    def unread_char(self, c):
         """Push back a character to be read again"""
         self._pushback.append(int(c))
         return self
 
-    def peekChar(self):
+    def peek_char(self):
         """Peek at next character without consuming"""
-        c = self._rChar()
+        c = self._r_char()
         if c >= 0:
             self._pushback.append(c)
         return None if c < 0 else c
 
-    def readChars(self, n):
+    def read_chars(self, n):
         """Read n characters as a string"""
         if n < 0:
             from .Err import ArgErr
@@ -86,21 +86,21 @@ class StrInStream:
             return ""
         chars = []
         for _ in range(int(n)):
-            c = self._rChar()
+            c = self._r_char()
             if c < 0:
                 from .Err import IOErr
                 raise IOErr.make("Unexpected end of stream")
             chars.append(chr(c))
         return ''.join(chars)
 
-    def readLine(self, max_chars=None):
+    def read_line(self, max_chars=None):
         """Read a line of text"""
         max_len = int(max_chars) if max_chars is not None else 2147483647
         if max_len <= 0:
             return ""
 
         # Read first char
-        c = self._rChar()
+        c = self._r_char()
         if c < 0:
             return None
 
@@ -111,7 +111,7 @@ class StrInStream:
                 break
             if c == 13:  # \r
                 # Check for \r\n
-                next_c = self._rChar()
+                next_c = self._r_char()
                 if next_c >= 0 and next_c != 10:
                     self._pushback.append(next_c)
                 break
@@ -120,18 +120,18 @@ class StrInStream:
             if len(chars) >= max_len:
                 break
 
-            c = self._rChar()
+            c = self._r_char()
             if c < 0:
                 break
 
         return ''.join(chars)
 
-    def readAllStr(self, normalizeNewlines=True):
+    def read_all_str(self, normalizeNewlines=True):
         """Read all remaining characters as a string"""
         chars = []
         last = -1
         while True:
-            c = self._rChar()
+            c = self._r_char()
             if c < 0:
                 break
             if normalizeNewlines:
@@ -146,26 +146,26 @@ class StrInStream:
                 chars.append(chr(c))
         return ''.join(chars)
 
-    def readAllLines(self):
+    def read_all_lines(self):
         """Read all lines"""
         from .List import List
         lines = []
         while True:
-            line = self.readLine()
+            line = self.read_line()
             if line is None:
                 break
             lines.append(line)
-        return List.fromLiteral(lines, "sys::Str")
+        return List.from_literal(lines, "sys::Str")
 
-    def eachLine(self, f):
+    def each_line(self, f):
         """Iterate each line"""
         while True:
-            line = self.readLine()
+            line = self.read_line()
             if line is None:
                 break
             f.call(line)
 
-    def readStrToken(self, max_chars=None, func=None):
+    def read_str_token(self, max_chars=None, func=None):
         """Read string token until whitespace or func returns true"""
         from .Int import Int
 
@@ -173,14 +173,14 @@ class StrInStream:
         if max_len <= 0:
             return ""
 
-        c = self._rChar()
+        c = self._r_char()
         if c < 0:
             return None
 
         chars = []
         while True:
             if func is None:
-                terminate = Int.isSpace(c)
+                terminate = Int.is_space(c)
             else:
                 terminate = func.call(c)
 
@@ -192,19 +192,19 @@ class StrInStream:
             if len(chars) >= max_len:
                 break
 
-            c = self._rChar()
+            c = self._r_char()
             if c < 0:
                 break
 
         return ''.join(chars)
 
-    def readNullTerminatedStr(self, max_chars=None):
+    def read_null_terminated_str(self, max_chars=None):
         """Read until null byte or max chars"""
         max_len = int(max_chars) if max_chars is not None else 2147483647
         if max_len <= 0:
             return ""
 
-        c = self._rChar()
+        c = self._r_char()
         if c < 0:
             return None
 
@@ -215,20 +215,20 @@ class StrInStream:
             chars.append(chr(c))
             if len(chars) >= max_len:
                 break
-            c = self._rChar()
+            c = self._r_char()
             if c < 0:
                 break
 
         return ''.join(chars)
 
-    def readProps(self):
+    def read_props(self):
         """Read properties file format and return as Map[Str:Str]"""
         from .Map import Map
         from .Type import Type, MapType
 
         # Create properly typed [Str:Str] map
         strType = Type.find("sys::Str")
-        props = Map.makeWithType(strType, strType)
+        props = Map.make_with_type(strType, strType)
         name = ""
         v = None
         in_block_comment = 0
@@ -240,7 +240,7 @@ class StrInStream:
 
         while True:
             last = c
-            c = self._rChar()
+            c = self._r_char()
             col_num += 1
             if c < 0:
                 break
@@ -286,7 +286,7 @@ class StrInStream:
 
             # End of line comment (//) or block comment (/*)
             if c == 47 and self._is_space_char(last):  # /
-                peek = self._rChar()
+                peek = self._r_char()
                 if peek < 0:
                     break
                 if peek == 47:  # //
@@ -299,7 +299,7 @@ class StrInStream:
 
             # Escape or line continuation
             if c == 92:  # \
-                peek = self._rChar()
+                peek = self._r_char()
                 if peek < 0:
                     break
                 elif peek == 110:  # n
@@ -314,12 +314,12 @@ class StrInStream:
                     # Line continuation
                     line_num += 1
                     if peek == 13:
-                        peek = self._rChar()
+                        peek = self._r_char()
                         if peek != 10:
                             self._pushback.append(peek)
                     # Skip leading whitespace on next line
                     while True:
-                        peek = self._rChar()
+                        peek = self._r_char()
                         if peek == 32 or peek == 9:  # space or tab - keep skipping
                             continue
                         if peek >= 0:
@@ -327,10 +327,10 @@ class StrInStream:
                         break
                     continue
                 elif peek == 117:  # u - unicode escape
-                    n3 = self._hex(self._rChar())
-                    n2 = self._hex(self._rChar())
-                    n1 = self._hex(self._rChar())
-                    n0 = self._hex(self._rChar())
+                    n3 = self._hex(self._r_char())
+                    n2 = self._hex(self._r_char())
+                    n1 = self._hex(self._r_char())
+                    n0 = self._hex(self._r_char())
                     if n3 < 0 or n2 < 0 or n1 < 0 or n0 < 0:
                         from .Err import IOErr
                         raise IOErr.make(f"Invalid hex value for \\uxxxx [Line {line_num}]")
@@ -373,15 +373,15 @@ class StrInStream:
         """Close the stream"""
         return True
 
-    def rChar(self):
+    def r_char(self):
         """Read character as int code point for Tokenizer compatibility.
 
         Returns: int code point or None at end of stream
         """
-        c = self.readChar()
+        c = self.read_char()
         return c if c is not None else None
 
-    def readObj(self, options=None):
+    def read_obj(self, options=None):
         """Read a serialized object from this stream.
 
         Args:
@@ -391,7 +391,7 @@ class StrInStream:
             Deserialized object
         """
         from fanx.ObjDecoder import ObjDecoder
-        return ObjDecoder(self, options).readObj()
+        return ObjDecoder(self, options).read_obj()
 
     def typeof(self):
         """Return Type for InStream"""
@@ -436,14 +436,14 @@ class InStream(Obj):
             self._charset = val
             return self
 
-    def readAllStr(self, normalizeNewlines=True):
+    def read_all_str(self, normalizeNewlines=True):
         """Read entire stream as a string"""
         if hasattr(self, '_stream'):
             content = self._stream.read()
         elif self._in is not None:
             # Check if wrapped stream has readAllStr (it's an InStream)
-            if hasattr(self._in, 'readAllStr'):
-                return self._in.readAllStr(normalizeNewlines)
+            if hasattr(self._in, 'read_all_str'):
+                return self._in.read_all_str(normalizeNewlines)
             # Otherwise it's a raw Python stream
             content = self._in.read()
         else:
@@ -455,14 +455,14 @@ class InStream(Obj):
             content = content.replace('\r\n', '\n').replace('\r', '\n')
         return content
 
-    def readAllLines(self):
+    def read_all_lines(self):
         """Read all lines from stream"""
         if hasattr(self, '_stream'):
             content = self._stream.read()
         elif self._in is not None:
             # Check if wrapped stream has readAllLines (it's an InStream)
-            if hasattr(self._in, 'readAllLines'):
-                return self._in.readAllLines()
+            if hasattr(self._in, 'read_all_lines'):
+                return self._in.read_all_lines()
             # Otherwise it's a raw Python stream
             content = self._in.read()
         else:
@@ -477,10 +477,10 @@ class InStream(Obj):
         lines = content.splitlines()
         return lines if lines else []
 
-    def readLine(self, max=None):
+    def read_line(self, max=None):
         """Read a single line from stream"""
         if self._in is not None:
-            return self._in.readLine(max)
+            return self._in.read_line(max)
 
         if hasattr(self, '_stream'):
             line = self._stream.readline()
@@ -493,10 +493,10 @@ class InStream(Obj):
             return line if line else None
         return None
 
-    def readChar(self):
+    def read_char(self):
         """Read a single character, return as Int (unicode code point) or None at end"""
-        if self._in is not None and hasattr(self._in, 'readChar'):
-            return self._in.readChar()
+        if self._in is not None and hasattr(self._in, 'read_char'):
+            return self._in.read_char()
 
         if hasattr(self, '_stream'):
             c = self._stream.read(1)
@@ -528,14 +528,14 @@ class InStream(Obj):
         # Default implementation - may not be supported
         return self
 
-    def unreadChar(self, c):
+    def unread_char(self, c):
         """Push back a character"""
-        if self._in is not None and hasattr(self._in, 'unreadChar'):
-            return self._in.unreadChar(c)
+        if self._in is not None and hasattr(self._in, 'unread_char'):
+            return self._in.unread_char(c)
         # Default implementation - may not be supported
         return self
 
-    def readProps(self):
+    def read_props(self):
         """Read a properties file format and return as a Map."""
         from .Map import Map
         result = Map()
@@ -543,7 +543,7 @@ class InStream(Obj):
         if hasattr(self, '_stream'):
             content = self._stream.read()
         elif self._in is not None:
-            return self._in.readProps()
+            return self._in.read_props()
         else:
             return result
 
@@ -561,7 +561,7 @@ class InStream(Obj):
             if eq_pos > 0:
                 key = line[:eq_pos].strip()
                 value = line[eq_pos + 1:].strip()
-                result.set(key, value)
+                result.set_(key, value)
 
         return result
 
@@ -573,15 +573,15 @@ class InStream(Obj):
             self._stream.close()
         return True
 
-    def rChar(self):
+    def r_char(self):
         """Read character as int code point for Tokenizer compatibility.
 
         Returns: int code point or None at end of stream
         """
-        c = self.readChar()
+        c = self.read_char()
         return c if c is not None else None
 
-    def readObj(self, options=None):
+    def read_obj(self, options=None):
         """Read a serialized object from this stream.
 
         Args:
@@ -591,7 +591,7 @@ class InStream(Obj):
             Deserialized object
         """
         from fanx.ObjDecoder import ObjDecoder
-        return ObjDecoder(self, options).readObj()
+        return ObjDecoder(self, options).read_obj()
 
     def typeof(self):
         """Return Type for InStream"""

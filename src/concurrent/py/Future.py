@@ -23,20 +23,20 @@ class Future(Obj):
         self._wraps = wraps
 
     @staticmethod
-    def makeCompletable():
+    def make_completable():
         """Construct a completable future instance in the pending state."""
         from fan.concurrent.ActorFuture import ActorFuture
         return ActorFuture.make()
 
     @staticmethod
-    def waitForAll(futures, timeout=None):
+    def wait_for_all(futures, timeout=None):
         """
         Block on a list of futures until they all transition to a completed state.
         If timeout is null block forever, otherwise raise TimeoutErr if any one
         of the futures does not complete before the timeout elapses.
         """
         from fan.concurrent.ActorFuture import ActorFuture
-        ActorFuture.waitForAll(futures, timeout)
+        ActorFuture.wait_for_all(futures, timeout)
 
     def wraps(self):
         """Return the wrapped future or null if this is an ActorFuture."""
@@ -58,13 +58,13 @@ class Future(Obj):
 
     # Delegating methods to wrapped future
 
-    def isDone(self):
+    def is_done(self):
         """Return if this future has completed."""
-        return self.status().isComplete()
+        return self.status().is_complete()
 
-    def isCancelled(self):
+    def is_cancelled(self):
         """Return if this future was cancelled."""
-        return self.status().isCancelled()
+        return self.status().is_cancelled()
 
     def status(self):
         """Return current status of this future."""
@@ -78,9 +78,9 @@ class Future(Obj):
         """Return the exception or null if completed successfully."""
         return self._wrapped().err()
 
-    def waitFor(self, timeout=None):
+    def wait_for(self, timeout=None):
         """Block until this future transitions to a completed state."""
-        self._wrapped().waitFor(timeout)
+        self._wrapped().wait_for(timeout)
         return self
 
     def then(self, onOk, onErr=None):
@@ -97,9 +97,9 @@ class Future(Obj):
         self._wrapped().complete(result)
         return self
 
-    def completeErr(self, err):
+    def complete_err(self, err):
         """Complete the future with a failure condition."""
-        self._wrapped().completeErr(err)
+        self._wrapped().complete_err(err)
         return self
 
     def promise(self):

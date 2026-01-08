@@ -45,13 +45,13 @@ class ActorFuture(Obj):
         """Create new instance of subclass that wraps given future"""
         return future  # ActorFuture doesn't wrap, just returns the given future
 
-    def isDone(self):
+    def is_done(self):
         """Return if this future has completed"""
-        return self.status().isComplete()
+        return self.status().is_complete()
 
-    def isCancelled(self):
+    def is_cancelled(self):
         """Return if this future was cancelled"""
-        return self.status().isCancelled()
+        return self.status().is_cancelled()
 
     def status(self):
         """Return current status of this future"""
@@ -121,9 +121,9 @@ class ActorFuture(Obj):
 
         # Return immutable copy of result
         from fan.sys.ObjUtil import ObjUtil
-        return ObjUtil.toImmutable(result) if result is not None else result
+        return ObjUtil.to_immutable(result) if result is not None else result
 
-    def waitFor(self, timeout=None):
+    def wait_for(self, timeout=None):
         """
         Block until this future transitions to a completed state.
         If timeout is null then block forever, otherwise raise TimeoutErr
@@ -199,7 +199,7 @@ class ActorFuture(Obj):
         """
         # Ensure result is immutable
         from fan.sys.ObjUtil import ObjUtil
-        result = ObjUtil.toImmutable(result) if result is not None else result
+        result = ObjUtil.to_immutable(result) if result is not None else result
 
         when_done = None
         with self._condition:
@@ -216,7 +216,7 @@ class ActorFuture(Obj):
         self._send_when_done(when_done)
         return self
 
-    def completeErr(self, err):
+    def complete_err(self, err):
         """
         Complete the future with a failure condition using given exception.
         Raise an exception if the future is already complete
@@ -242,7 +242,7 @@ class ActorFuture(Obj):
         Register a callback function when this future completes.
         In Python this is a blocking operation (like Java VM).
         """
-        self.waitFor(None)
+        self.wait_for(None)
         chain = None
         try:
             state = self._state
@@ -263,9 +263,9 @@ class ActorFuture(Obj):
         except Exception as e:
             result_future = ActorFuture.make()
             if isinstance(e, Err):
-                result_future.completeErr(e)
+                result_future.complete_err(e)
             else:
-                result_future.completeErr(Err.make(str(e)))
+                result_future.complete_err(Err.make(str(e)))
             return result_future
 
     def promise(self):
@@ -273,16 +273,16 @@ class ActorFuture(Obj):
         from fan.sys.Err import UnsupportedErr
         raise UnsupportedErr.make("Not available in Python VM")
 
-    # Methods for sendWhenDone/sendWhenComplete support
+    # Methods for send_when_done/send_when_complete support
 
-    def sendWhenDone(self, actor, future):
+    def send_when_done(self, actor, future):
         """
         Register actor/future to be notified when this future completes.
-        Used by Actor.sendWhenComplete().
+        Used by Actor.send_when_complete().
         """
         immediate = False
         with self._condition:
-            if self.isDone():
+            if self.is_done():
                 immediate = True
             else:
                 self._when_done.append((actor, future))
@@ -295,8 +295,8 @@ class ActorFuture(Obj):
                 traceback.print_exc()
 
     def _register_when_done(self, actor, future):
-        """Alias for sendWhenDone for backwards compatibility"""
-        return self.sendWhenDone(actor, future)
+        """Alias for send_when_done for backwards compatibility"""
+        return self.send_when_done(actor, future)
 
     def _send_when_done(self, when_done_list):
         """Send notifications to all registered when-done handlers"""
@@ -309,9 +309,9 @@ class ActorFuture(Obj):
                 import traceback
                 traceback.print_exc()
 
-    # Static helper for waitForAll
+    # Static helper for wait_for_all
     @staticmethod
-    def waitForAll(futures, timeout=None):
+    def wait_for_all(futures, timeout=None):
         """
         Block on a list of futures until they all transition to a completed state.
         If timeout is null block forever, otherwise raise TimeoutErr if any one
@@ -319,7 +319,7 @@ class ActorFuture(Obj):
         """
         if timeout is None:
             for f in futures:
-                f.waitFor(None)
+                f.wait_for(None)
         else:
             import time
             # Convert Duration to milliseconds
@@ -331,7 +331,7 @@ class ActorFuture(Obj):
             for f in futures:
                 left = deadline - time.time() * 1000
                 from fan.sys.Duration import Duration
-                f.waitFor(Duration.makeMillis(int(left)))
+                f.wait_for(Duration.make_millis(int(left)))
 
 
 # Type metadata registration for reflection
@@ -344,11 +344,11 @@ _t._base_qname = 'concurrent::Future'
 _t.tf_({'sys::Js': {}})
 _t.am_('make', 265, 'concurrent::ActorFuture', [], {})
 _t.am_('status', 1, 'concurrent::FutureStatus', [], {})
-_t.am_('isDone', 1, 'sys::Bool', [], {})
-_t.am_('isCancelled', 1, 'sys::Bool', [], {})
+_t.am_('is_done', 1, 'sys::Bool', [], {})
+_t.am_('is_cancelled', 1, 'sys::Bool', [], {})
 _t.am_('get', 1, 'sys::Obj?', [Param('timeout', Type.find('sys::Duration?'), True)], {})
-_t.am_('waitFor', 1, 'concurrent::Future', [Param('timeout', Type.find('sys::Duration?'), True)], {})
+_t.am_('wait_for', 1, 'concurrent::Future', [Param('timeout', Type.find('sys::Duration?'), True)], {})
 _t.am_('cancel', 1, 'sys::Void', [], {})
 _t.am_('complete', 1, 'concurrent::Future', [Param('result', Type.find('sys::Obj?'), False)], {})
-_t.am_('completeErr', 1, 'concurrent::Future', [Param('err', Type.find('sys::Err'), False)], {})
+_t.am_('complete_err', 1, 'concurrent::Future', [Param('err', Type.find('sys::Err'), False)], {})
 _t.am_('then', 1, 'concurrent::Future', [Param('onOk', Type.find('|sys::Obj?->sys::Obj?|'), False), Param('onErr', Type.find('|sys::Err->sys::Obj?|?'), True)], {})

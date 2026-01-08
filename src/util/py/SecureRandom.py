@@ -59,16 +59,16 @@ class SecureRandom(Obj):
 
         return start + (val % (end_val - start))
 
-    def nextBool(self):
+    def next_bool(self):
         """Return the next random boolean."""
         return secrets.randbits(1) == 1
 
-    def nextFloat(self):
+    def next_float(self):
         """Return the next random float between 0.0 and 1.0."""
         # Generate 53 bits of randomness for a float in [0, 1)
         return secrets.randbits(53) / (1 << 53)
 
-    def nextBuf(self, size):
+    def next_buf(self, size):
         """Return a buffer filled with random bytes."""
         from fan.sys.Buf import Buf
         size = int(size)

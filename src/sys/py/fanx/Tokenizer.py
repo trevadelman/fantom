@@ -82,10 +82,10 @@ class Tokenizer:
             return self.type
 
         self.val = None
-        self.type = self._doNext()
+        self.type = self._do_next()
         return self.type
 
-    def _doNext(self):
+    def _do_next(self):
         """Internal method to read next token."""
         while True:
             # Skip whitespace
@@ -193,15 +193,15 @@ class Tokenizer:
 
             if c == ord('*'):
                 if self.peek == ord('*'):
-                    self._skipCommentSL()
+                    self._skip_comment_sl()
                     continue
 
             if c == ord('/'):
                 if self.peek == ord('/'):
-                    self._skipCommentSL()
+                    self._skip_comment_sl()
                     continue
                 if self.peek == ord('*'):
-                    self._skipCommentML()
+                    self._skip_comment_ml()
                     continue
 
             # Invalid character
@@ -211,7 +211,7 @@ class Tokenizer:
         """Parse identifier: alpha (alpha|digit)*"""
         s = []
         first = self.cur
-        while (self.curt == self.ALPHA or self.curt == self.DIGIT) and self.cur > 0:
+        while (self.curt == Tokenizer.ALPHA or self.curt == Tokenizer.DIGIT) and self.cur > 0:
             s.append(chr(self.cur))
             self._consume()
 
@@ -401,14 +401,14 @@ class Tokenizer:
         self._consume()  # x
 
         # Read first hex digit
-        val = self._hexDigit(self.cur)
+        val = self._hex_digit(self.cur)
         if val < 0:
             raise self._err("Expecting hex number")
         self._consume()
 
         nib_count = 1
         while True:
-            nib = self._hexDigit(self.cur)
+            nib = self._hex_digit(self.cur)
             if nib < 0:
                 if self.cur == ord('_'):
                     self._consume()
@@ -424,7 +424,7 @@ class Tokenizer:
         return Token.INT_LITERAL
 
     @staticmethod
-    def _hexDigit(c):
+    def _hex_digit(c):
         """Convert hex character to int value."""
         if ord('0') <= c <= ord('9'):
             return c - ord('0')
@@ -517,13 +517,13 @@ class Tokenizer:
         # Check for \uxxxx
         if c == ord('u'):
             self._consume()
-            n3 = self._hexDigit(self.cur)
+            n3 = self._hex_digit(self.cur)
             self._consume()
-            n2 = self._hexDigit(self.cur)
+            n2 = self._hex_digit(self.cur)
             self._consume()
-            n1 = self._hexDigit(self.cur)
+            n1 = self._hex_digit(self.cur)
             self._consume()
-            n0 = self._hexDigit(self.cur)
+            n0 = self._hex_digit(self.cur)
             self._consume()
             if n3 < 0 or n2 < 0 or n1 < 0 or n0 < 0:
                 raise self._err("Invalid hex value for \\uxxxx")
@@ -549,10 +549,10 @@ class Tokenizer:
                 self._consume()
 
         from fan.sys.Uri import Uri
-        self.val = Uri.fromStr(''.join(s))
+        self.val = Uri.from_str(''.join(s))
         return Token.URI_LITERAL
 
-    def _skipCommentSL(self):
+    def _skip_comment_sl(self):
         """Skip single line comment (// or **)."""
         self._consume()  # first char
         self._consume()  # second char
@@ -564,7 +564,7 @@ class Tokenizer:
                 break
             self._consume()
 
-    def _skipCommentML(self):
+    def _skip_comment_ml(self):
         """Skip multi-line comment (/* */). Supports nesting."""
         self._consume()  # /
         self._consume()  # *
@@ -592,9 +592,9 @@ class Tokenizer:
             self.line += 1
 
         # Read next character, normalize \r\n
-        c = self.in_stream.rChar()
+        c = self.in_stream.r_char()
         if c == ord('\n') and self.peek == ord('\r'):
-            c = self.in_stream.rChar()
+            c = self.in_stream.r_char()
 
         # Roll cur to peek, peek to new char
         self.cur = self.peek
@@ -603,7 +603,7 @@ class Tokenizer:
         if self.peek is not None and 0 < self.peek < 128:
             self.peekt = self._char_map[self.peek]
         else:
-            self.peekt = self.ALPHA if self.peek > 0 else 0
+            self.peekt = Tokenizer.ALPHA if self.peek > 0 else 0
 
     def _err(self, msg):
         """Create error with line number context."""

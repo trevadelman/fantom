@@ -5,17 +5,18 @@
 
 import math
 from .Obj import Obj
+from .Type import _camel_to_snake
 
 
 class Float(Obj):
     """Float type - uses static methods on native float"""
 
     @staticmethod
-    def defVal():
+    def def_val():
         return 0.0
 
     @staticmethod
-    def isImmutable(self):
+    def is_immutable(self):
         return True
 
     @staticmethod
@@ -81,7 +82,7 @@ class Float(Obj):
 
     # Conversions
     @staticmethod
-    def toStr(self):
+    def to_str(self):
         if math.isnan(self):
             return "NaN"
         if math.isinf(self):
@@ -95,16 +96,16 @@ class Float(Obj):
         return s
 
     @staticmethod
-    def toCode(self):
+    def to_code(self):
         import math
         if math.isnan(self):
             return "Float.nan"
         if math.isinf(self):
             return "Float.posInf" if self > 0 else "Float.negInf"
-        return Float.toStr(self) + "f"
+        return Float.to_str(self) + "f"
 
     @staticmethod
-    def toInt(self):
+    def to_int(self):
         # Handle special values - Fantom returns maxVal/minVal for infinity
         if math.isnan(self):
             return 0
@@ -116,29 +117,29 @@ class Float(Obj):
         return int(self)
 
     @staticmethod
-    def toFloat(self):
+    def to_float(self):
         return float(self)
 
     @staticmethod
-    def toDecimal(self):
+    def to_decimal(self):
         """Convert to Decimal - returns the float value as-is for now"""
         return self
 
     # Math operations
     @staticmethod
-    def abs(self):
+    def abs_(self):
         return abs(self)
 
     @staticmethod
-    def min(self, that):
+    def min_(self, that):
         return min(self, that)
 
     @staticmethod
-    def max(self, that):
+    def max_(self, that):
         return max(self, that)
 
     @staticmethod
-    def pow(self, exp):
+    def pow_(self, exp):
         return self ** exp
 
     @staticmethod
@@ -156,7 +157,7 @@ class Float(Obj):
         return math.ceil(self)
 
     @staticmethod
-    def round(self):
+    def round_(self):
         # Handle special values - infinity and NaN round to themselves
         if math.isnan(self) or math.isinf(self):
             return self
@@ -222,26 +223,26 @@ class Float(Obj):
 
     # Degree conversion
     @staticmethod
-    def toDegrees(self):
+    def to_degrees(self):
         return math.degrees(self)
 
     @staticmethod
-    def toRadians(self):
+    def to_radians(self):
         return math.radians(self)
 
     # Checks
     @staticmethod
-    def isNaN(self):
+    def is_na_n(self):
         return math.isnan(self)
 
     @staticmethod
-    def isNegZero(self):
+    def is_neg_zero(self):
         return self == 0.0 and math.copysign(1, self) < 0
 
     @staticmethod
-    def normNegZero(self):
+    def norm_neg_zero(self):
         """Normalize negative zero to positive zero"""
-        if Float.isNegZero(self):
+        if Float.is_neg_zero(self):
             return 0.0
         return self
 
@@ -287,16 +288,13 @@ class Float(Obj):
         return struct.unpack('>I', struct.pack('>f', self))[0]
 
     @staticmethod
-    def makeBits(bits):
+    def make_bits(bits):
         """Convert IEEE 754 64-bit bits to Float"""
         import struct
         return struct.unpack('>d', struct.pack('>q', bits))[0]
 
-    # Alias for compatibility
-    bitsToFloat = makeBits
-
     @staticmethod
-    def makeBits32(bits):
+    def make_bits32(bits):
         """Convert IEEE 754 32-bit bits to Float"""
         import struct
         # Use unsigned int format for 32-bit
@@ -304,7 +302,7 @@ class Float(Obj):
 
     # Parsing
     @staticmethod
-    def fromStr(s, checked=True):
+    def from_str(s, checked=True):
         try:
             s = s.strip()
             if s == "NaN":
@@ -318,15 +316,15 @@ class Float(Obj):
             if not checked:
                 return None
             from .Err import ParseErr
-            raise ParseErr.makeStr("Float", s)
+            raise ParseErr.make_str("Float", s)
 
     # Constants
     @staticmethod
-    def posInf():
+    def pos_inf():
         return float("inf")
 
     @staticmethod
-    def negInf():
+    def neg_inf():
         return float("-inf")
 
     @staticmethod
@@ -348,7 +346,7 @@ class Float(Obj):
         return random.random()
 
     @staticmethod
-    def _getLocaleSeparators(locale=None):
+    def _get_locale_separators(locale=None):
         """Get thousands and decimal separators for the given locale.
 
         Returns (thousands_sep, decimal_sep) tuple.
@@ -375,7 +373,7 @@ class Float(Obj):
         return ('\u00a0', ',')
 
     @staticmethod
-    def toLocale(self, pattern=None, locale=None):
+    def to_locale(self, pattern=None, locale=None):
         """Format float according to locale pattern"""
         if math.isnan(self):
             return "NaN"
@@ -383,7 +381,7 @@ class Float(Obj):
             return "INF" if self > 0 else "-INF"
 
         # Get locale-specific separators
-        thousands_sep, decimal_sep = Float._getLocaleSeparators(locale)
+        thousands_sep, decimal_sep = Float._get_locale_separators(locale)
 
         # Handle negative zero - treat as positive zero
         # math.copysign(1, -0.0) returns -1.0, so check both value and sign
@@ -401,9 +399,9 @@ class Float(Obj):
                 rounded = round(self)
                 if is_negative:
                     rounded = -rounded
-                return Int.toLocale(rounded, None, locale)
+                return Int.to_locale(rounded, None, locale)
             # Determine default pattern based on magnitude
-            pattern = Float._getDefaultLocalePattern(self)
+            pattern = Float._get_default_locale_pattern(self)
 
         # Pattern parsing for "#", "#.###", "#,###.00", "#.00##", "00.0" etc.
         use_grouping = ',' in pattern
@@ -465,10 +463,10 @@ class Float(Obj):
                 parts = formatted.split('.')
                 int_part = parts[0]
                 dec_part = parts[1]
-                int_part = Float._formatIntWithGrouping(int(int_part) if int_part else 0, group_size, thousands_sep)
+                int_part = Float._format_int_with_grouping(int(int_part) if int_part else 0, group_size, thousands_sep)
                 formatted = int_part + decimal_sep + dec_part
             else:
-                formatted = Float._formatIntWithGrouping(int(formatted) if formatted else 0, group_size, thousands_sep)
+                formatted = Float._format_int_with_grouping(int(formatted) if formatted else 0, group_size, thousands_sep)
         else:
             # No grouping - just replace decimal separator
             formatted = formatted.replace('.', decimal_sep)
@@ -487,7 +485,7 @@ class Float(Obj):
         return formatted
 
     @staticmethod
-    def _getDefaultLocalePattern(val):
+    def _get_default_locale_pattern(val):
         """Determine default locale pattern based on magnitude.
 
         Following the JavaScript implementation:
@@ -520,7 +518,7 @@ class Float(Obj):
         return "0.0##"
 
     @staticmethod
-    def _formatIntWithGrouping(val, group_size, sep):
+    def _format_int_with_grouping(val, group_size, sep):
         """Format integer part with specified group size and separator"""
         s = str(abs(int(val)))
 
@@ -561,3 +559,31 @@ class Float(Obj):
                 s += '.0'
             out.w(s)
             out.w("f")
+
+    @staticmethod
+    def trap(self, name, args=None):
+        """Dynamic method invocation with automatic name conversion.
+
+        Supports both Fantom names (camelCase) and Python names (snake_case).
+        Uses dynamic getattr() lookup instead of hardcoded map.
+        """
+        if args is None:
+            args = []
+
+        # First try exact match
+        method = getattr(Float, name, None)
+
+        # Try camelCase -> snake_case conversion
+        if method is None:
+            snake_name = _camel_to_snake(name)
+            method = getattr(Float, snake_name, None)
+
+        # Try adding underscore for Python builtins (abs -> abs_, etc.)
+        if method is None and not name.endswith('_'):
+            method = getattr(Float, name + '_', None)
+
+        if method is not None and callable(method):
+            return method(self, *args)
+
+        raise AttributeError(f"Float.{name}")
+

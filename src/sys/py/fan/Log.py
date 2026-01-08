@@ -17,7 +17,7 @@ class LogLevel(Obj):
         self._ordinal = ordinal
 
     @staticmethod
-    def fromStr(name, checked=True):
+    def from_str(name, checked=True):
         """Parse LogLevel from string"""
         name_lower = name.lower()
         if name_lower in LogLevel._levels:
@@ -32,11 +32,11 @@ class LogLevel(Obj):
         """Get all log level values"""
         if LogLevel._vals_list is None:
             from fan.sys.List import List
-            vals = List.fromLiteral(
+            vals = List.from_literal(
                 [LogLevel._debug, LogLevel._info, LogLevel._warn, LogLevel._err, LogLevel._silent],
                 "sys::LogLevel"
             )
-            LogLevel._vals_list = List.toImmutable(vals)
+            LogLevel._vals_list = List.to_immutable(vals)
         return LogLevel._vals_list
 
     @staticmethod
@@ -72,7 +72,7 @@ class LogLevel(Obj):
         """Get numeric ordinal"""
         return self._ordinal
 
-    def toStr(self):
+    def to_str(self):
         return self._name
 
     def __lt__(self, other):
@@ -132,7 +132,7 @@ class LogRec(Obj):
     def level(self):
         return self._level
 
-    def logName(self):
+    def log_name(self):
         return self._logName
 
     def msg(self):
@@ -141,7 +141,7 @@ class LogRec(Obj):
     def err(self):
         return self._err
 
-    def toStr(self):
+    def to_str(self):
         return f"[{self._level.name()}] {self._logName}: {self._msg}"
 
 
@@ -156,7 +156,7 @@ class Log(Obj):
     def __init__(self, name, register=True):
         """Create a new log. If register=True, adds to global registry."""
         # Validate name
-        if not Log._isValidName(name):
+        if not Log._is_valid_name(name):
             from fan.sys.Err import NameErr
             raise NameErr(f"Invalid log name: {name}")
 
@@ -173,7 +173,7 @@ class Log(Obj):
             Log._logs[name] = self
 
     @staticmethod
-    def _isValidName(name):
+    def _is_valid_name(name):
         """Validate log name - must be valid identifier characters"""
         if not name:
             return False
@@ -193,7 +193,7 @@ class Log(Obj):
     def get(name):
         """Get or create a log by name"""
         # Validate name
-        if not Log._isValidName(name):
+        if not Log._is_valid_name(name):
             from fan.sys.Err import NameErr
             raise NameErr(f"Invalid log name: {name}")
 
@@ -216,7 +216,7 @@ class Log(Obj):
     def list_():
         """List all logs"""
         from fan.sys.List import List
-        return List.fromLiteral(list(Log._logs.values()), "sys::Log")
+        return List.from_literal(list(Log._logs.values()), "sys::Log")
 
     def name(self):
         """Get log name"""
@@ -230,40 +230,40 @@ class Log(Obj):
             self._level = value
             return None
 
-    def isEnabled(self, level):
+    def is_enabled(self, level):
         """Check if level is enabled"""
         return level._ordinal >= self._level._ordinal
 
-    def isDebug(self):
+    def is_debug(self):
         return self._level._ordinal <= LogLevel._debug._ordinal
 
-    def isInfo(self):
+    def is_info(self):
         return self._level._ordinal <= LogLevel._info._ordinal
 
-    def isWarn(self):
+    def is_warn(self):
         return self._level._ordinal <= LogLevel._warn._ordinal
 
-    def isErr(self):
+    def is_err(self):
         return self._level._ordinal <= LogLevel._err._ordinal
 
     def debug(self, msg, err=None):
         """Log debug message"""
-        if self.isEnabled(LogLevel._debug):
+        if self.is_enabled(LogLevel._debug):
             self._log(LogLevel._debug, msg, err)
 
     def info(self, msg, err=None):
         """Log info message"""
-        if self.isEnabled(LogLevel._info):
+        if self.is_enabled(LogLevel._info):
             self._log(LogLevel._info, msg, err)
 
     def warn(self, msg, err=None):
         """Log warning message"""
-        if self.isEnabled(LogLevel._warn):
+        if self.is_enabled(LogLevel._warn):
             self._log(LogLevel._warn, msg, err)
 
     def err(self, msg, err=None):
         """Log error message"""
-        if self.isEnabled(LogLevel._err):
+        if self.is_enabled(LogLevel._err):
             self._log(LogLevel._err, msg, err)
 
     def _log(self, level, msg, err):
@@ -296,27 +296,27 @@ class Log(Obj):
         if rec._err:
             self._pyLogger.exception(rec._err)
 
-    def toStr(self):
+    def to_str(self):
         return self._name
 
     @staticmethod
     def handlers():
         """Get global log handlers"""
         from fan.sys.List import List
-        return List.fromLiteral(list(Log._handlers), "|sys::LogRec->sys::Void|")
+        return List.from_literal(list(Log._handlers), "|sys::LogRec->sys::Void|")
 
     @staticmethod
-    def addHandler(handler):
+    def add_handler(handler):
         """Add a global log handler"""
         # Check immutability
         from fan.sys.ObjUtil import ObjUtil
-        if not ObjUtil.isImmutable(handler):
+        if not ObjUtil.is_immutable(handler):
             from fan.sys.Err import NotImmutableErr
             raise NotImmutableErr("Handler must be immutable")
         Log._handlers.append(handler)
 
     @staticmethod
-    def removeHandler(handler):
+    def remove_handler(handler):
         """Remove a global log handler"""
         if handler in Log._handlers:
             Log._handlers.remove(handler)

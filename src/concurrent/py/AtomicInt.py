@@ -29,19 +29,19 @@ class AtomicInt(Obj):
             with self._lock:
                 self.__val = new_val
 
-    def _getVal(self):
+    def _get_val(self):
         """Get the value atomically (callable version)."""
         with self._lock:
             return self.__val
 
-    def getAndSet(self, val):
+    def get_and_set(self, val):
         """Atomically set to the given value and return the old value."""
         with self._lock:
             old = self.__val
             self.__val = val
             return old
 
-    def compareAndSet(self, expect, update):
+    def compare_and_set(self, expect, update):
         """Atomically set to update if current value equals expect."""
         with self._lock:
             if self.__val == expect:
@@ -49,40 +49,40 @@ class AtomicInt(Obj):
                 return True
             return False
 
-    def getAndIncrement(self):
+    def get_and_increment(self):
         """Atomically increment and return the old value."""
         with self._lock:
             old = self.__val
             self.__val += 1
             return old
 
-    def getAndDecrement(self):
+    def get_and_decrement(self):
         """Atomically decrement and return the old value."""
         with self._lock:
             old = self.__val
             self.__val -= 1
             return old
 
-    def getAndAdd(self, delta):
+    def get_and_add(self, delta):
         """Atomically add delta and return the old value."""
         with self._lock:
             old = self.__val
             self.__val += delta
             return old
 
-    def incrementAndGet(self):
+    def increment_and_get(self):
         """Atomically increment and return the new value."""
         with self._lock:
             self.__val += 1
             return self.__val
 
-    def decrementAndGet(self):
+    def decrement_and_get(self):
         """Atomically decrement and return the new value."""
         with self._lock:
             self.__val -= 1
             return self.__val
 
-    def addAndGet(self, delta):
+    def add_and_get(self, delta):
         """Atomically add delta and return the new value."""
         with self._lock:
             self.__val += delta
@@ -103,11 +103,11 @@ class AtomicInt(Obj):
         with self._lock:
             self.__val += delta
 
-    def toStr(self):
-        return Int.toStr(self._getVal())
+    def to_str(self):
+        return Int.to_str(self._get_val())
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()
 
 
 # Type metadata registration for reflection
@@ -118,15 +118,15 @@ _t = Type.find('concurrent::AtomicInt')
 _t.tf_({'sys::Js': {}})
 _t.af_('val', 1, 'sys::Int', {})
 _t.am_('make', 257, 'sys::Void', [Param('val', Type.find('sys::Int'), True)], {})
-_t.am_('getAndSet', 1, 'sys::Int', [Param('val', Type.find('sys::Int'), False)], {})
-_t.am_('compareAndSet', 1, 'sys::Bool', [Param('expect', Type.find('sys::Int'), False), Param('update', Type.find('sys::Int'), False)], {})
-_t.am_('getAndIncrement', 1, 'sys::Int', [], {})
-_t.am_('getAndDecrement', 1, 'sys::Int', [], {})
-_t.am_('getAndAdd', 1, 'sys::Int', [Param('delta', Type.find('sys::Int'), False)], {})
-_t.am_('incrementAndGet', 1, 'sys::Int', [], {})
-_t.am_('decrementAndGet', 1, 'sys::Int', [], {})
-_t.am_('addAndGet', 1, 'sys::Int', [Param('delta', Type.find('sys::Int'), False)], {})
+_t.am_('get_and_set', 1, 'sys::Int', [Param('val', Type.find('sys::Int'), False)], {})
+_t.am_('compare_and_set', 1, 'sys::Bool', [Param('expect', Type.find('sys::Int'), False), Param('update', Type.find('sys::Int'), False)], {})
+_t.am_('get_and_increment', 1, 'sys::Int', [], {})
+_t.am_('get_and_decrement', 1, 'sys::Int', [], {})
+_t.am_('get_and_add', 1, 'sys::Int', [Param('delta', Type.find('sys::Int'), False)], {})
+_t.am_('increment_and_get', 1, 'sys::Int', [], {})
+_t.am_('decrement_and_get', 1, 'sys::Int', [], {})
+_t.am_('add_and_get', 1, 'sys::Int', [Param('delta', Type.find('sys::Int'), False)], {})
 _t.am_('increment', 1, 'sys::Void', [], {})
 _t.am_('decrement', 1, 'sys::Void', [], {})
 _t.am_('add', 1, 'sys::Void', [Param('delta', Type.find('sys::Int'), False)], {})
-_t.am_('toStr', 4609, 'sys::Str', [], {})
+_t.am_('to_str', 4609, 'sys::Str', [], {})

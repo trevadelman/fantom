@@ -24,7 +24,7 @@ class File(Obj):
         return os.sep
 
     @staticmethod
-    def pathSep():
+    def path_sep():
         """Path separator for current OS."""
         return os.pathsep
 
@@ -34,7 +34,7 @@ class File(Obj):
 
         # Store the URI
         if isinstance(uri, str):
-            self._uri = Uri.fromStr(uri)
+            self._uri = Uri.from_str(uri)
         elif isinstance(uri, Uri):
             self._uri = uri
         else:
@@ -59,7 +59,7 @@ class File(Obj):
 
         # Handle Uri or string
         if isinstance(uri, str):
-            uri = Uri.fromStr(uri)
+            uri = Uri.from_str(uri)
 
         # Create file
         f = File(uri)
@@ -67,10 +67,10 @@ class File(Obj):
         # Check slash consistency with actual file type
         if f._path.exists():
             is_dir = f._path.is_dir()
-            uri_is_dir = f._uri.isDir()
+            uri_is_dir = f._uri.is_dir()
             if is_dir and not checkSlash and not uri_is_dir:
                 # Auto-correct URI to have trailing slash (per JS behavior)
-                f._uri = uri.plusSlash()
+                f._uri = uri.plus_slash()
             elif is_dir and checkSlash and not uri_is_dir:
                 raise IOErr.make(f"Directory URI must end with slash: {uri}")
             elif not is_dir and uri_is_dir:
@@ -95,7 +95,7 @@ class File(Obj):
 
         # Backslash-escape special URI characters in path
         # Fantom URIs use backslash escaping (e.g., `file \#2`) not percent encoding
-        uri_str = File._escapePathForUri(uri_str)
+        uri_str = File._escape_path_for_uri(uri_str)
 
         # For absolute paths, create file:// URI with scheme
         if path.is_absolute():
@@ -106,17 +106,17 @@ class File(Obj):
             if path.exists() and path.is_dir() and not uri_str.endswith('/'):
                 uri_str += '/'
             # Return with file:// scheme
-            return File(Uri.fromStr(f"file://{uri_str}"))
+            return File(Uri.from_str(f"file://{uri_str}"))
 
         # For relative paths, no scheme
         if path.exists() and path.is_dir() and not uri_str.endswith('/'):
             uri_str += '/'
 
         # Create Uri directly to avoid urlparse misinterpreting special chars
-        return File(Uri._makeFromPathStr(uri_str))
+        return File(Uri._make_from_path_str(uri_str))
 
     @staticmethod
-    def _escapePathForUri(path_str):
+    def _escape_path_for_uri(path_str):
         """Escape special URI characters in path using backslash.
 
         Fantom URIs use backslash escaping for # ? etc.
@@ -130,7 +130,7 @@ class File(Obj):
         return ''.join(result)
 
     @staticmethod
-    def osRoots():
+    def os_roots():
         """Return list of OS root directories."""
         from .List import List as FanList
         if os.name == 'nt':
@@ -141,13 +141,13 @@ class File(Obj):
                 drive = f"{letter}:\\"
                 if os.path.exists(drive):
                     roots.append(File.os(drive))
-            return FanList.fromLiteral(roots, "sys::File")
+            return FanList.from_literal(roots, "sys::File")
         else:
             # Unix: just root
-            return FanList.fromLiteral([File.os("/")], "sys::File")
+            return FanList.from_literal([File.os("/")], "sys::File")
 
     @staticmethod
-    def createTemp(prefix="fan", suffix=".tmp", dir=None):
+    def create_temp(prefix="fan", suffix=".tmp", dir=None):
         """Create a temporary file.
 
         Args:
@@ -163,7 +163,7 @@ class File(Obj):
         dir_path = None
         if dir is not None:
             if isinstance(dir, File):
-                if not dir.isDir():
+                if not dir.is_dir():
                     raise IOErr.make(f"Not a directory: {dir}")
                 dir_path = str(dir._path)
             else:
@@ -180,14 +180,14 @@ class File(Obj):
             return Path('.')
 
         # Get path string from URI
-        path_str = uri.pathStr() if hasattr(uri, 'pathStr') else str(uri)
+        path_str = uri.path_str() if hasattr(uri, 'path_str') else str(uri)
 
         # Handle file:// scheme
         if hasattr(uri, 'scheme') and uri.scheme() == 'file':
-            path_str = uri.pathStr()
+            path_str = uri.path_str()
 
         # Unescape backslash-escaped special characters for OS path
-        path_str = File._unescapePathFromUri(path_str)
+        path_str = File._unescape_path_from_uri(path_str)
 
         # Remove leading slash for relative paths on Unix
         # Keep it for absolute paths
@@ -199,7 +199,7 @@ class File(Obj):
         return Path(path_str.rstrip('/') if path_str != '/' else '/')
 
     @staticmethod
-    def _unescapePathFromUri(path_str):
+    def _unescape_path_from_uri(path_str):
         """Unescape backslash-escaped characters in URI path for OS path.
 
         Converts URI path like 'file \#2' to OS path 'file #2'.
@@ -228,12 +228,12 @@ class File(Obj):
         """Return the URI for this file."""
         return self._uri
 
-    def toStr(self):
+    def to_str(self):
         """Return string representation (same as uri.toStr)."""
         return str(self._uri)
 
     def __str__(self):
-        return self.toStr()
+        return self.to_str()
 
     def __repr__(self):
         return f"File({self._uri})"
@@ -274,29 +274,29 @@ class File(Obj):
             ext = suffix[1:] if suffix else None
         return ext
 
-    def mimeType(self):
+    def mime_type(self):
         """Return MIME type based on extension."""
         from .MimeType import MimeType
         ext = self.ext()
         if ext is None:
             return None
-        return MimeType.forExt(ext)
+        return MimeType.for_ext(ext)
 
-    def isDir(self):
+    def is_dir(self):
         """Return true if this represents a directory."""
-        if hasattr(self._uri, 'isDir'):
-            return self._uri.isDir()
+        if hasattr(self._uri, 'is_dir'):
+            return self._uri.is_dir()
         return self._path.is_dir() if self._path.exists() else str(self._path).endswith('/')
 
     def path(self):
         """Return path segments as a list."""
         return self._uri.path() if hasattr(self._uri, 'path') else list(self._path.parts)
 
-    def pathStr(self):
+    def path_str(self):
         """Return path as string."""
-        return self._uri.pathStr() if hasattr(self._uri, 'pathStr') else str(self._path)
+        return self._uri.path_str() if hasattr(self._uri, 'path_str') else str(self._path)
 
-    def osPath(self):
+    def os_path(self):
         """Return OS-specific path string.
 
         For relative URIs, returns relative OS path.
@@ -326,7 +326,7 @@ class File(Obj):
             uri_str += '/'
         if not uri_str.startswith('/'):
             uri_str = '/' + uri_str
-        return File(Uri.fromStr(f"file://{uri_str}"))
+        return File(Uri.from_str(f"file://{uri_str}"))
 
     #########################################################################
     # Access Info
@@ -344,7 +344,7 @@ class File(Obj):
             return None
         return self._path.stat().st_size
 
-    def isEmpty(self):
+    def is_empty(self):
         """Return true if file/directory is empty."""
         if not self._path.exists():
             return True
@@ -358,7 +358,7 @@ class File(Obj):
         import os
         if val is not None:
             # Set modified time
-            mtime = val.toJava() / 1000.0  # Convert from Java millis to Unix seconds
+            mtime = val.to_java() / 1000.0  # Convert from Java millis to Unix seconds
             atime = self._path.stat().st_atime if self._path.exists() else mtime
             os.utime(str(self._path), (atime, mtime))
             return
@@ -366,7 +366,7 @@ class File(Obj):
         if not self._path.exists():
             return None
         mtime = self._path.stat().st_mtime
-        return DateTime.fromPosix(int(mtime))
+        return DateTime.from_posix(int(mtime))
 
     def store(self):
         """Return the storage device for this file."""
@@ -377,50 +377,50 @@ class File(Obj):
     # Listing
     #########################################################################
 
-    def list(self, pattern=None):
+    def list_(self, pattern=None):
         """List files in directory."""
         from .List import List as FanList
 
         if not self._path.exists() or not self._path.is_dir():
-            return FanList.fromLiteral([], "sys::File")
+            return FanList.from_literal([], "sys::File")
 
         result = []
         for child in self._path.iterdir():
             f = File.os(str(child))
             if pattern is None or self._matches_pattern(child.name, pattern):
                 result.append(f)
-        return FanList.fromLiteral(result, "sys::File")
+        return FanList.from_literal(result, "sys::File")
 
     # Alias for transpiled code (list is reserved in Python contexts)
     list_ = list
 
-    def listFiles(self, pattern=None):
+    def list_files(self, pattern=None):
         """List files (not directories) in directory."""
         from .List import List as FanList
 
         if not self._path.exists() or not self._path.is_dir():
-            return FanList.fromLiteral([], "sys::File")
+            return FanList.from_literal([], "sys::File")
 
         result = []
         for child in self._path.iterdir():
             if child.is_file():
                 if pattern is None or self._matches_pattern(child.name, pattern):
                     result.append(File.os(str(child)))
-        return FanList.fromLiteral(result, "sys::File")
+        return FanList.from_literal(result, "sys::File")
 
-    def listDirs(self, pattern=None):
+    def list_dirs(self, pattern=None):
         """List directories in directory."""
         from .List import List as FanList
 
         if not self._path.exists() or not self._path.is_dir():
-            return FanList.fromLiteral([], "sys::File")
+            return FanList.from_literal([], "sys::File")
 
         result = []
         for child in self._path.iterdir():
             if child.is_dir():
                 if pattern is None or self._matches_pattern(child.name, pattern):
                     result.append(File.os(str(child)))
-        return FanList.fromLiteral(result, "sys::File")
+        return FanList.from_literal(result, "sys::File")
 
     def _matches_pattern(self, name, pattern):
         """Check if name matches a Regex pattern."""
@@ -449,14 +449,14 @@ class File(Obj):
         from .Err import IOErr
 
         if isinstance(uri, str):
-            uri = Uri.fromStr(uri)
+            uri = Uri.from_str(uri)
 
         # Resolve URI
         resolved = self._uri.plus(uri) if hasattr(self._uri, 'plus') else None
         if resolved is None:
             # Simple path concatenation
             new_path = self._path / str(uri)
-            resolved = Uri.fromStr(new_path.as_posix())
+            resolved = Uri.from_str(new_path.as_posix())
 
         return File.make(resolved, checkSlash)
 
@@ -469,21 +469,21 @@ class File(Obj):
 
     def create(self):
         """Create this file/directory if it doesn't exist."""
-        if self.isDir():
+        if self.is_dir():
             self._path.mkdir(parents=True, exist_ok=True)
         else:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             self._path.touch()
         return self
 
-    def createFile(self, name):
+    def create_file(self, name):
         """Create a child file in this directory."""
         from .Uri import Uri
         child_path = self._path / name
         child_path.touch()
         return File.os(str(child_path))
 
-    def createDir(self, name):
+    def create_dir(self, name):
         """Create a child directory in this directory."""
         from .Uri import Uri
         child_path = self._path / name
@@ -499,19 +499,19 @@ class File(Obj):
         else:
             self._path.unlink()
 
-    def deleteOnExit(self):
+    def delete_on_exit(self):
         """Mark file for deletion when process exits."""
         import atexit
         atexit.register(lambda: self._path.unlink(missing_ok=True) if self._path.exists() else None)
         return self
 
-    def moveTo(self, dest):
+    def move_to(self, dest):
         """Move this file to destination."""
         from .Err import ArgErr, IOErr
 
         if isinstance(dest, File):
             dest_path = dest._path
-            dest_is_dir = dest.isDir()  # Use URI-based check
+            dest_is_dir = dest.is_dir()  # Use URI-based check
         else:
             dest_path = Path(str(dest))
             dest_is_dir = str(dest_path).endswith('/') or (dest_path.exists() and dest_path.is_dir())
@@ -526,7 +526,7 @@ class File(Obj):
         shutil.move(str(self._path), str(dest_path))
         return File.os(str(dest_path))
 
-    def moveInto(self, dest):
+    def move_into(self, dest):
         """Move this file into destination directory."""
         from .Uri import Uri
         if isinstance(dest, File):
@@ -539,9 +539,9 @@ class File(Obj):
             path_str += '/'
         if new_path.is_absolute() and not path_str.startswith('/'):
             path_str = '/' + path_str
-        return self.moveTo(File(Uri.fromStr(path_str)))
+        return self.move_to(File(Uri.from_str(path_str)))
 
-    def copyTo(self, dest, options=None):
+    def copy_to(self, dest, options=None):
         """Copy this file/directory to destination.
 
         Options:
@@ -557,8 +557,8 @@ class File(Obj):
             dest = File.os(str(dest))
 
         # Validate - dir must copy to dir, file must copy to file
-        if self.isDir() != dest.isDir():
-            if self.isDir():
+        if self.is_dir() != dest.is_dir():
+            if self.is_dir():
                 raise ArgErr.make(f"copyTo must be dir `{dest}`")
             else:
                 raise ArgErr.make(f"copyTo must not be dir `{dest}`")
@@ -571,10 +571,10 @@ class File(Obj):
             overwrite = options.get("overwrite")
 
         # Perform recursive copy
-        self._doCopyTo(dest, exclude, overwrite)
+        self._do_copy_to(dest, exclude, overwrite)
         return dest
 
-    def _doCopyTo(self, to, exclude, overwrite):
+    def _do_copy_to(self, to, exclude, overwrite):
         """Internal recursive copy implementation."""
         from .Err import IOErr
 
@@ -608,33 +608,33 @@ class File(Obj):
                 raise IOErr.make(f"No overwrite policy for `{to}`")
 
         # Copy directory
-        if self.isDir():
+        if self.is_dir():
             to.create()
-            kids = self.list()
+            kids = self.list_()
             # Use size property or len() depending on List implementation
             size = kids.size if isinstance(kids.size, int) else kids.size()
             for i in range(size):
                 kid = kids.get(i)
-                kid._doCopyTo(to._plusNameOf(kid), exclude, overwrite)
+                kid._do_copy_to(to._plus_name_of(kid), exclude, overwrite)
         # Copy file contents
         else:
-            self._doCopyFile(to)
+            self._do_copy_file(to)
 
-    def _doCopyFile(self, to):
+    def _do_copy_file(self, to):
         """Copy file contents to destination."""
         # Ensure parent directory exists
         to._path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(str(self._path), str(to._path))
 
-    def _plusNameOf(self, x):
+    def _plus_name_of(self, x):
         """Get this + name of x (with trailing slash if x is dir)."""
         from .Uri import Uri
         name = x.name()
-        if x.isDir():
+        if x.is_dir():
             name += "/"
-        return self.plus(Uri.fromStr(name))
+        return self.plus(Uri.from_str(name))
 
-    def copyInto(self, dest, options=None):
+    def copy_into(self, dest, options=None):
         """Copy this file into destination directory.
 
         Args:
@@ -645,10 +645,10 @@ class File(Obj):
         """
         from .Err import ArgErr
 
-        if not dest.isDir():
+        if not dest.is_dir():
             raise ArgErr.make(f"Not a dir: `{dest}`")
 
-        return self.copyTo(dest._plusNameOf(self), options)
+        return self.copy_to(dest._plus_name_of(self), options)
 
     def rename(self, newName):
         """Rename this file."""
@@ -660,7 +660,7 @@ class File(Obj):
     # I/O
     #########################################################################
 
-    def open(self, mode="rw"):
+    def open_(self, mode="rw"):
         """Open file for random access, return Buf.
 
         Args:
@@ -719,7 +719,7 @@ class File(Obj):
 
         return FileOutStream(buf, self._path, append)
 
-    def readAllStr(self, normalizeNewlines=True):
+    def read_all_str(self, normalizeNewlines=True):
         """Read entire file as string.
 
         Args:
@@ -735,28 +735,28 @@ class File(Obj):
             content = self._path.read_bytes().decode('utf-8')
         return content
 
-    def readAllLines(self):
+    def read_all_lines(self):
         """Read file as list of lines."""
         from .List import List as FanList
-        content = self.readAllStr()
+        content = self.read_all_str()
         lines = content.split('\n')
         # Remove trailing empty string from final newline
         if lines and lines[-1] == '':
             lines = lines[:-1]
-        return FanList.fromLiteral(lines, "sys::Str")
+        return FanList.from_literal(lines, "sys::Str")
 
-    def readAllBuf(self):
+    def read_all_buf(self):
         """Read entire file into buffer."""
         from .Buf import Buf
         data = self._path.read_bytes()
-        return Buf.fromBytes(data)
+        return Buf.from_bytes(data)
 
-    def eachLine(self, callback):
+    def each_line(self, callback):
         """Iterate over each line in file."""
-        for line in self.readAllLines():
+        for line in self.read_all_lines():
             callback(line)
 
-    def writeProps(self, props):
+    def write_props(self, props):
         """Write a properties file format.
 
         Args:
@@ -783,7 +783,7 @@ class File(Obj):
                     f.write(f"{key}={val}\n")
         return self
 
-    def readProps(self):
+    def read_props(self):
         """Read a properties file and return as Map."""
         from .Map import Map
 
@@ -802,10 +802,10 @@ class File(Obj):
                 if eq > 0:
                     key = line[:eq].strip()
                     val = line[eq+1:].strip()
-                    props.set(key, val)
+                    props.set_(key, val)
         return props
 
-    def readObj(self, options=None):
+    def read_obj(self, options=None):
         """Read a serialized object from this file.
 
         Args:
@@ -815,9 +815,9 @@ class File(Obj):
             Deserialized object
         """
         from fanx.ObjDecoder import ObjDecoder
-        return ObjDecoder(self.in_(), options).readObj()
+        return ObjDecoder(self.in_(), options).read_obj()
 
-    def writeObj(self, obj, options=None):
+    def write_obj(self, obj, options=None):
         """Write a serialized object to this file.
 
         Args:
@@ -830,12 +830,12 @@ class File(Obj):
         out = self.out()
         try:
             from fanx.ObjEncoder import ObjEncoder
-            ObjEncoder(out, options).writeObj(obj)
+            ObjEncoder(out, options).write_obj(obj)
         finally:
             out.close()
         return self
 
-    def withOut(self, callback, append=False, bufSize=None):
+    def with_out(self, callback, append=False, bufSize=None):
         """Open file for writing, call callback with OutStream, then close.
 
         Args:
@@ -853,7 +853,7 @@ class File(Obj):
         finally:
             out.close()
 
-    def withIn(self, callback, bufSize=None):
+    def with_in(self, callback, bufSize=None):
         """Open file for reading, call callback with InStream, then close.
 
         Args:
@@ -908,48 +908,48 @@ class SysOutStream(Obj):
         self._buf.write(b)
         return self
 
-    def writeBuf(self, other, n=None):
-        self._buf.writeBuf(other, n)
+    def write_buf(self, other, n=None):
+        self._buf.write_buf(other, n)
         return self
 
-    def writeI2(self, x):
-        self._buf.writeI2(x)
+    def write_i2(self, x):
+        self._buf.write_i2(x)
         return self
 
-    def writeI4(self, x):
-        self._buf.writeI4(x)
+    def write_i4(self, x):
+        self._buf.write_i4(x)
         return self
 
-    def writeI8(self, x):
-        self._buf.writeI8(x)
+    def write_i8(self, x):
+        self._buf.write_i8(x)
         return self
 
-    def writeF4(self, x):
-        self._buf.writeF4(x)
+    def write_f4(self, x):
+        self._buf.write_f4(x)
         return self
 
-    def writeF8(self, x):
-        self._buf.writeF8(x)
+    def write_f8(self, x):
+        self._buf.write_f8(x)
         return self
 
-    def writeBool(self, x):
-        self._buf.writeBool(x)
+    def write_bool(self, x):
+        self._buf.write_bool(x)
         return self
 
-    def writeDecimal(self, x):
-        self._buf.writeDecimal(x)
+    def write_decimal(self, x):
+        self._buf.write_decimal(x)
         return self
 
-    def writeUtf(self, s):
-        self._buf.writeUtf(s)
+    def write_utf(self, s):
+        self._buf.write_utf(s)
         return self
 
-    def writeChar(self, c):
-        self._buf.writeChar(c)
+    def write_char(self, c):
+        self._buf.write_char(c)
         return self
 
-    def writeChars(self, s, off=0, length=None):
-        self._buf.writeChars(s, off, length)
+    def write_chars(self, s, off=0, length=None):
+        self._buf.write_chars(s, off, length)
         return self
 
     def print_(self, obj):
@@ -958,8 +958,8 @@ class SysOutStream(Obj):
 
     print = print_
 
-    def printLine(self, obj=None):
-        self._buf.printLine(obj)
+    def print_line(self, obj=None):
+        self._buf.print_line(obj)
         return self
 
     def flush(self):
@@ -1004,84 +1004,84 @@ class SysInStream(Obj):
     def read(self):
         return self._buf.read()
 
-    def readBuf(self, other, n):
-        return self._buf.readBuf(other, n)
+    def read_buf(self, other, n):
+        return self._buf.read_buf(other, n)
 
     def unread(self, n):
         self._buf.unread(n)
         return self
 
-    def readAllBuf(self):
-        return self._buf.readAllBuf()
+    def read_all_buf(self):
+        return self._buf.read_all_buf()
 
-    def readBufFully(self, buf, n):
-        return self._buf.readBufFully(buf, n)
+    def read_buf_fully(self, buf, n):
+        return self._buf.read_buf_fully(buf, n)
 
     def peek(self):
         return self._buf.peek()
 
-    def readU1(self):
-        return self._buf.readU1()
+    def read_u1(self):
+        return self._buf.read_u1()
 
-    def readS1(self):
-        return self._buf.readS1()
+    def read_s1(self):
+        return self._buf.read_s1()
 
-    def readU2(self):
-        return self._buf.readU2()
+    def read_u2(self):
+        return self._buf.read_u2()
 
-    def readS2(self):
-        return self._buf.readS2()
+    def read_s2(self):
+        return self._buf.read_s2()
 
-    def readU4(self):
-        return self._buf.readU4()
+    def read_u4(self):
+        return self._buf.read_u4()
 
-    def readS4(self):
-        return self._buf.readS4()
+    def read_s4(self):
+        return self._buf.read_s4()
 
-    def readS8(self):
-        return self._buf.readS8()
+    def read_s8(self):
+        return self._buf.read_s8()
 
-    def readF4(self):
-        return self._buf.readF4()
+    def read_f4(self):
+        return self._buf.read_f4()
 
-    def readF8(self):
-        return self._buf.readF8()
+    def read_f8(self):
+        return self._buf.read_f8()
 
-    def readBool(self):
-        return self._buf.readBool()
+    def read_bool(self):
+        return self._buf.read_bool()
 
-    def readUtf(self):
-        return self._buf.readUtf()
+    def read_utf(self):
+        return self._buf.read_utf()
 
-    def readChar(self):
-        return self._buf.readChar()
+    def read_char(self):
+        return self._buf.read_char()
 
-    def rChar(self):
+    def r_char(self):
         """Read character as int code point for Tokenizer compatibility."""
-        c = self.readChar()
+        c = self.read_char()
         return c if c is not None else None
 
-    def unreadChar(self, c):
-        self._buf.unreadChar(c)
+    def unread_char(self, c):
+        self._buf.unread_char(c)
         return self
 
-    def peekChar(self):
-        return self._buf.peekChar()
+    def peek_char(self):
+        return self._buf.peek_char()
 
-    def readChars(self, n):
-        return self._buf.readChars(n)
+    def read_chars(self, n):
+        return self._buf.read_chars(n)
 
-    def readLine(self, max_chars=None):
-        return self._buf.readLine(max_chars)
+    def read_line(self, max_chars=None):
+        return self._buf.read_line(max_chars)
 
-    def readAllStr(self, normalize=True):
-        return self._buf.readAllStr(normalize)
+    def read_all_str(self, normalize=True):
+        return self._buf.read_all_str(normalize)
 
-    def readAllLines(self):
-        return self._buf.readAllLines()
+    def read_all_lines(self):
+        return self._buf.read_all_lines()
 
-    def eachLine(self, f):
-        self._buf.eachLine(f)
+    def each_line(self, f):
+        self._buf.each_line(f)
 
     def skip(self, n):
         """Skip n bytes."""
@@ -1117,38 +1117,38 @@ class SysInStream(Obj):
             if close:
                 self.close()
 
-    def readStrToken(self, max_chars=None, func=None):
+    def read_str_token(self, max_chars=None, func=None):
         """Read string token until whitespace or func returns true."""
         from .Int import Int
         max_len = int(max_chars) if max_chars is not None else 2147483647
         if max_len <= 0:
             return ""
-        c = self._buf.readChar()
+        c = self._buf.read_char()
         if c is None:
             return None
         chars = []
         while True:
             if func is None:
-                terminate = Int.isSpace(c)
+                terminate = Int.is_space(c)
             else:
                 terminate = func.call(c)
             if terminate:
-                self._buf.unreadChar(c)
+                self._buf.unread_char(c)
                 break
             chars.append(chr(c))
             if len(chars) >= max_len:
                 break
-            c = self._buf.readChar()
+            c = self._buf.read_char()
             if c is None:
                 break
         return ''.join(chars)
 
-    def readNullTerminatedStr(self, max_chars=None):
+    def read_null_terminated_str(self, max_chars=None):
         """Read string until null byte or max chars."""
         max_len = int(max_chars) if max_chars is not None else 2147483647
         if max_len <= 0:
             return ""
-        c = self._buf.readChar()
+        c = self._buf.read_char()
         if c is None:
             return None
         chars = []
@@ -1158,16 +1158,16 @@ class SysInStream(Obj):
             chars.append(chr(c))
             if len(chars) >= max_len:
                 break
-            c = self._buf.readChar()
+            c = self._buf.read_char()
             if c is None:
                 break
         return ''.join(chars)
 
-    def readDecimal(self):
+    def read_decimal(self):
         """Read decimal as string (Fantom serialization)."""
-        s = self._buf.readUtf()
+        s = self._buf.read_utf()
         from .Decimal import Decimal
-        return Decimal.fromStr(s)
+        return Decimal.from_str(s)
 
     def charset(self, val=None):
         return self._buf.charset(val)

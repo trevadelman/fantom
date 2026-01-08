@@ -18,12 +18,12 @@ class Uuid(Obj):
         return Uuid(py_uuid.uuid4())
 
     @staticmethod
-    def makeStr(s):
+    def make_str(s):
         """Create UUID from string"""
-        return Uuid.fromStr(s)
+        return Uuid.from_str(s)
 
     @staticmethod
-    def fromStr(s, checked=True):
+    def from_str(s, checked=True):
         """Parse UUID from string"""
         try:
             return Uuid(py_uuid.UUID(s))
@@ -34,7 +34,7 @@ class Uuid(Obj):
             return None
 
     @staticmethod
-    def makeBits(hi, lo):
+    def make_bits(hi, lo):
         """Create UUID from high/low 64-bit values (signed 64-bit ints from Fantom)"""
         # Convert signed 64-bit to unsigned 64-bit
         if hi < 0:
@@ -45,7 +45,7 @@ class Uuid(Obj):
         val = (hi << 64) | lo
         return Uuid(py_uuid.UUID(int=val))
 
-    def bitsHi(self):
+    def bits_hi(self):
         """Get upper 64 bits as signed 64-bit int (Fantom convention)"""
         val = self._uuid.int >> 64
         # Convert to signed if high bit is set
@@ -53,7 +53,7 @@ class Uuid(Obj):
             val -= 0x10000000000000000
         return val
 
-    def bitsLo(self):
+    def bits_lo(self):
         """Get lower 64 bits as signed 64-bit int (Fantom convention)"""
         val = self._uuid.int & 0xFFFFFFFFFFFFFFFF
         # Convert to signed if high bit is set
@@ -61,7 +61,7 @@ class Uuid(Obj):
             val -= 0x10000000000000000
         return val
 
-    def toStr(self):
+    def to_str(self):
         """String representation"""
         return str(self._uuid)
 
@@ -102,13 +102,13 @@ class Uuid(Obj):
         from fan.sys.Type import Type
         return Type.find("sys::Uuid")
 
-    def literalEncode(self, encoder):
+    def literal_encode(self, encoder):
         """Encode for serialization.
 
         Simple types serialize as: Type("toStr")
         Example: sys::Uuid("550e8400-e29b-41d4-a716-446655440000")
         """
-        encoder.wType(self.typeof())
+        encoder.w_type(self.typeof())
         encoder.w('(')
-        encoder.wStrLiteral(self.toStr(), '"')
+        encoder.w_str_literal(self.to_str(), '"')
         encoder.w(')')
