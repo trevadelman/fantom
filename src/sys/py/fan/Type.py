@@ -326,8 +326,9 @@ class Type(Obj):
         from .Pod import Pod
         known_pods = {"sys", "concurrent", "testSys", "graphics", "inet", "crypto", "web",
                       "dom", "domkit", "util", "webmod", "compiler", "build", "fansh", "fandoc",
-                      "haystack", "xeto", "xetom", "xetoc", "testHaystack", "def", "ph",
-                      "phIoT", "phScience", "ashrae", "hx", "defc"}
+                      "haystack", "xeto", "xetom", "xetoc", "testHaystack", "testXeto", "def", "ph",
+                      "phIoT", "phScience", "ashrae", "hx", "defc", "obs", "axon", "folio",
+                      "rdf", "xetodoc", "markdown"}
         if pod_name not in known_pods:
             raise UnknownPodErr.make(f"Unknown pod: {pod_name}")
 

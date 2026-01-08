@@ -62,5 +62,18 @@ temp-es/
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Haxall symlinks (created by build-haxall.sh)
 src/haystack
 src/xeto
+src/xetom
+src/xetoc
+src/testHaystack
+src/testXeto
+src/axon
+src/def
+src/folio
+src/hx
+src/obs
+src/rdf
+src/xetodoc
