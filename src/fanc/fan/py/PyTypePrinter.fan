@@ -1062,7 +1062,7 @@ class PyTypePrinter : PyPrinter
           else
           {
             // Chain to another named constructor's body
-            w("self._${chainCtorName}_body(")
+            w("self._${escapeName(chainCtorName)}_body(")
             chain.args.each |arg, i|
             {
               if (i > 0) w(", ")
@@ -1090,7 +1090,7 @@ class PyTypePrinter : PyPrinter
           else
           {
             // Call parent's named constructor body
-            w("super()._${chainCtorName}_body(")
+            w("super()._${escapeName(chainCtorName)}_body(")
             chain.args.each |arg, i|
             {
               if (i > 0) w(", ")
