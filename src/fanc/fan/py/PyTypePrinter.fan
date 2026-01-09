@@ -904,10 +904,20 @@ class PyTypePrinter : PyPrinter
       unindent
 
       // Generate __init__ constructor
+      // For mixins, use *args, **kwargs to support cooperative multiple inheritance
       nl
-      w("def __init__(self)").colon
-      indent
-      w("super().__init__()").eos
+      if (t.isMixin)
+      {
+        w("def __init__(self, *args, **kwargs)").colon
+        indent
+        w("super().__init__(*args, **kwargs)").eos
+      }
+      else
+      {
+        w("def __init__(self)").colon
+        indent
+        w("super().__init__()").eos
+      }
       // Instance field initialization
       t.fieldDefs.each |f|
       {
@@ -1194,40 +1204,47 @@ class PyTypePrinter : PyPrinter
     }
 
     // Generate __init__ constructor (uses primary ctor's signature)
-    // For mixins with only static factories, __init__ should have no required params
+    // For mixins, use *args, **kwargs to support cooperative multiple inheritance
     nl
-    w("def __init__(self")
-
-    // Only emit params if we have an actual instance constructor
-    // Static factories (static new) don't define instance constructor params
-    if (hasInstanceCtor)
+    if (t.isMixin)
     {
-      // In Python, once we emit a default parameter, ALL following params must have defaults
-      // Find the first index where we should start emitting defaults:
-      // - explicit hasDefault, OR
-      // - nullable type AND all following params also have defaults or are nullable
-      firstDefaultIdx := primaryCtor.params.size
-      for (i := primaryCtor.params.size - 1; i >= 0; i--)
-      {
-        p := primaryCtor.params[i]
-        if (p.hasDefault || p.type.isNullable)
-          firstDefaultIdx = i
-        else
-          break  // Found a required param, stop
-      }
+      w("def __init__(self, *args, **kwargs)")
+    }
+    else
+    {
+      w("def __init__(self")
 
-      primaryCtor.params.each |p, i|
+      // Only emit params if we have an actual instance constructor
+      // Static factories (static new) don't define instance constructor params
+      if (hasInstanceCtor)
       {
-        w(", ")
-        w(escapeName(p.name))
-        // Only add =None if at or after firstDefaultIdx
-        if (i >= firstDefaultIdx)
+        // In Python, once we emit a default parameter, ALL following params must have defaults
+        // Find the first index where we should start emitting defaults:
+        // - explicit hasDefault, OR
+        // - nullable type AND all following params also have defaults or are nullable
+        firstDefaultIdx := primaryCtor.params.size
+        for (i := primaryCtor.params.size - 1; i >= 0; i--)
         {
-          w("=None")
+          p := primaryCtor.params[i]
+          if (p.hasDefault || p.type.isNullable)
+            firstDefaultIdx = i
+          else
+            break  // Found a required param, stop
+        }
+
+        primaryCtor.params.each |p, i|
+        {
+          w(", ")
+          w(escapeName(p.name))
+          // Only add =None if at or after firstDefaultIdx
+          if (i >= firstDefaultIdx)
+          {
+            w("=None")
+          }
         }
       }
+      w(")")
     }
-    w(")")
     colon
 
     indent
@@ -1238,17 +1255,25 @@ class PyTypePrinter : PyPrinter
       emitDefaultParamChecks(primaryCtor)
 
     // Call super().__init__() with constructor chain arguments
-    w("super().__init__(")
-    if (hasInstanceCtor && primaryCtor.ctorChain != null)
+    // For mixins, pass through *args, **kwargs to support cooperative multiple inheritance
+    if (t.isMixin)
     {
-      chain := primaryCtor.ctorChain
-      chain.args.each |arg, i|
-      {
-        if (i > 0) w(", ")
-        PyExprPrinter(this).expr(arg)
-      }
+      w("super().__init__(*args, **kwargs)").eos
     }
-    w(")").eos
+    else
+    {
+      w("super().__init__(")
+      if (hasInstanceCtor && primaryCtor.ctorChain != null)
+      {
+        chain := primaryCtor.ctorChain
+        chain.args.each |arg, i|
+        {
+          if (i > 0) w(", ")
+          PyExprPrinter(this).expr(arg)
+        }
+      }
+      w(")").eos
+    }
 
     // Instance field initialization
     t.fieldDefs.each |f|
