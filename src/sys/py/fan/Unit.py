@@ -67,14 +67,29 @@ class Unit(Obj):
         """Parse and load the units.txt database."""
         # Find units.txt relative to this file
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        # Navigate to fan/etc/sys/units.txt
-        units_path = os.path.join(current_dir, '..', '..', '..', '..', 'etc', 'sys', 'units.txt')
-        units_path = os.path.normpath(units_path)
 
-        if not os.path.exists(units_path):
-            # Try alternate path
-            units_path = os.path.join(current_dir, '..', '..', '..', '..', '..', 'fan', 'etc', 'sys', 'units.txt')
-            units_path = os.path.normpath(units_path)
+        # Try several paths - Unit.py can be in different locations:
+        # 1. fan/src/sys/py/fan/Unit.py -> fan/etc/sys/units.txt (../../../../etc)
+        # 2. gen/py/fan/sys/Unit.py -> fan/etc/sys/units.txt (../../../../fan/etc)
+        possible_paths = [
+            # From fan/src/sys/py/fan/
+            os.path.join(current_dir, '..', '..', '..', '..', 'etc', 'sys', 'units.txt'),
+            # From gen/py/fan/sys/ (4 levels up to project root)
+            os.path.join(current_dir, '..', '..', '..', '..', 'fan', 'etc', 'sys', 'units.txt'),
+            # From gen/py/fan/ (3 levels up to project root)
+            os.path.join(current_dir, '..', '..', '..', 'fan', 'etc', 'sys', 'units.txt'),
+        ]
+
+        units_path = None
+        for path in possible_paths:
+            path = os.path.normpath(path)
+            if os.path.exists(path):
+                units_path = path
+                break
+
+        if units_path is None:
+            # Fallback to first path for error message
+            units_path = os.path.normpath(possible_paths[0])
 
         current_quantity = "dimensionless"
         current_dim = None
