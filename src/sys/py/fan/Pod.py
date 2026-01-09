@@ -287,6 +287,14 @@ class Pod(Obj):
             return Pod.find(pod, False)
         return pod
 
+    # Python reserved words that need escaping with trailing underscore
+    _PYTHON_KEYWORDS = {
+        "and", "as", "assert", "async", "await", "break", "class", "continue",
+        "def", "del", "elif", "else", "except", "finally", "for", "from",
+        "global", "if", "import", "in", "is", "lambda", "nonlocal", "not",
+        "or", "pass", "raise", "return", "try", "while", "with", "yield"
+    }
+
     @staticmethod
     def find(name, checked=True):
         """Find a pod by name.
@@ -294,8 +302,10 @@ class Pod(Obj):
         Dynamically discovers pods by checking if a Python module exists
         at fan.{podname}. No hardcoded list needed.
 
+        Handles Python keyword escaping: pod name "def" maps to module "fan.def_"
+
         Args:
-            name: Pod name string
+            name: Pod name string (Fantom name, not escaped)
             checked: If true (default), throw UnknownPodErr if not found
 
         Returns:
@@ -309,13 +319,16 @@ class Pod(Obj):
         if name in Pod._pods:
             return Pod._pods[name]
 
+        # Escape Python keywords: def -> def_
+        module_name = name + "_" if name in Pod._PYTHON_KEYWORDS else name
+
         # Try to import the pod module - if it exists, create the pod
         # This dynamically discovers pods without a hardcoded list
         try:
             import importlib
             # Try to import the pod's __init__.py
-            module = importlib.import_module(f'fan.{name}')
-            # Pod module exists - create and register
+            module = importlib.import_module(f'fan.{module_name}')
+            # Pod module exists - create and register (use original Fantom name)
             pod = Pod(name, "1.0.80")  # Version >= 1.0.14 for test compatibility
             Pod._pods[name] = pod
             Pod._list = None  # Invalidate cached list

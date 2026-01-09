@@ -134,6 +134,13 @@ class StrBuf(Obj):
         self._buf.extend(list(s[start:end]))
         return self
 
+    def add_trim(self, x):
+        """Add string with its leading and trailing whitespace trimmed."""
+        from .ObjUtil import ObjUtil
+        s = "null" if x is None else ObjUtil.to_str(x)
+        self._buf.extend(list(s.strip()))
+        return self
+
     def join(self, obj, sep=" "):
         """Append object with separator if not empty."""
         from .ObjUtil import ObjUtil
@@ -161,6 +168,12 @@ class StrBuf(Obj):
             raise IndexErr.make(f"Index {index} out of bounds")
         for i, c in enumerate(s):
             self._buf.insert(index + i, c)
+        return self
+
+    def trim_end(self):
+        """Remove any trailing whitespace in the buffer."""
+        while self._buf and self._buf[-1] in ' \t\n\r\f\v':
+            self._buf.pop()
         return self
 
     def remove(self, index):

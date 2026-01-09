@@ -11,7 +11,7 @@
 //
 
 // default version used by build scripts
-buildVersion=4.0.4
+buildVersion=1.0
 
 // Must be configured boot build in substitute/release installation
 //devHome=/work/fan/
@@ -24,7 +24,7 @@ buildVersion=4.0.4
 // dotnetHome=/C:/WINDOWS/Microsoft.NET/Framework/v2.0.50727/
 
 // Mac setup
-//jdkHome=/System/Library/Frameworks/JavaVM.framework/Versions/CurrentJDK/Home/
+jdkHome=file:/Library/Java/JavaVirtualMachines/temurin-18.jdk/Contents/Home/
 
 # Haxall build macros
 hx.depend=4.0.4

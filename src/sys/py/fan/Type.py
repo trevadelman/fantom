@@ -335,13 +335,10 @@ class Type(Obj):
                 raise UnknownTypeErr.make(f"Unknown type: {qname}")
 
         # For unknown pods, throw UnknownPodErr
+        # Let Pod.find() handle pod discovery dynamically via import
         from .Pod import Pod
-        known_pods = {"sys", "concurrent", "testSys", "graphics", "inet", "crypto", "web",
-                      "dom", "domkit", "util", "webmod", "compiler", "build", "fansh", "fandoc",
-                      "haystack", "xeto", "xetom", "xetoc", "testHaystack", "testXeto", "def", "ph",
-                      "phIoT", "phScience", "ashrae", "hx", "defc", "obs", "axon", "folio",
-                      "rdf", "xetodoc", "markdown", "yaml"}
-        if pod_name not in known_pods:
+        pod = Pod.find(pod_name, False)  # checked=False to avoid recursion
+        if pod is None:
             raise UnknownPodErr.make(f"Unknown pod: {pod_name}")
 
         t = Type(qname)
@@ -3125,5 +3122,6 @@ class FacetInstance(Obj):
 # These will be set after module initialization
 def _init_type_fields():
     """Initialize static type$ fields on type classes"""
+    pass  # Will be called by runtime initialization
     pass  # Will be called by runtime initialization
     pass  # Will be called by runtime initialization
