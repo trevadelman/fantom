@@ -64,17 +64,14 @@ class ObjUtil:
                 if not isinstance(a, bool) and not isinstance(b, bool):
                     return a == b
             return False
-        # Value types like Duration, Date, Time, etc. - same value means same identity
-        # In Fantom, literals like 5ns === 5ns are true because they represent same value
-        # Check for value types by seeing if they have equals() and are immutable
-        if hasattr(a, 'equals') and hasattr(a, 'is_immutable'):
-            try:
-                if a.is_immutable() and type(a) == type(b):
-                    return a.equals(b)
-            except:
-                pass
-        # For strings and other objects, use object identity
-        # String methods implement identity optimization by returning same object
+        # Value types use equals() for identity - same value means same identity
+        # Types opt-in to value semantics by defining _same_uses_equals = True
+        # This includes Duration, Date, Time, Uri, etc. where 5ns === 5ns is true
+        # Reference types (File, Buf, etc.) use object identity even if immutable
+        if hasattr(a, '_same_uses_equals') and a._same_uses_equals:
+            if type(a) == type(b) and hasattr(a, 'equals'):
+                return a.equals(b)
+        # For strings and other reference types, use object identity
         return a is b
 
     @staticmethod

@@ -827,23 +827,22 @@ class Buf(Obj):
         return base64.urlsafe_b64encode(self._get_data()).decode('ascii').rstrip('=')
 
     def to_file(self, uri):
-        """Write buffer contents to a file.
+        """Create an in-memory file backed by this buffer's contents.
 
         Args:
-            uri: The Uri or string path to write to
+            uri: The Uri or string for the virtual file
 
         Returns:
-            The File that was written
+            A MemFile backed by this buffer's immutable contents
         """
-        from .File import File
+        from .MemFile import MemFile
         from .Uri import Uri
 
         if isinstance(uri, str):
             uri = Uri.from_str(uri)
-        f = File(uri)
-        f._path.parent.mkdir(parents=True, exist_ok=True)
-        f._path.write_bytes(self._get_data())
-        return f
+        # Create immutable copy of buffer for the file
+        immutable_buf = self.to_immutable()
+        return MemFile.make(immutable_buf, uri)
 
     def to_digest(self, algorithm):
         """Compute digest hash."""
