@@ -173,6 +173,10 @@ class Type(Obj):
         # For custom objects, try to get fantom type
         if hasattr(obj, '__class__'):
             cls = obj.__class__
+            # Skip Python implementation details that aren't Fantom types
+            # Cvar is a helper class for closure variable wrapping
+            if cls.__name__ in ('Cvar', 'CvarWrapper'):
+                return None
             # Check for module path to get pod name
             module = cls.__module__
             if module.startswith('fan.'):
