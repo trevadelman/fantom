@@ -670,6 +670,10 @@ class PyTypePrinter : PyPrinter
     enumFields := t.fieldDefs.findAll |f| { f.enumDef != null }
       .sort |a, b| { a.enumDef.ordinal <=> b.enumDef.ordinal }
 
+    // Generate static fields (including once storage fields) for enum
+    // This is needed for enums with once methods like UnitQuantity.unitToQuantity
+    staticFields(t)
+
     // Private cache field for vals
     nl
     w("_vals = None").nl
@@ -865,12 +869,14 @@ class PyTypePrinter : PyPrinter
     }
 
     // Additional methods (like negOrdinal in EnumAbc)
+    // Also allows $Once helper methods for once methods on enums
     t.methodDefs.each |m|
     {
       if (m.isCtor) return
       if (m.isInstanceInit) return
       if (m.isStaticInit) return
-      if (m.isSynthetic) return
+      // Allow once helper methods (synthetic but needed) - they end with $Once
+      if (m.isSynthetic && !m.name.endsWith("\$Once")) return
       if (m.name == "fromStr") return  // Already generated
 
       method(m)
@@ -1423,9 +1429,31 @@ class PyTypePrinter : PyPrinter
   ** Follows the JavaScript transpiler pattern from JsType.writeStaticField()
   private Void staticFields(TypeDef t)
   {
-    // Find all static fields (excluding synthetic, but allow 'once' storage fields)
-    // The 'once' storage fields are synthetic but have the isOnce flag set
-    staticFieldDefs := t.fieldDefs.findAll |f| { f.isStatic && (!f.isSynthetic || f.isOnce) }
+    // Collect names of once storage fields from once methods
+    // When Fantom compiles a `once` method, it creates:
+    //   1. A storage field: methodName$Store (synthetic)
+    //   2. A helper method: methodName$Once (synthetic, contains original body)
+    //   3. The original method modified to check storage and call helper
+    // We identify once storage fields by finding methods with isOnce=true
+    onceStorageFieldNames := Str:Bool[:]
+    t.methodDefs.each |m|
+    {
+      if (m.isOnce)
+        onceStorageFieldNames["${m.name}\$Store"] = true
+    }
+
+    // Find all static fields:
+    // - Non-synthetic fields (normal static fields)
+    // - Synthetic fields that are once storage (identified by method analysis above)
+    // - Fields with isOnce flag set (compiler may also set this)
+    staticFieldDefs := t.fieldDefs.findAll |f|
+    {
+      if (!f.isStatic) return false
+      if (!f.isSynthetic) return true  // Normal static field
+      if (f.isOnce) return true         // Compiler marked as once
+      if (onceStorageFieldNames.containsKey(f.name)) return true  // Backing storage for once method
+      return false
+    }
     if (staticFieldDefs.isEmpty) return
 
     // Check if there's a staticInit method
@@ -1436,7 +1464,8 @@ class PyTypePrinter : PyPrinter
     staticFieldDefs.each |f|
     {
       // Once fields use "_once_" as sentinel value, regular fields use None
-      if (f.isOnce)
+      isOnceStorage := f.isOnce || onceStorageFieldNames.containsKey(f.name)
+      if (isOnceStorage)
         w("_${escapeName(f.name)} = \"_once_\"").nl
       else
         w("_${escapeName(f.name)} = None").nl
@@ -1445,7 +1474,9 @@ class PyTypePrinter : PyPrinter
     // Generate static getter for each static field
     staticFieldDefs.each |f|
     {
-      staticFieldGetter(t, f, staticInitMethod != null)
+      // Determine if this is a once storage field (synthetic backing for once method)
+      isOnceStorage := f.isOnce || onceStorageFieldNames.containsKey(f.name)
+      staticFieldGetter(t, f, staticInitMethod != null, isOnceStorage)
     }
 
     // Generate _static_init() method if there's a staticInit block or fields need init
@@ -1456,7 +1487,8 @@ class PyTypePrinter : PyPrinter
   }
 
   ** Generate static getter method for a static field
-  private Void staticFieldGetter(TypeDef t, FieldDef f, Bool hasStaticInit)
+  ** isOnceStorage: true if this field is backing storage for a once method
+  private Void staticFieldGetter(TypeDef t, FieldDef f, Bool hasStaticInit, Bool isOnceStorage)
   {
     name := escapeName(f.name)
     typeName := t.name
@@ -1466,9 +1498,9 @@ class PyTypePrinter : PyPrinter
     w("def ${name}()").colon
     indent
 
-    // Special handling for 'once' fields
+    // Special handling for 'once' fields (either compiler-marked or identified as once storage)
     // Once fields use "_once_" as sentinel and call the $Once helper method
-    if (f.isOnce)
+    if (isOnceStorage)
     {
       // The field name is like "specRef$Store", helper method is "specRef$Once"
       // We need to extract the base name and generate the helper call
