@@ -199,8 +199,36 @@ class PyTypePrinter : PyPrinter
         result[podName].add(typeName)
     }
 
-    // Scan using statements from the compilation unit
-    // This catches types referenced in method bodies like Service.find()
+    // Scan ALL pod dependencies for type references (like JS transpiler does)
+    // This catches types from any dependent pod, not just those with explicit using statements
+    t.pod.depends.each |depend|
+    {
+      podName := depend.name
+      // Skip FFI imports (e.g., [java]java.io)
+      if (podName.startsWith("[")) return
+      // Skip sys pod (already imported) and same pod (runtime handled)
+      if (podName == "sys") return
+      if (podName == t.pod.name) return
+
+      // Scan all method bodies for types from this dependent pod
+      t.methodDefs.each |m|
+      {
+        // Scan method body
+        if (m.code != null)
+          scanBlockForTypes(m.code, podName, addByName)
+        // Also scan constructor chaining (: super(...) or : this(...))
+        // This catches types like Marker.val in: super("sys::Marker", type, Marker.val)
+        if (m.ctorChain != null)
+        {
+          m.ctorChain.args.each |arg|
+          {
+            scanExprForTypes(arg, podName, addByName)
+          }
+        }
+      }
+    }
+
+    // Also scan using statements for explicit type imports
     t.unit.usings.each |u|
     {
       // Skip FFI imports (e.g., [java]java.io::RandomAccessFile)
@@ -210,16 +238,6 @@ class PyTypePrinter : PyPrinter
       {
         // Specific type import: using concurrent::Actor
         addByName(u.podName, u.typeName)
-      }
-      else
-      {
-        // Whole-pod import: using concurrent, using haystack, etc.
-        // Scan all method bodies for types from this pod
-        t.methodDefs.each |m|
-        {
-          if (m.code == null) return
-          scanBlockForTypes(m.code, u.podName, addByName)
-        }
       }
     }
 
@@ -1122,32 +1140,38 @@ class PyTypePrinter : PyPrinter
     }
 
     // Generate _ctor_init helper for field initialization (used by named ctors)
+    // This method ONLY initializes THIS class's fields - it does NOT call parent.
+    // Named constructor body methods (like _makeResolved_body) are responsible
+    // for calling the appropriate parent constructor with proper arguments.
     if (ctorMethods.size > 1 || (ctorMethods.size == 1 && ctorMethods.first.name != "make"))
     {
       nl
       w("def _ctor_init(self)").colon
       indent
-      // Only call super().__init__() if parent has no required ctor params
-      // If parent has required params, call parent's _ctor_init() instead
-      // This initializes parent fields without needing constructor arguments
-      parentHasRequiredParams := t.base != null && !t.base.isObj &&
-        t.base.ctors.any |ctor| { ctor.params.any |p| { !p.hasDefault } }
+
+      // Check if parent will have _ctor_init (multiple ctors or named ctors)
       parentHasMultipleCtors := t.base != null && !t.base.isObj && t.base.ctors.size > 1
-      // Only call parent's _ctor_init() if parent actually has named constructors
-      // (i.e., constructors with names other than "make")
-      // This is the same condition that triggers _ctor_init() generation in the parent
       parentHasNamedCtors := t.base != null && !t.base.isObj &&
         t.base.ctors.any |ctor| { ctor.name != "make" }
-      if (parentHasRequiredParams || parentHasMultipleCtors || parentHasNamedCtors)
+      parentWillHaveCtorInit := parentHasMultipleCtors || parentHasNamedCtors
+
+      hasFieldsToInit := t.fieldDefs.any |f| { !f.isStatic }
+      hasInstanceInit := t.methodDefs.any |m| { m.isInstanceInit && m.code != null }
+
+      if (parentWillHaveCtorInit)
       {
-        // Call parent's _ctor_init() to initialize parent fields
+        // Parent has _ctor_init, so we can call it to initialize parent fields
         w("super()._ctor_init()").eos
       }
-      else
+      else if (!hasFieldsToInit && !hasInstanceInit)
       {
-        w("super().__init__()").eos
+        // No parent call, no fields, no instance init - need pass
+        pass
       }
-      // Instance field initialization
+      // Otherwise, DO NOT call parent - the named constructor body will handle
+      // the parent chain with proper arguments
+
+      // Instance field initialization (THIS class's fields only)
       t.fieldDefs.each |f|
       {
         if (f.isStatic) return
@@ -1994,5 +2018,5 @@ class PyTypePrinter : PyPrinter
 
     // Check if the field name is in our list
     return fieldNames.contains(fieldExpr.field.name)
-  }
+}
 }
