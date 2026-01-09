@@ -303,6 +303,30 @@ class Field(Slot):
     def to_str(self):
         return self.qname()
 
+    def trap(self, name, args=None):
+        """Dynamic method invocation via -> operator.
+
+        Handles special methods like set_const for bypassing const checks.
+        """
+        if args is None:
+            args = []
+
+        # Handle set_const - bypasses const check for setting const fields
+        # Used by compiler infrastructure (e.g., xetoc Assemble)
+        if name == "set_const":
+            if len(args) >= 2:
+                self.set_(args[0], args[1], check_const=False)
+            return None
+
+        # Look up method on self
+        method = getattr(self, name, None)
+        if method is not None and callable(method):
+            return method(*args) if args else method()
+
+        # Not found
+        from .Err import UnknownSlotErr
+        raise UnknownSlotErr.make(f"{self.qname()}.{name}")
+
     @staticmethod
     def find(qname, checked=True):
         """Find field by qualified name like 'sys::Str.size'.
