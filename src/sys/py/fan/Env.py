@@ -10,12 +10,67 @@ class Env(Obj):
     """Env stub for bootstrap - returns 'py' runtime"""
 
     _instance = None
+    _creating = False  # Guard against recursive creation
+
+    def __init__(self, parent=None):
+        """Initialize Env with optional parent.
+
+        In Fantom, Env uses a parent chain pattern where child envs
+        delegate to their parent. PathEnv extends Env and passes
+        Env.cur() as its parent.
+        """
+        super().__init__()
+        self._parent = parent
 
     @staticmethod
     def cur():
         if Env._instance is None:
-            Env._instance = Env()
+            # Guard against recursive calls during PathEnv creation
+            # (PathEnv.__init__ calls super().__init__(Env.cur()))
+            if Env._creating:
+                # Return a base Env during PathEnv construction
+                return Env.__new__(Env)
+
+            # Check for fan.props to determine if we should use PathEnv
+            # This matches the Java pattern where PathEnv is used when fan.props exists
+            fan_props = Env._find_fan_props_file()
+            if fan_props:
+                # Lazy import to avoid circular dependency
+                try:
+                    from fan.util.PathEnv import PathEnv
+                    Env._creating = True
+                    try:
+                        Env._instance = PathEnv.make_props(fan_props)
+                    finally:
+                        Env._creating = False
+                except ImportError:
+                    # PathEnv not available (e.g., util pod not transpiled yet)
+                    Env._instance = Env()
+            else:
+                Env._instance = Env()
         return Env._instance
+
+    @staticmethod
+    def _find_fan_props_file():
+        """Find fan.props file walking up from current directory.
+
+        Returns File object if found, None otherwise.
+        """
+        from pathlib import Path
+        import os
+
+        try:
+            from .File import File
+
+            current = Path(os.getcwd())
+            while current != current.parent:
+                fan_props = current / "fan.props"
+                if fan_props.exists():
+                    return File.os(str(fan_props))
+                current = current.parent
+        except Exception:
+            pass
+        return None
 
     def runtime(self):
         return "py"
@@ -45,9 +100,11 @@ class Env(Obj):
         """Get search path for files.
 
         Returns list of directories to search for files.
-        The first is workDir, last is homeDir.
+        Base Env returns [workDir, homeDir]. PathEnv overrides this
+        to include paths from fan.props.
         """
         from .List import List
+
         # Default path is workDir then homeDir
         work = self.work_dir()
         home = self.home_dir()

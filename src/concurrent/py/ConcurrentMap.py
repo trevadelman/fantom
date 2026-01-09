@@ -44,7 +44,7 @@ class ConcurrentMap(Obj):
             from fan.sys.Err import NotImmutableErr
             raise NotImmutableErr.make("ConcurrentMap values must be immutable")
 
-    def set(self, key, val):
+    def set_(self, key, val):
         """Set a value by key."""
         self._check_immutable(val)
         with self._lock:
@@ -135,7 +135,7 @@ class ConcurrentMap(Obj):
 
     def __setitem__(self, key, val):
         """Support bracket syntax: map[key] = val"""
-        self.set(key, val)
+        self.set_(key, val)
 
     def to_str(self):
         with self._lock:
