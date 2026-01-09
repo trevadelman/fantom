@@ -208,3 +208,9 @@ class Obj:
 
     def __repr__(self):
         return self.to_str()
+
+    @staticmethod
+    def echo(obj=None):
+        """Print to stdout - Fantom's Obj.echo() static method"""
+        from .ObjUtil import ObjUtil
+        ObjUtil.echo(obj)
