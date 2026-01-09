@@ -418,18 +418,10 @@ class ObjUtil:
             from .Err import NullErr
             raise NullErr.make(f"Coerce to non-null: {qname}")
 
-        # Already have qname from above
-        if hasattr(type_, '_qname'):
-            qname = type_._qname
-        elif isinstance(type_, str):
-            qname = type_
-        else:
-            qname = str(type_)
-
         # Strip nullable suffix for base type check
         base_qname = qname.rstrip('?')
 
-        # Check against common types
+        # Check against common types (primitives)
         if base_qname in ("sys::Obj", "sys::Obj?"):
             return obj
         if base_qname == "sys::Int":
@@ -457,7 +449,18 @@ class ObjUtil:
             if isinstance(obj, Map):
                 return obj
         else:
-            # For other types, check if object's type fits
+            # Fast path: Check if object's class matches target type exactly
+            # This avoids expensive Type.find() and Type.is_() calls for exact matches
+            if "::" in base_qname:
+                pod_name, type_name = base_qname.split("::", 1)
+                cls = obj.__class__
+                # Check class name match and module prefix match
+                if (cls.__name__ == type_name and
+                    cls.__module__.startswith('fan.') and
+                    cls.__module__.split('.')[1] == pod_name):
+                    return obj
+
+            # Fall back to full type check for inheritance cases
             if ObjUtil.is_(obj, type_):
                 return obj
             # Also allow if it's actually the type (direct coerce without strict checking)

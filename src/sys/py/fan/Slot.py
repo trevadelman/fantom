@@ -178,6 +178,16 @@ class Slot(Obj):
         type_qname = qname[:dot_idx]
         slot_name = qname[dot_idx + 1:]
 
+        # Explicitly import the module to ensure tf_() and am_() calls execute
+        # This handles circular import cases where Type.find returns before
+        # the module fully completes execution
+        if "::" in type_qname:
+            pod_name, type_name = type_qname.split("::", 1)
+            try:
+                __import__(f'fan.{pod_name}.{type_name}', fromlist=[type_name])
+            except ImportError:
+                pass  # Type.find will handle the error
+
         # Find the type
         from .Type import Type
         type_obj = Type.find(type_qname, checked)
