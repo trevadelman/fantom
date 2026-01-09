@@ -134,6 +134,7 @@ class Type(Obj):
         self._nullable = None  # Lazily created NullableType
         self._listOf = None    # Lazily created ListType
         self._emptyList = None  # Lazily created empty list
+        self._inheritance_cache = None  # Lazily computed inheritance chain (like JS inheritance$)
         # Reflection infrastructure (like JS af$/am$ pattern)
         self._slots_info = []  # List of Field/Method metadata added via af_/am_
         self._reflected = False  # Whether reflection has been processed
@@ -751,12 +752,20 @@ class Type(Obj):
         1. Add self
         2. Add base class's inheritance chain
         3. Add each mixin's inheritance chain
+
+        Results are cached (like JS inheritance$) because this is called
+        millions of times during type checking.
         """
+        # Return cached result if available (like JS: if (this.inheritance$ == null) ...)
+        if self._inheritance_cache is not None:
+            return self._inheritance_cache
+
         from .List import List as FanList
 
         # Handle Void as special case
         if self._qname == "sys::Void":
-            return FanList.from_literal([self], "sys::Type").to_immutable()
+            self._inheritance_cache = FanList.from_literal([self], "sys::Type").to_immutable()
+            return self._inheritance_cache
 
         seen = {self._qname}
         result = [self]
@@ -776,7 +785,9 @@ class Type(Obj):
                     seen.add(t._qname)
                     result.append(t)
 
-        return FanList.from_literal(result, "sys::Type").to_immutable()
+        # Cache and return
+        self._inheritance_cache = FanList.from_literal(result, "sys::Type").to_immutable()
+        return self._inheritance_cache
 
     # Generic type support
     def params(self):
