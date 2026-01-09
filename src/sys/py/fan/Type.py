@@ -705,7 +705,8 @@ class Type(Obj):
         "sys::Uri", "sys::Version", "sys::Uuid", "sys::Unit", "sys::MimeType", "sys::Locale",
         "sys::Type", "sys::Pod", "sys::Method", "sys::Field", "sys::Slot", "sys::Param",
         "sys::Depend", "sys::Range", "sys::Regex", "sys::Str", "sys::Bool", "sys::Int",
-        "sys::Float", "sys::Decimal", "sys::Num",
+        "sys::Float", "sys::Decimal", "sys::Num", "sys::File", "sys::FileStore", "sys::Log",
+        "sys::Charset", "sys::Endian",
     }
 
     def is_const(self):
