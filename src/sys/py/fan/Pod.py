@@ -291,6 +291,9 @@ class Pod(Obj):
     def find(name, checked=True):
         """Find a pod by name.
 
+        Dynamically discovers pods by checking if a Python module exists
+        at fan.{podname}. No hardcoded list needed.
+
         Args:
             name: Pod name string
             checked: If true (default), throw UnknownPodErr if not found
@@ -306,22 +309,19 @@ class Pod(Obj):
         if name in Pod._pods:
             return Pod._pods[name]
 
-        # For known system and haxall pods, create and register
-        known_pods = {
-            # System pods
-            "sys", "concurrent", "testSys", "graphics", "inet",
-            "crypto", "web", "dom", "domkit", "util", "webmod",
-            "compiler", "build", "fansh", "fandoc",
-            # Haxall pods
-            "haystack", "xeto", "testHaystack", "def", "ph",
-            "phIoT", "phScience", "ashrae", "hx"
-        }
-
-        if name in known_pods:
+        # Try to import the pod module - if it exists, create the pod
+        # This dynamically discovers pods without a hardcoded list
+        try:
+            import importlib
+            # Try to import the pod's __init__.py
+            module = importlib.import_module(f'fan.{name}')
+            # Pod module exists - create and register
             pod = Pod(name, "1.0.80")  # Version >= 1.0.14 for test compatibility
             Pod._pods[name] = pod
             Pod._list = None  # Invalidate cached list
             return pod
+        except ImportError:
+            pass
 
         # Unknown pod
         if checked:
