@@ -16,6 +16,10 @@ class Obj:
         return self is that
 
     def hash(self):
+        # Lazily initialize _hash if not set (subclasses may not call super().__init__())
+        if not hasattr(self, '_hash'):
+            Obj._hash_counter += 1
+            self._hash = Obj._hash_counter
         return self._hash
 
     def compare(self, that):

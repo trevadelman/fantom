@@ -63,14 +63,14 @@ class PyTypePrinter : PyPrinter
     // Import base class (but skip if this IS Obj - no self-import)
     if (t.qname != "sys::Obj")
     {
+      // Always import Obj - needed for static methods like Obj.echo()
+      w("from fan.sys.Obj import Obj").nl
+
+      // Also import non-Obj base class if needed
       if (t.base != null && !t.base.isObj)
       {
         podPath := PyUtil.podImport(t.base.pod.name)
         w("from ${podPath}.${t.base.name} import ${t.base.name}").nl
-      }
-      else
-      {
-        w("from fan.sys.Obj import Obj").nl
       }
     }
 
