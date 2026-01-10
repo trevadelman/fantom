@@ -70,6 +70,7 @@ src/xetom
 src/xetoc
 src/testHaystack
 src/testXeto
+src/testAxon
 src/axon
 src/def
 src/folio
@@ -77,3 +78,10 @@ src/hx
 src/obs
 src/rdf
 src/xetodoc
+src/auth
+src/defc
+src/hxUtil
+src/hxStore
+src/hxFolio
+src/hxm
+src/hxd
