@@ -822,7 +822,7 @@ class Buf(Obj):
         """Convert to base64 string."""
         return base64.b64encode(self._get_data()).decode('ascii')
 
-    def to_base64uri(self):
+    def to_base64_uri(self):
         """Convert to URL-safe base64."""
         return base64.urlsafe_b64encode(self._get_data()).decode('ascii').rstrip('=')
 
