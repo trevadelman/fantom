@@ -253,6 +253,22 @@ class Env(Obj):
         # os.version - OS version
         env_map.set_("os.version", platform.release())
 
+        # os.arch - CPU architecture
+        machine = platform.machine()
+        # Map Python machine names to Java-style names
+        arch_map = {
+            'x86_64': 'x86_64',
+            'amd64': 'amd64',
+            'x86': 'x86',
+            'i386': 'i386',
+            'i686': 'i686',
+            'arm64': 'aarch64',
+            'aarch64': 'aarch64',
+            'ppc': 'ppc',
+            'ppc64': 'ppc64',
+        }
+        env_map.set_("os.arch", arch_map.get(machine, machine))
+
         # user.name - Current user
         env_map.set_("user.name", os.environ.get("USER", os.environ.get("USERNAME", "unknown")))
 

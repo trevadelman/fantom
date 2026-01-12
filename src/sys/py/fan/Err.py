@@ -213,3 +213,34 @@ class QueueOverflowErr(Err):
 class NotCompleteErr(Err):
     """Not complete error - thrown when Future is still pending"""
     pass
+
+
+class TestErr(Err):
+    """Test error - thrown in test assertions"""
+    pass
+
+
+class ReturnErr(Err):
+    """Return error - used for control flow in Axon"""
+
+    def __init__(self, msg=None, cause=None, val=None):
+        super().__init__(msg, cause)
+        self._val = val
+
+    @staticmethod
+    def make_val(val):
+        err = ReturnErr(None, None, val)
+        return err
+
+    def val(self):
+        return self._val
+
+
+class NotFilterErr(Err):
+    """Not filter error - thrown when filter parse fails"""
+    pass
+
+
+class UnknownNameErr(Err):
+    """Unknown name error - thrown when identifier lookup fails"""
+    pass

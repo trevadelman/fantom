@@ -96,7 +96,7 @@ class PyTypePrinter : PyPrinter
     w("from fan.sys.Func import Func").nl
     w("from fan.sys.Env import Env").nl
     w("from fan.sys.Unsafe import Unsafe, make").nl
-    w("from fan.sys.Err import Err, ParseErr, NullErr, CastErr, ArgErr, IndexErr, UnsupportedErr, UnknownTypeErr, UnknownPodErr, UnknownSlotErr, UnknownServiceErr, ReadonlyErr, IOErr, NotImmutableErr, CancelledErr, ConstErr, InterruptedErr, NameErr, TimeoutErr").nl
+    w("from fan.sys.Err import Err, ParseErr, NullErr, CastErr, ArgErr, IndexErr, UnsupportedErr, UnknownTypeErr, UnknownPodErr, UnknownSlotErr, UnknownServiceErr, ReadonlyErr, IOErr, NotImmutableErr, CancelledErr, ConstErr, InterruptedErr, NameErr, TimeoutErr, TestErr, ReturnErr, NotFilterErr, UnknownNameErr").nl
     w("from fan.sys.Buf import Buf").nl
     w("from fan.sys.File import File").nl
     w("from fan.sys.Zip import Zip").nl
@@ -340,6 +340,9 @@ class PyTypePrinter : PyPrinter
         }
         if (switchStmt.defaultBlock != null)
           scanBlockForTypes(switchStmt.defaultBlock, podName, addByName)
+      case StmtId.throwStmt:
+        throwStmt := stmt as ThrowStmt
+        scanExprForTypes(throwStmt.exception, podName, addByName)
     }
   }
 
@@ -360,6 +363,30 @@ class PyTypePrinter : PyPrinter
     if (expr.id == ExprId.call)
     {
       callExpr := expr as CallExpr
+
+      // Special case: Type.find("pod::ClassName") - parse the string literal
+      // This is used in verifyErr() and other reflection-based code
+      if (callExpr.method.name == "find" && callExpr.method.parent.qname == "sys::Type")
+      {
+        if (!callExpr.args.isEmpty)
+        {
+          firstArg := callExpr.args.first
+          if (firstArg.id == ExprId.strLiteral)
+          {
+            lit := firstArg as LiteralExpr
+            qname := lit.val as Str
+            if (qname != null && qname.contains("::"))
+            {
+              colonIdx := qname.index("::")
+              typePod := qname[0..<colonIdx]
+              typeName := qname[colonIdx+2..-1]
+              if (typePod == podName)
+                addByName(podName, typeName)
+            }
+          }
+        }
+      }
+
       // Static method calls: Coord.fromStr(...)
       if (callExpr.target != null)
         scanExprForTypes(callExpr.target, podName, addByName)
@@ -765,13 +792,33 @@ class PyTypePrinter : PyPrinter
     w("inst = object.__new__(${t.name})").eos
     w("inst._ordinal = _ordinal").eos
     w("inst._name = _name").eos
-    // Initialize custom fields (skip first 2: ordinal, name)
+    // Initialize custom fields from ctor params (skip first 2: ordinal, name)
     if (ctorMethod != null && ctorMethod.params.size > 2)
     {
       ctorMethod.params[2..-1].each |p|
       {
         w("inst._${escapeName(p.name)} = ${escapeName(p.name)}").eos
       }
+    }
+    // Run constructor body to compute derived fields
+    if (ctorMethod != null && ctorMethod.code != null && !ctorMethod.code.stmts.isEmpty)
+    {
+      // Need to bind 'self' for the constructor body
+      w("self = inst").eos
+      stmtPrinter := PyStmtPrinter(this)
+      stmtPrinter.scanMethodForClosures(ctorMethod.code)
+      ctorMethod.code.stmts.each |s, idx|
+      {
+        this.m.stmtIndex = idx
+        // Skip synthetic return statements
+        if (s.id == StmtId.returnStmt)
+        {
+          ret := s as ReturnStmt
+          if (ret.expr == null || ret.isSynthetic) return
+        }
+        stmtPrinter.stmt(s)
+      }
+      this.m.clearClosures()
     }
     w("return inst").eos
     unindent
@@ -1449,6 +1496,7 @@ class PyTypePrinter : PyPrinter
     staticFieldDefs := t.fieldDefs.findAll |f|
     {
       if (!f.isStatic) return false
+      if (f.enumDef != null) return false  // Skip enum value fields - handled by vals()/_make_enum()
       if (!f.isSynthetic) return true  // Normal static field
       if (f.isOnce) return true         // Compiler marked as once
       if (onceStorageFieldNames.containsKey(f.name)) return true  // Backing storage for once method
@@ -1560,9 +1608,20 @@ class PyTypePrinter : PyPrinter
     // Mark that we're in a static context (no 'self' available)
     m.inStaticContext = true
 
+    // Collect enum field names for filtering (only for enum types)
+    enumFieldNames := Str:Bool[:]
+    if (t.isEnum)
+    {
+      t.fieldDefs.each |f|
+      {
+        if (f.enumDef != null)
+          enumFieldNames[f.name] = true
+      }
+    }
+
     // If there's a static init method, it contains EVERYTHING (Fantom compiler combines
     // all static initialization into one method). Just emit it, skipping the final return
-    // so we can clear the guard flag after.
+    // and enum value assignments (which are handled by vals()/_make_enum()).
     if (staticInitMethod != null && staticInitMethod.code != null)
     {
       stmtPrinter := PyStmtPrinter(this)
@@ -1576,6 +1635,9 @@ class PyTypePrinter : PyPrinter
           ret := s as ReturnStmt
           if (ret.expr == null) return  // Skip void return
         }
+        // Skip enum value field assignments - they're handled by vals()/_make_enum()
+        if (t.isEnum && isEnumFieldAssignment(s, enumFieldNames))
+          return
         stmtPrinter.stmt(s)
       }
       this.m.clearClosures()
@@ -2075,5 +2137,26 @@ class PyTypePrinter : PyPrinter
 
     // Check if the field name is in our list
     return fieldNames.contains(fieldExpr.field.name)
-}
+  }
+
+  ** Check if a statement assigns to an enum value field
+  ** Used to filter out enum value initialization from _static_init() since
+  ** enum values are handled by vals()/_make_enum() instead
+  private Bool isEnumFieldAssignment(Stmt s, Str:Bool enumFieldNames)
+  {
+    // Check for expression statement with assignment
+    if (s.id != StmtId.expr) return false
+    exprStmt := s as ExprStmt
+    if (exprStmt.expr.id != ExprId.assign) return false
+
+    // Check if LHS is a field reference
+    assignExpr := exprStmt.expr as BinaryExpr
+    if (assignExpr.lhs.id != ExprId.field) return false
+
+    fieldExpr := assignExpr.lhs as FieldExpr
+    if (!fieldExpr.field.isStatic) return false
+
+    // Check if it's an enum field
+    return enumFieldNames.containsKey(fieldExpr.field.name)
+  }
 }
