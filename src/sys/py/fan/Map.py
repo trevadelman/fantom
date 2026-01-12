@@ -315,9 +315,45 @@ class Map(Obj, MutableMapping):
         raise UnknownKeyErr(f"Key not found: {key}")
 
     def get_checked(self, key, checked=True):
-        """Get value, throw UnknownKeyErr if not found and checked=True"""
+        """Get value, throw UnknownKeyErr if not found and checked=True.
+
+        Uses multi-pass lookup to support both Fantom names (camelCase) and
+        Python names (snake_case). This enables reflection-based lookups
+        where Fantom code uses camelCase names but Python stores snake_case.
+
+        Pass 1: exact match
+        Pass 2: camelCase -> snake_case conversion
+        Pass 3: Python builtin escaping (map -> map_)
+        Pass 4: Combined snake_case + builtin escaping
+        """
+        # Pass 1: exact match
         if key in self:
             return self[key]
+
+        if isinstance(key, str):
+            from .Type import _camel_to_snake, _PYTHON_BUILTINS
+
+            # Pass 2: try camelCase -> snake_case conversion
+            # This handles Fantom reflection APIs where names like "parseBool"
+            # need to find functions stored as "parse_bool"
+            snake_key = _camel_to_snake(key)
+            if snake_key != key and snake_key in self:
+                return self[snake_key]
+
+            # Pass 3: try Python builtin escaping (map -> map_)
+            # This handles Fantom names that conflict with Python builtins
+            if key in _PYTHON_BUILTINS:
+                escaped_key = key + '_'
+                if escaped_key in self:
+                    return self[escaped_key]
+
+            # Pass 4: try snake_case + builtin escaping
+            # This handles camelCase names that become Python builtins after conversion
+            if snake_key in _PYTHON_BUILTINS:
+                escaped_snake_key = snake_key + '_'
+                if escaped_snake_key in self:
+                    return self[escaped_snake_key]
+
         if checked:
             from .Err import UnknownKeyErr
             raise UnknownKeyErr(f"Key not found: {key}")

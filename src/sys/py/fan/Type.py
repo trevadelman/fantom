@@ -10,6 +10,13 @@ from .Obj import Obj
 # Name Conversion Helpers (Two-Pass Lookup Approach)
 #########################################################################
 
+# Python builtins that get trailing underscore in transpilation
+# Used by Map.get_checked() and Type.slot() for two-pass lookup
+_PYTHON_BUILTINS = {'hash', 'print', 'abs', 'min', 'max', 'set', 'map',
+                    'list', 'dir', 'oct', 'open', 'vars', 'match',
+                    'all', 'any', 'pow', 'round', 'type', 'id', 'and', 'or', 'not'}
+
+
 def _camel_to_snake(name):
     """Convert camelCase to snake_case.
 
