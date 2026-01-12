@@ -306,14 +306,16 @@ class PyExprPrinter : PyPrinter
 
     // Check if this is a cvar wrapper call (closure-captured variable)
     // Pattern: self.make(value) with no target -> ObjUtil.cvar(value)
-    // The Fantom compiler generates this.make(x) for closure-captured variables
-    // IMPORTANT: Do NOT match it-block constructors like `return make { it.x = val }`
-    // Cvar wrappers wrap LOCAL VARIABLES, it-block constructors wrap CLOSURES
+    // The Fantom compiler generates synthetic Wrap$* classes for closure-captured variables
+    // that need to be hoisted to the heap (non-final variables used in closures)
     if (e.target == null && !e.method.isStatic && e.method.name == "make" && e.args.size == 1)
     {
       arg := e.args.first
-      // Only treat as cvar if argument is NOT a closure (closures are it-blocks)
-      if (arg.id != ExprId.closure)
+      parentType := e.method.parent
+      // Only treat as cvar if:
+      // 1. Argument is NOT a closure (closures are it-blocks)
+      // 2. Parent type is a synthetic wrapper class (Wrap$*)
+      if (arg.id != ExprId.closure && parentType.isSynthetic && parentType.name.startsWith("Wrap\$"))
       {
         // This is a cvar wrapper - use ObjUtil.cvar() instead of self.make()
         w("ObjUtil.cvar(")
@@ -321,7 +323,7 @@ class PyExprPrinter : PyPrinter
         w(")")
         return
       }
-      // If argument IS a closure, fall through to handle as constructor call
+      // Otherwise fall through to handle as normal constructor/method call
     }
 
     // Check if this is a dynamic call (-> operator)
