@@ -156,6 +156,17 @@ class PyTypePrinter : PyPrinter
     // Automatic same-unit imports can cause circular import issues when helper classes
     // reference each other (e.g., FacetsA imports FacetsB imports FacetsA)
 
+    // Exception: Same-pod exception types used in catch clauses need explicit imports
+    // because they're used at statement level (except ErrType as e:) not via reflection
+    samePodCatchTypes := collectSamePodCatchTypes(t)
+    samePodCatchTypes.each |typeName|
+    {
+      // Skip self-import
+      if (typeName == t.name) return
+      podPath := PyUtil.podImport(t.pod.name)
+      w("from ${podPath}.${typeName} import ${typeName}").nl
+    }
+
     nl
   }
 
@@ -262,6 +273,70 @@ class PyTypePrinter : PyPrinter
     }
 
     return result
+  }
+
+  ** Collect same-pod exception types used in catch clauses
+  ** These need explicit imports because they're used at statement level
+  private Str[] collectSamePodCatchTypes(TypeDef t)
+  {
+    result := Str[,]
+
+    // Scan all methods for catch clauses
+    t.methodDefs.each |m|
+    {
+      if (m.code != null)
+        scanBlockForCatchTypes(m.code, t.pod.name, result)
+    }
+
+    return result
+  }
+
+  ** Scan a block for same-pod catch types
+  private Void scanBlockForCatchTypes(Block block, Str podName, Str[] result)
+  {
+    block.stmts.each |stmt|
+    {
+      if (stmt.id == StmtId.tryStmt)
+      {
+        tryStmt := stmt as TryStmt
+        tryStmt.catches.each |c|
+        {
+          if (c.errType != null && c.errType.pod.name == podName)
+          {
+            typeName := c.errType.name
+            if (!result.contains(typeName))
+              result.add(typeName)
+          }
+        }
+        // Recurse into try block
+        scanBlockForCatchTypes(tryStmt.block, podName, result)
+        tryStmt.catches.each |c| { scanBlockForCatchTypes(c.block, podName, result) }
+        if (tryStmt.finallyBlock != null)
+          scanBlockForCatchTypes(tryStmt.finallyBlock, podName, result)
+      }
+      else if (stmt.id == StmtId.ifStmt)
+      {
+        ifStmt := stmt as IfStmt
+        scanBlockForCatchTypes(ifStmt.trueBlock, podName, result)
+        if (ifStmt.falseBlock != null) scanBlockForCatchTypes(ifStmt.falseBlock, podName, result)
+      }
+      else if (stmt.id == StmtId.forStmt)
+      {
+        forStmt := stmt as ForStmt
+        if (forStmt.block != null) scanBlockForCatchTypes(forStmt.block, podName, result)
+      }
+      else if (stmt.id == StmtId.whileStmt)
+      {
+        whileStmt := stmt as WhileStmt
+        scanBlockForCatchTypes(whileStmt.block, podName, result)
+      }
+      else if (stmt.id == StmtId.switchStmt)
+      {
+        switchStmt := stmt as SwitchStmt
+        switchStmt.cases.each |c| { scanBlockForCatchTypes(c.block, podName, result) }
+        if (switchStmt.defaultBlock != null) scanBlockForCatchTypes(switchStmt.defaultBlock, podName, result)
+      }
+    }
   }
 
   ** Unwrap nullable, list, map, func types to get the base type
