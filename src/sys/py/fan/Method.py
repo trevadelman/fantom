@@ -42,8 +42,9 @@ class Method(Slot):
         return self._returns
 
     def params(self):
-        """Get parameter list as List of Param objects"""
-        return self._params
+        """Get parameter list as Fantom List of Param objects"""
+        from .List import List as FanList
+        return FanList.from_list(self._params, "sys::Param")
 
     def func(self):
         """Get the Func wrapper for this method.
@@ -339,13 +340,15 @@ class MethodFunc:
 
     def params(self):
         """Get parameters including 'this' for instance methods."""
+        from .List import List as FanList
         method_params = self._method.params()
 
         # For instance methods, prepend 'this' parameter
         if not self._method.is_static():
             from .Param import Param
             this_param = Param("this", self._method.parent(), False)
-            return [this_param] + list(method_params)
+            all_params = [this_param] + list(method_params._list)
+            return FanList.from_list(all_params, "sys::Param")
 
         return method_params
 

@@ -96,7 +96,7 @@ class PyTypePrinter : PyPrinter
     w("from fan.sys.Func import Func").nl
     w("from fan.sys.Env import Env").nl
     w("from fan.sys.Unsafe import Unsafe, make").nl
-    w("from fan.sys.Err import Err, ParseErr, NullErr, CastErr, ArgErr, IndexErr, UnsupportedErr, UnknownTypeErr, UnknownPodErr, UnknownSlotErr, UnknownServiceErr, ReadonlyErr, IOErr, NotImmutableErr, CancelledErr, ConstErr, InterruptedErr, NameErr, TimeoutErr, TestErr, ReturnErr, NotFilterErr, UnknownNameErr").nl
+    w("from fan.sys.Err import Err, ParseErr, NullErr, CastErr, ArgErr, IndexErr, UnsupportedErr, UnknownTypeErr, UnknownPodErr, UnknownSlotErr, UnknownServiceErr, ReadonlyErr, IOErr, NotImmutableErr, CancelledErr, ConstErr, InterruptedErr, NameErr, TimeoutErr, TestErr, ReturnErr, NotFilterErr, UnknownNameErr, UnknownKeyErr").nl
     w("from fan.sys.Buf import Buf").nl
     w("from fan.sys.File import File").nl
     w("from fan.sys.Zip import Zip").nl

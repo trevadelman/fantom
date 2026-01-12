@@ -242,5 +242,10 @@ class NotFilterErr(Err):
 
 
 class UnknownNameErr(Err):
-    """Unknown name error - thrown when identifier lookup fails"""
+    """Unknown name error"""
+    pass
+
+
+class UnknownKeyErr(Err):
+    """Unknown key error (key not found in map/dict)"""
     pass
