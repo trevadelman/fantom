@@ -190,12 +190,42 @@ class Type(Obj):
                 parts = module.split('.')
                 if len(parts) >= 3:
                     pod = parts[1]  # e.g., 'sys', 'testSys'
+                    # Convert Python pod name to Fantom pod name
+                    # Python uses 'def_' because 'def' is a reserved word
+                    pod = Type._py_pod_to_fantom(pod)
                     return Type.find(f"{pod}::{cls.__name__}")
             return Type.find(f"sys::{cls.__name__}")
         return Type.find("sys::Obj")
 
     # Generic type parameter names
     _GENERIC_PARAM_NAMES = {"V", "K", "R", "A", "B", "C", "D", "E", "F", "G", "H", "L", "M"}
+
+    # Python pod names that differ from Fantom pod names
+    # Python uses trailing underscore for reserved words (e.g., 'def' -> 'def_')
+    _PY_POD_TO_FANTOM = {
+        "def_": "def",  # 'def' is a Python keyword
+    }
+
+    # Reverse mapping: Fantom pod name -> Python module name
+    _FANTOM_POD_TO_PY = {
+        "def": "def_",  # 'def' is a Python keyword
+    }
+
+    @staticmethod
+    def _py_pod_to_fantom(py_pod):
+        """Convert Python pod name to Fantom pod name.
+
+        Python uses underscore suffix for reserved words (e.g., 'def_' -> 'def').
+        """
+        return Type._PY_POD_TO_FANTOM.get(py_pod, py_pod)
+
+    @staticmethod
+    def _fantom_pod_to_py(fantom_pod):
+        """Convert Fantom pod name to Python module name.
+
+        Python uses underscore suffix for reserved words (e.g., 'def' -> 'def_').
+        """
+        return Type._FANTOM_POD_TO_PY.get(fantom_pod, fantom_pod)
 
     @staticmethod
     def find(qname, checked=True):
@@ -367,8 +397,10 @@ class Type(Obj):
             parts = qname.split("::")
             if len(parts) == 2:
                 pod, name = parts
+                # Convert Fantom pod name to Python module name (e.g., 'def' -> 'def_')
+                py_pod = Type._fantom_pod_to_py(pod)
                 try:
-                    module = __import__(f'fan.{pod}.{name}', fromlist=[name])
+                    module = __import__(f'fan.{py_pod}.{name}', fromlist=[name])
                     # The import triggers the class definition which calls tf_()
                 except ImportError:
                     # For util:: types, try to find them in sys namespace

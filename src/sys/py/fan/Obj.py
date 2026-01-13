@@ -73,7 +73,9 @@ class Obj:
         if module.startswith('fan.'):
             parts = module.split('.')
             if len(parts) >= 2:
-                pod = parts[1]  # e.g., 'sys', 'testSys'
+                py_pod = parts[1]  # e.g., 'sys', 'testSys', 'def_'
+                # Convert Python pod name to Fantom pod name (e.g., 'def_' -> 'def')
+                pod = Type._py_pod_to_fantom(py_pod)
                 return Type.find(f"{pod}::{class_name}")
 
         # Default to sys pod
