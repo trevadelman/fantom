@@ -363,12 +363,14 @@ class Type(Obj):
             except ImportError:
                 raise UnknownTypeErr.make(f"Unknown type: {qname}")
 
-        # For unknown pods, throw UnknownPodErr
+        # For unknown pods, throw UnknownPodErr (only if checked=True)
         # Let Pod.find() handle pod discovery dynamically via import
         from .Pod import Pod
         pod = Pod.find(pod_name, False)  # checked=False to avoid recursion
         if pod is None:
-            raise UnknownPodErr.make(f"Unknown pod: {pod_name}")
+            if checked:
+                raise UnknownPodErr.make(f"Unknown pod: {pod_name}")
+            return None
 
         t = Type(qname)
         Type._cache[qname] = t
