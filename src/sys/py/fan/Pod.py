@@ -219,8 +219,19 @@ class Pod(Obj):
         return result
 
     def type(self, name, checked=True):
-        """Find a type by name in this pod"""
+        """Find a type by name in this pod.
+
+        If the type isn't registered yet, delegates to Type.find() which
+        imports the module and triggers type registration. This provides
+        Python-idiomatic lazy loading while maintaining consistency with
+        Type.find() behavior.
+        """
         t = self._types.get(name)
+        if t is None:
+            # Type not registered yet - try to load it via Type.find()
+            # This triggers module import and type registration
+            from .Type import Type
+            t = Type.find(f"{self._name}::{name}", False)
         if t is None and checked:
             from .Err import UnknownTypeErr
             raise UnknownTypeErr(f"Unknown type: {self._name}::{name}")

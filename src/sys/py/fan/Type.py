@@ -352,14 +352,6 @@ class Type(Obj):
         if not pod_name or not type_name_part:
             raise ArgErr.make(f"Invalid type signature '{qname}', use <pod>::<type>")
 
-        # For checked=false, return None for unknown types
-        if not checked:
-            if pod_name == "sys" and qname not in Type._KNOWN_TYPES:
-                return None
-            # For non-sys pods, we don't know them - return None
-            if pod_name != "sys" and not qname.startswith("testSys::"):
-                return None
-
         # For checked=true with sys pod and unknown type, throw UnknownTypeErr
         # Exception: internal implementation types (NullableType, ListType, etc.)
         # Also allow 'type' - Python's builtin that sometimes gets passed through
@@ -3176,3 +3168,4 @@ def _init_type_fields():
     pass  # Will be called by runtime initialization
     pass  # Will be called by runtime initialization
     pass  # Will be called by runtime initialization
+# These will be set after module initialization
