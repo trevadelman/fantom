@@ -306,14 +306,15 @@ class Field(Slot):
     def trap(self, name, args=None):
         """Dynamic method invocation via -> operator.
 
-        Handles special methods like set_const for bypassing const checks.
+        Handles special methods like setConst for bypassing const checks.
         """
         if args is None:
             args = []
 
-        # Handle set_const - bypasses const check for setting const fields
+        # Handle setConst - bypasses const check for setting const fields
         # Used by compiler infrastructure (e.g., xetoc Assemble)
-        if name == "set_const":
+        # Accept both camelCase (Fantom) and snake_case (Python)
+        if name == "setConst" or name == "set_const":
             if len(args) >= 2:
                 self.set_(args[0], args[1], check_const=False)
             return None

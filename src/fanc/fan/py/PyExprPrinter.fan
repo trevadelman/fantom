@@ -335,7 +335,9 @@ class PyExprPrinter : PyPrinter
         expr(e.target)
       else
         w("self")
-      w(", ").str(escapeName(e.name))
+      // NOTE: Do NOT escapeName() here - the name is a string key for dict lookup,
+      // not a Python identifier. "id" should stay "id", not become "id_"
+      w(", ").str(e.name)
       // Fantom semantics: no args = null, with args = list
       if (e.args.isEmpty)
       {
@@ -612,9 +614,11 @@ class PyExprPrinter : PyPrinter
   private Void safeCallBody(CallExpr e)
   {
     // Dynamic call (-> operator) with safe nav
+    // NOTE: Do NOT escapeName() here - the name is a string key for dict lookup,
+    // not a Python identifier. "id" should stay "id", not become "id_"
     if (e.isDynamic)
     {
-      w("ObjUtil.trap(_safe_, ").str(escapeName(e.name))
+      w("ObjUtil.trap(_safe_, ").str(e.name)
       if (e.args.isEmpty)
         w(", None)")
       else
