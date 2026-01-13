@@ -1607,9 +1607,21 @@ class Type(Obj):
         - _method_list: All methods
         - _slots_by_name: name -> Slot lookup
         """
-        if self._reflected:
-            return self
-        self._reflected = True
+        # Use _slots_by_name as guard (like JS slotsByName$)
+        # But also re-reflect if _slots_info has grown since last reflection
+        # This handles the case where Type.find() creates the Type before the module
+        # imports and registers its slots via am_()
+        if self._slots_by_name:
+            # Count how many of our own slots were reflected last time
+            own_slots_count = sum(1 for s in self._slot_list if s._parent is self)
+            if len(self._slots_info) <= own_slots_count:
+                return self
+            # More slots have been added via am_() - need to re-reflect
+            # Clear all cached slot data
+            self._slots_by_name = {}
+            self._slot_list = []
+            self._field_list = []
+            self._method_list = []
 
         from .Field import Field
         from .Method import Method

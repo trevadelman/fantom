@@ -955,7 +955,8 @@ class List(Obj, MutableSequence):
         """Join elements into string"""
         from .ObjUtil import ObjUtil
         if converter is not None:
-            return sep.join(converter(ObjUtil.to_str(x)) for x in self._values)
+            # Call converter with original item, then convert result to string
+            return sep.join(ObjUtil.to_str(converter(x)) for x in self._values)
         return sep.join(ObjUtil.to_str(x) for x in self._values)
 
     #################################################################

@@ -44,7 +44,20 @@ class Method(Slot):
     def params(self):
         """Get parameter list as Fantom List of Param objects"""
         from .List import List as FanList
-        return FanList.from_list(self._params, "sys::Param")
+        from .Param import Param
+        from .Type import Type
+        # Defensive: ensure all params are Param objects (not strings)
+        # This handles cases where dynamic discovery may have added strings
+        normalized = []
+        for p in self._params:
+            if isinstance(p, str):
+                # Convert string to Param with Obj? type
+                normalized.append(Param(p, Type.find("sys::Obj?"), False))
+            elif isinstance(p, Param):
+                normalized.append(p)
+            else:
+                normalized.append(p)
+        return FanList.from_list(normalized, "sys::Param")
 
     def func(self):
         """Get the Func wrapper for this method.
@@ -154,12 +167,15 @@ class Method(Slot):
             from_call_on: True if called from callOn()
         """
         # Get parameter info for validation and trimming
-        params = self._params if self._params else []
+        # Use self.params() to get normalized Param objects (handles string params)
+        from .Param import Param
+        params = list(self.params()) if self._params else []
         is_static = self.is_static()
         is_ctor = self.is_ctor()
 
         # Calculate min required args (params without defaults)
-        min_args = sum(1 for p in params if not p.has_default())
+        # Defensive: handle params that may not have has_default method
+        min_args = sum(1 for p in params if isinstance(p, Param) and not p.has_default())
         max_args = len(params)
 
         # For call/callList: instance methods expect target as first arg
