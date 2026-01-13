@@ -125,8 +125,8 @@ class Method(Slot):
         if args is None:
             args = []
         # Convert Fantom List to Python list if needed
-        if hasattr(args, '_list'):
-            args = list(args._list)
+        if hasattr(args, '_values'):
+            args = list(args._values)
         return self._invoke(target, list(args), from_call_on=True)
 
     def call_list(self, args):
@@ -137,8 +137,8 @@ class Method(Slot):
         if args is None:
             args = []
         # Convert Fantom List to Python list if needed
-        if hasattr(args, '_list'):
-            args = list(args._list)
+        if hasattr(args, '_values'):
+            args = list(args._values)
         return self._invoke(None, list(args), from_call=True)
 
     def _invoke(self, target, args, from_call=False, from_call_on=False):
@@ -347,7 +347,7 @@ class MethodFunc:
         if not self._method.is_static():
             from .Param import Param
             this_param = Param("this", self._method.parent(), False)
-            all_params = [this_param] + list(method_params._list)
+            all_params = [this_param] + list(method_params)
             return FanList.from_list(all_params, "sys::Param")
 
         return method_params

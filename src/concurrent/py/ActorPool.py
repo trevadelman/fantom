@@ -173,7 +173,7 @@ class ActorPool(Obj):
 
         # Handle Fantom List
         if isinstance(actors, List):
-            actors = actors._list
+            actors = list(actors)
 
         if len(actors) == 0:
             raise IndexErr.make("Empty actor list")
