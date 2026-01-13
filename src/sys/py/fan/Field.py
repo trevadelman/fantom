@@ -4,6 +4,7 @@
 #
 
 from .Slot import Slot
+from .Type import _camel_to_snake
 
 
 class Field(Slot):
@@ -453,6 +454,27 @@ class FieldGetter:
             return self._field.get(args[0])
         return self._field.get()
 
+    def trap(self, name, args=None):
+        """Dynamic method invocation via -> operator.
+
+        FieldGetter acts like a Method, so trap should look up method attributes.
+        """
+        if args is None:
+            args = []
+
+        # Look up method on self (is_static, is_public, etc.)
+        # Handle both camelCase (Fantom) and snake_case (Python)
+        snake_name = _camel_to_snake(name)
+        method = getattr(self, snake_name, None)
+        if method is None:
+            method = getattr(self, name, None)
+        if method is not None and callable(method):
+            return method(*args) if args else method()
+
+        # Not found
+        from .Err import UnknownSlotErr
+        raise UnknownSlotErr.make(f"FieldGetter.{name}")
+
 
 class FieldSetter:
     """Synthetic setter method for a field.
@@ -538,3 +560,24 @@ class FieldSetter:
             self._field.set_(args[0], args[1])
         elif args and len(args) == 1:
             self._field.set_(None, args[0])
+
+    def trap(self, name, args=None):
+        """Dynamic method invocation via -> operator.
+
+        FieldSetter acts like a Method, so trap should look up method attributes.
+        """
+        if args is None:
+            args = []
+
+        # Look up method on self (is_static, is_public, etc.)
+        # Handle both camelCase (Fantom) and snake_case (Python)
+        snake_name = _camel_to_snake(name)
+        method = getattr(self, snake_name, None)
+        if method is None:
+            method = getattr(self, name, None)
+        if method is not None and callable(method):
+            return method(*args) if args else method()
+
+        # Not found
+        from .Err import UnknownSlotErr
+        raise UnknownSlotErr.make(f"FieldSetter.{name}")
