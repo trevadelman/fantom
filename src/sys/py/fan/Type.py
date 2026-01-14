@@ -3179,5 +3179,4 @@ def _init_type_fields():
     pass  # Will be called by runtime initialization
     pass  # Will be called by runtime initialization
     pass  # Will be called by runtime initialization
-# These will be set after module initialization
 

@@ -221,21 +221,42 @@ class Pod(Obj):
     def type(self, name, checked=True):
         """Find a type by name in this pod.
 
-        If the type isn't registered yet, delegates to Type.find() which
-        imports the module and triggers type registration. This provides
-        Python-idiomatic lazy loading while maintaining consistency with
-        Type.find() behavior.
+        Only returns types that actually exist - either already registered
+        via _register_type() or importable as a Python module.
+
+        Unlike Type.find(), this does NOT create phantom Type objects for
+        non-existent types. This is important for FFI resolution which
+        iterates pods looking for types by name.
         """
+        # First check if already registered
         t = self._types.get(name)
-        if t is None:
-            # Type not registered yet - try to load it via Type.find()
-            # This triggers module import and type registration
+        if t is not None:
+            return t
+
+        # Try to import the module directly to see if type exists
+        # Convert Fantom pod name to Python module name (e.g., 'def' -> 'def_')
+        py_pod = self._name + "_" if self._name in Pod._PYTHON_KEYWORDS else self._name
+
+        try:
+            module = __import__(f'fan.{py_pod}.{name}', fromlist=[name])
+            # Module exists - check if the type was registered during import
+            t = self._types.get(name)
+            if t is not None:
+                return t
+            # Module exists but type not registered - create and register it
             from .Type import Type
             t = Type.find(f"{self._name}::{name}", False)
-        if t is None and checked:
+            if t is not None:
+                self._types[name] = t
+            return t
+        except ImportError:
+            # Module doesn't exist - type doesn't exist in this pod
+            pass
+
+        if checked:
             from .Err import UnknownTypeErr
             raise UnknownTypeErr(f"Unknown type: {self._name}::{name}")
-        return t
+        return None
 
     # Alias for transpiled code that escapes 'type' to 'type_'
     def type_(self, name, checked=True):
