@@ -189,6 +189,36 @@ class ObjDecoder:
         if root and self.options and "makeArgs" in self.options:
             args = list(self.options["makeArgs"])
 
+        # Check if last parameter is a Func (it-block pattern)
+        # If so, create a synthetic it-block function from to_set fields
+        set_after_ctor = True
+        ctor_params = make_ctor.params()
+        if ctor_params:
+            # Get last param - handle both list and Fantom List
+            if hasattr(ctor_params, 'last') and callable(ctor_params.last):
+                last_param = ctor_params.last()
+            elif hasattr(ctor_params, '__len__') and len(ctor_params) > 0:
+                last_param = ctor_params[-1]
+            else:
+                last_param = None
+
+            if last_param is not None:
+                # Get param type
+                param_type = last_param.type_() if hasattr(last_param, 'type_') else None
+                if param_type is None and hasattr(last_param, 'type'):
+                    param_type = last_param.type() if callable(last_param.type) else last_param.type
+
+                # Check if last param fits Func and type is const
+                func_type = Type.find("sys::Func")
+                if param_type is not None and param_type.fits(func_type) and t.is_const():
+                    # Create it-block function from to_set fields
+                    from fan.sys.Field import Field
+                    it_block = Field.make_set_func(to_set)
+                    if args is None:
+                        args = []
+                    args.append(it_block)
+                    set_after_ctor = False
+
         # Construct object
         try:
             if args:
@@ -198,9 +228,10 @@ class ObjDecoder:
         except Exception as e:
             raise self._err(f"Cannot make {t}: {e}", line)
 
-        # Set fields
-        for field, val in to_set.items():
-            self._complex_set(obj, field, val, line)
+        # Set fields (if not passed to ctor as it-block)
+        if set_after_ctor:
+            for field, val in to_set.items():
+                self._complex_set(obj, field, val, line)
 
         # Add collection items
         if to_add:

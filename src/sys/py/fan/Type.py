@@ -995,7 +995,7 @@ class Type(Obj):
         # Get known const fields for this type (these should NOT be discovered as methods)
         const_fields = Type._SYS_CONST_FIELDS.get(self._qname, set())
 
-        # Discover static methods
+        # Discover methods (both static and instance)
         for name in dir(py_class):
             # Skip private/dunder methods
             if name.startswith('_'):
@@ -1010,12 +1010,19 @@ class Type(Obj):
             except AttributeError:
                 continue
 
-            # Check if it's a static method
+            # Check what kind of method/attribute this is
             raw_attr = inspect.getattr_static(py_class, name)
             is_static_method = isinstance(raw_attr, staticmethod)
+            is_regular_function = inspect.isfunction(raw_attr)
 
             if is_static_method and callable(attr):
+                # Static method
                 method = self._create_method_from_function(name, attr, is_static=True)
+                if method:
+                    discovered.append(method)
+            elif is_regular_function:
+                # Instance method (regular function defined in class)
+                method = self._create_method_from_function(name, raw_attr, is_static=False)
                 if method:
                     discovered.append(method)
 

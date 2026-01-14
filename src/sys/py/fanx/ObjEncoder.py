@@ -222,8 +222,10 @@ class ObjEncoder:
                 first = False
 
             # Write field name and value
+            # Convert snake_case to camelCase for cross-platform serialization
+            from fan.sys.Type import _snake_to_camel
             self.w_indent()
-            self.w(f.name())
+            self.w(_snake_to_camel(f.name()))
             self.w('=')
 
             # Get field type, handle type_() method name
