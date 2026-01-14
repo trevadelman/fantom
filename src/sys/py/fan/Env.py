@@ -353,7 +353,7 @@ class Env(Obj):
 
         Args:
             pod: Pod to load props for
-            uri: Uri of props file relative to etc/{pod}/
+            uri: Uri of props file (e.g., "locale/de.props", "config.props")
             maxAge: Maximum cache age (Duration)
 
         Returns:
@@ -361,17 +361,23 @@ class Env(Obj):
         """
         from .Map import Map
         from .Duration import Duration
+        from pathlib import Path
         import time
-
-        # Initialize cache if needed
-        if not hasattr(self, '_propsCache'):
-            self._propsCache = {}
 
         # Build cache key
         pod_name = pod.name() if hasattr(pod, 'name') else str(pod)
-        cache_key = f"{pod_name}:{uri}"
+        uri_str = str(uri) if hasattr(uri, '__str__') else uri
+        cache_key = f"{pod_name}:{uri_str}"
 
-        # Check cache
+        # Check static cache first (populated by transpiler via __props)
+        if cache_key in Env._props:
+            return Env._props[cache_key]
+
+        # Initialize instance cache if needed
+        if not hasattr(self, '_propsCache'):
+            self._propsCache = {}
+
+        # Check instance cache
         now = time.time()
         if cache_key in self._propsCache:
             cached_time, cached_props = self._propsCache[cache_key]
@@ -379,20 +385,40 @@ class Env(Obj):
             if now - cached_time < max_age_secs:
                 return cached_props
 
-        # Build file path: etc/{pod}/{uri}
-        etc_dir = self.work_dir().plus(f"etc/{pod_name}/", False)
-        props_file = etc_dir.plus(uri, False)
-
-        # Load props - create properly typed empty map if file not found
+        # Try to load from file system
         props = Map.make_with_type("sys::Str", "sys::Str")
-        if props_file.exists():
-            loaded = props_file.read_props()
-            for k, v in loaded.items():
-                props.set_(k, v)
+        home = self.home_dir()
+
+        # Locations to search for props files
+        locations = [
+            home._path / "fan" / "src" / pod_name / uri_str,       # fan/src/sys/locale/de.props
+            home._path / "rel" / "src" / pod_name / uri_str,       # rel/src/sys/locale/de.props
+            home._path / "haxall" / "src" / "core" / pod_name / uri_str,  # haxall/src/core/haystack/locale/en.props
+            home._path / "src" / pod_name / uri_str,               # src/sys/locale/de.props
+            home._path / f"etc/{pod_name}" / uri_str,              # etc/sys/config.props
+        ]
+
+        for props_path in locations:
+            if props_path.exists():
+                try:
+                    with open(props_path, 'r', encoding='utf-8') as f:
+                        for line in f:
+                            line = line.strip()
+                            if not line or line.startswith('#') or line.startswith('//'):
+                                continue
+                            if '=' in line:
+                                k, v = line.split('=', 1)
+                                props.set_(k.strip(), v.strip())
+                    break  # Found and loaded
+                except Exception:
+                    continue
 
         # Make immutable and cache
         result = props.to_immutable()
         self._propsCache[cache_key] = (now, result)
+
+        # Also add to static cache for faster future lookups
+        Env._props[cache_key] = result
 
         return result
 
@@ -438,12 +464,10 @@ class Env(Obj):
     def locale(self, pod, key, defVal=_LOCALE_NO_DEFAULT, locale=None):
         """Get localized string.
 
-        Matches the JavaScript implementation pattern:
-        1. Check static _props cache (populated by __props or loaded at runtime)
-        2. Check locale/{locale}.props from cache
-        3. Check locale/{lang}.props from cache
-        4. Check locale/en.props from cache
-        5. Fall back to pod::key pattern
+        1. props(pod, locale.__strProps) - e.g., locale/de.props
+        2. props(pod, locale.__langProps) - e.g., locale/de.props
+        3. props(pod, locale/en.props) - fallback to English
+        4. Return pod::key or defVal
 
         Args:
             pod: Pod to get locale for
@@ -455,44 +479,33 @@ class Env(Obj):
             Localized string, default, or pod::key pattern
         """
         from .Locale import Locale
-        from .Map import Map
+        from .Uri import Uri
+        from .Duration import Duration
 
         # Get locale
         if locale is None:
             locale = Locale.cur()
 
         pod_name = pod.name() if hasattr(pod, 'name') else str(pod)
-        lang = locale.lang()
-        country = locale.country() if hasattr(locale, 'country') else None
+        max_age = Duration.max_val() if hasattr(Duration, 'max_val') else Duration.make(0x7FFFFFFFFFFFFFFF)
 
-        # Keys to check in static cache (matching JS pattern)
-        cache_keys = []
-        if country:
-            cache_keys.append(f"{pod_name}:locale/{lang}-{country}.props")
-        cache_keys.append(f"{pod_name}:locale/{lang}.props")
-        cache_keys.append(f"{pod_name}:locale/en.props")
+        # 1. props(pod, locale.__strProps) - e.g., "locale/de.props"
+        val = self.props(pod, locale._Locale__strProps, max_age).get(key, None)
+        if val is not None:
+            return val
 
-        # Check static cache first (populated by __props or loaded at runtime)
-        for cache_key in cache_keys:
-            if cache_key in Env._props:
-                props_map = Env._props[cache_key]
-                val = props_map.get(key, None)
-                if val is not None:
-                    return val
+        # 2. props(pod, locale.__langProps) - e.g., "locale/de.props"
+        val = self.props(pod, locale._Locale__langProps, max_age).get(key, None)
+        if val is not None:
+            return val
 
-        # If cache miss, try to load from files and populate cache
-        # This provides runtime fallback when transpiler didn't inject props
-        self._load_locale_props(pod_name, lang, country)
+        # 3. props(pod, "locale/en.props") - fallback to English
+        en_props_uri = Uri.from_str("locale/en.props")
+        val = self.props(pod, en_props_uri, max_age).get(key, None)
+        if val is not None:
+            return val
 
-        # Check cache again after loading
-        for cache_key in cache_keys:
-            if cache_key in Env._props:
-                props_map = Env._props[cache_key]
-                val = props_map.get(key, None)
-                if val is not None:
-                    return val
-
-        # Key not found - return based on whether defVal was provided
+        # 4. Key not found - return based on whether defVal was provided
         if defVal is not Env._LOCALE_NO_DEFAULT:
             # defVal was explicitly provided (including None)
             return defVal

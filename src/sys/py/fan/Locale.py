@@ -2,6 +2,8 @@
 # Copyright (c) 2025, Brian Frank and Andy Frank
 # Licensed under the Academic Free License version 3.0
 #
+# Native Locale implementation for Python runtime
+#
 
 import re
 import threading
@@ -19,22 +21,26 @@ class Locale(Obj):
     _cache = {}  # Cache for parsed locales (shared, but locales are immutable)
     _en = None   # Cached English locale
 
-    def __init__(self, str_val):
-        self._str = str_val
-        self._lang = None
-        self._country = None
-        self._parse()
+    def __init__(self, str_val, lang, country):
+        """Initialize Locale with string, language and country.
 
-    def _parse(self):
-        """Parse locale string into lang and country components"""
-        s = self._str
-        if '-' in s:
-            parts = s.split('-', 1)
-            self._lang = parts[0]
-            self._country = parts[1]
-        else:
-            self._lang = s
-            self._country = None
+        Args:
+            str_val: Full locale string (e.g., "en-US", "de")
+            lang: Language code (e.g., "en", "de")
+            country: Country code or None (e.g., "US", None)
+        """
+        self._str = str_val
+        self._lang = lang
+        self._country = country
+
+        # Pre-computed Uri objects for props lookup
+        from .Uri import Uri
+        self.__strProps = Uri.from_str(f"locale/{str_val}.props")
+        self.__langProps = Uri.from_str(f"locale/{lang}.props")
+
+        # Cached lookups (populated on first use)
+        self._monthsByName = None
+        self._numSymbols = None
 
     @staticmethod
     def from_str(s, checked=True):
@@ -73,7 +79,11 @@ class Locale(Obj):
                 if not re.match(r'^[a-z]{2}$', s):
                     raise ValueError(f"Invalid language code: {s}")
 
-            locale = Locale(s)
+            # Create locale with parsed components
+            if '-' in s:
+                locale = Locale(s, lang, country)
+            else:
+                locale = Locale(s, s, None)
             Locale._cache[s] = locale
             return locale
 
@@ -82,6 +92,46 @@ class Locale(Obj):
                 from fan.sys.Err import ParseErr
                 raise ParseErr(f"Invalid locale: {s}")
             return None
+
+    def __month_by_name(self, name):
+        """Get Month by localized name (abbr or full).
+
+        Matches JS implementation - builds cache on first use.
+        """
+        if self._monthsByName is None:
+            from .Month import Month
+            from .Str import Str
+            name_map = {}
+            vals = Month.vals()
+            # Handle both hand-written and generated Month classes
+            size = vals.size() if callable(getattr(vals, 'size', None)) else len(vals)
+            for i in range(size):
+                m = vals.get(i) if hasattr(vals, 'get') else vals[i]
+                name_map[Str.lower(m._Month__abbr(self))] = m
+                name_map[Str.lower(m._Month__full(self))] = m
+            self._monthsByName = name_map
+        return self._monthsByName.get(name)
+
+    def __num_symbols(self):
+        """Get number formatting symbols for this locale.
+
+        Returns dict with decimal, grouping, etc.
+        """
+        if self._numSymbols is None:
+            from .Pod import Pod
+            from .Env import Env
+            pod = Pod.find("sys")
+            env = Env.cur()
+            self._numSymbols = {
+                'decimal': env.locale(pod, "numDecimal", ".", self),
+                'grouping': env.locale(pod, "numGrouping", ",", self),
+                'minus': env.locale(pod, "numMinus", "-", self),
+                'percent': env.locale(pod, "numPercent", "%", self),
+                'posInf': env.locale(pod, "numPosInf", "+Inf", self),
+                'negInf': env.locale(pod, "numNegInf", "-Inf", self),
+                'nan': env.locale(pod, "numNaN", "NaN", self),
+            }
+        return self._numSymbols
 
     @staticmethod
     def en():

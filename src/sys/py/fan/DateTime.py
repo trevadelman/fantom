@@ -900,23 +900,21 @@ class DateTime(Obj):
 
     def to_locale(self, pattern=None, locale=None):
         """Format DateTime using locale pattern"""
+        from .Locale import Locale
+        if locale is None:
+            locale = Locale.cur()
         if pattern is None:
             # Use locale-specific default pattern
-            from .Locale import Locale
-            cur = locale if locale is not None else Locale.cur()
             # US locale uses 12-hour time with AM/PM
-            if cur.country() == "US":
+            if locale.country() == "US":
                 pattern = "D-MMM-YYYY WWW k:mm:ssAA zzz"
             else:
                 # Non-US locales use 24-hour time
                 pattern = "D-MMM-YYYY WWW hh:mm:ss zzz"
 
+        # Weekday names (TODO: make locale-aware)
         weekday_full = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
         weekday_abbr = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-        month_full = ["January", "February", "March", "April", "May", "June",
-                      "July", "August", "September", "October", "November", "December"]
-        month_abbr = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
         result = []
         i = 0
@@ -936,9 +934,15 @@ class DateTime(Obj):
                     result.append(str(self._year))
             elif c == 'M':  # Month
                 if count >= 4:
-                    result.append(month_full[self._month.ordinal()])
+                    # Use locale-aware month name via Month native
+                    from .Month import Month as MonthNative
+                    m = MonthNative.vals().get(self._month.ordinal())
+                    result.append(m._Month__full(locale))
                 elif count == 3:
-                    result.append(month_abbr[self._month.ordinal()])
+                    # Use locale-aware month abbreviation via Month native
+                    from .Month import Month as MonthNative
+                    m = MonthNative.vals().get(self._month.ordinal())
+                    result.append(m._Month__abbr(locale))
                 elif count == 2:
                     result.append(f"{self._month.ordinal() + 1:02d}")
                 else:
@@ -1301,13 +1305,22 @@ class DateTime(Obj):
         return num
 
     @staticmethod
-    def _parse_month(s, pos, abbr_list, full_list):
-        """Parse month name from string, return (month_num, new_pos)"""
+    def _parse_month(s, pos, abbr_list, full_list, locale=None):
+        """Parse month name from string, return (month_num, new_pos).
+        Uses locale-aware month names via Locale.__monthByName when available."""
         word = ""
         while pos < len(s) and s[pos].isalpha():
             word += s[pos]
             pos += 1
         word_lower = word.lower()
+
+        # Try locale-aware month lookup first
+        if locale is not None:
+            m = locale._Locale__month_by_name(word_lower)
+            if m is not None:
+                return m.ordinal() + 1, pos
+
+        # Fall back to English month names
         for i, name in enumerate(abbr_list):
             if word_lower == name or word_lower == full_list[i]:
                 return i + 1, pos
@@ -1994,14 +2007,13 @@ class Date(Obj):
 
     def to_locale(self, pattern=None, locale=None):
         """Format Date using locale pattern"""
+        from .Locale import Locale
+        if locale is None:
+            locale = Locale.cur()
         if pattern is None:
             pattern = "D-MMM-YYYY"
         weekday_full = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
         weekday_abbr = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-        month_full = ["January", "February", "March", "April", "May", "June",
-                      "July", "August", "September", "October", "November", "December"]
-        month_abbr = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
         result = []
         i = 0
         while i < len(pattern):
@@ -2018,9 +2030,15 @@ class Date(Obj):
                     result.append(str(self._year))
             elif c == 'M':
                 if count >= 4:
-                    result.append(month_full[self._month.ordinal()])
+                    # Use locale-aware month name via Month native
+                    from .Month import Month as MonthNative
+                    m = MonthNative.vals().get(self._month.ordinal())
+                    result.append(m._Month__full(locale))
                 elif count == 3:
-                    result.append(month_abbr[self._month.ordinal()])
+                    # Use locale-aware month abbreviation via Month native
+                    from .Month import Month as MonthNative
+                    m = MonthNative.vals().get(self._month.ordinal())
+                    result.append(m._Month__abbr(locale))
                 elif count == 2:
                     result.append(f"{self._month.ordinal() + 1:02d}")
                 else:
@@ -2081,11 +2099,13 @@ class Date(Obj):
     @staticmethod
     def from_locale(s, pattern, checked=True):
         """Parse Date from locale pattern string"""
+        from .Locale import Locale
         try:
             month_full = ["january", "february", "march", "april", "may", "june",
                           "july", "august", "september", "october", "november", "december"]
             month_abbr = ["jan", "feb", "mar", "apr", "may", "jun",
                           "jul", "aug", "sep", "oct", "nov", "dec"]
+            locale = Locale.cur()
 
             year = 0
             mon = 0
@@ -2110,7 +2130,7 @@ class Date(Obj):
                         year += 1900
                 elif c == 'M':
                     if count >= 3:
-                        mon, pos = DateTime._parse_month(s, pos, month_abbr, month_full)
+                        mon, pos = DateTime._parse_month(s, pos, month_abbr, month_full, locale)
                     else:
                         mon = DateTime._parse_int(s, pos, count)
                         pos += len(str(mon)) if count == 1 else count

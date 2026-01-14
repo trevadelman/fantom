@@ -450,24 +450,39 @@ class Int(Obj):
             if not pattern:
                 return str(self) + suffix
 
+        # Handle decimal patterns like "#,###.0" or "0.00"
+        # For integers, we format the integer part then append the decimal portion
+        decimal_format = ""
+        if '.' in pattern:
+            int_pattern, dec_pattern = pattern.split('.', 1)
+            # Build decimal format based on pattern
+            # '0' = required digit, '#' = optional digit
+            # For integers, required decimal places are all zeros
+            decimal_format = decimal_sep + ('0' * len(dec_pattern.replace('#', '')))
+            # If pattern has only '#' after decimal, no decimals for integer
+            if not decimal_format or decimal_format == decimal_sep:
+                decimal_format = ""
+            pattern = int_pattern
+
         # Parse grouping from pattern like "#,###" -> group size 3
         if ',' in pattern:
             parts = pattern.split(',')
             # Group size is the length of the last segment
             group_size = len(parts[-1])
-            return Int._format_with_grouping(self, group_size, thousands_sep) + suffix
+            return Int._format_with_grouping(self, group_size, thousands_sep) + decimal_format + suffix
 
         # Fixed width with leading zeros (pattern like "000")
         if pattern.startswith('0'):
             width = len(pattern)
             s = str(abs(self)).zfill(width)
-            return ('-' + s) if self < 0 else s
+            result = ('-' + s) if self < 0 else s
+            return result + decimal_format + suffix
 
         # Pattern "#" - no grouping
         if pattern == '#':
-            return str(self) + suffix
+            return str(self) + decimal_format + suffix
 
-        return str(self) + suffix
+        return str(self) + decimal_format + suffix
 
     @staticmethod
     def _format_with_grouping(val, group_size, sep):
