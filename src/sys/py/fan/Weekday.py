@@ -202,6 +202,10 @@ class Weekday(Obj):
     def hash_(self):
         return self._ordinal
 
+    def is_immutable(self):
+        """Enums are always immutable in Fantom"""
+        return True
+
     def __add__(self, val):
         """Weekday + Int -> Weekday"""
         return self.increment(val)

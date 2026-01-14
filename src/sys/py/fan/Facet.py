@@ -18,3 +18,7 @@ class Facet(Obj):
         """Return Fantom Type for this Facet."""
         from .Type import Type
         return Type.find("sys::Facet")
+
+    def is_immutable(self):
+        """Facets are always immutable in Fantom (they are const)."""
+        return True

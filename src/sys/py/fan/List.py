@@ -275,8 +275,10 @@ class List(Obj, MutableSequence):
     def to_immutable(self):
         """Return immutable version of this list"""
         from .ObjUtil import ObjUtil
+        from .Type import Type
+        from .Err import NotImmutableErr
         immutable_items = []
-        for item in self._values:
+        for i, item in enumerate(self._values):
             if item is None:
                 immutable_items.append(None)
             elif ObjUtil.is_immutable(item):
@@ -284,7 +286,8 @@ class List(Obj, MutableSequence):
             elif hasattr(item, 'to_immutable') and callable(item.to_immutable):
                 immutable_items.append(item.to_immutable())
             else:
-                immutable_items.append(item)
+                # Item cannot be made immutable - throw NotImmutableErr (matches JS impl)
+                raise NotImmutableErr.make(f"Item [{i}] not immutable {Type.of(item)}")
         result = ImmutableList(None, immutable_items)
         result._elementType = self._elementType
         result._listType = self._listType

@@ -99,6 +99,10 @@ class LogLevel(Obj):
         """Override Obj.hash() - return ordinal-based hash"""
         return hash(self._ordinal)
 
+    def is_immutable(self):
+        """LogLevel enums are always immutable"""
+        return True
+
 
 # Define log levels - stored in private class attributes
 LogLevel._debug = LogLevel("debug", 0)

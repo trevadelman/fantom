@@ -137,6 +137,10 @@ class Month(Obj):
         """Get full locale name"""
         return self.to_locale("MMMM")
 
+    def is_immutable(self):
+        """Month enums are always immutable"""
+        return True
+
 
 class DateTime(Obj):
     """DateTime represents an absolute instant in time with nanosecond precision."""

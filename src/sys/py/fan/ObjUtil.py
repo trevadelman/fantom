@@ -493,6 +493,11 @@ class ObjUtil:
             return True
         if isinstance(obj, (bool, int, float, str)):
             return True
+        # Facets are always immutable (const classes in Fantom)
+        # Check this early to handle Facet subclasses correctly
+        from .Facet import Facet
+        if isinstance(obj, Facet):
+            return True
         # Check if object has its own isImmutable method
         # This handles Func instances which track their own immutability
         if hasattr(obj, "is_immutable") and callable(getattr(obj, "is_immutable", None)):

@@ -58,6 +58,10 @@ class Enum(Obj):
     def __hash__(self):
         return hash(self._ordinal)
 
+    def is_immutable(self):
+        """Enums are always immutable in Fantom"""
+        return True
+
     def typeof(self):
         """Return the Fantom type for this enum"""
         from .Type import Type

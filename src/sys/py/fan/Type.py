@@ -2896,10 +2896,16 @@ class FacetInstance(Obj):
     This creates a proxy that gets default field values from the actual facet class
     and applies any explicit values from facet_data.
 
+    Extends Obj but provides Facet semantics - is_immutable() returns True.
+
     Allows accessing facet field values via:
     - Direct attribute access: facet._val, facet._b
     - Trap access: facet->val, facet->b
     """
+
+    def is_immutable(self):
+        """Facets are always immutable in Fantom (they are const)."""
+        return True
 
     def __new__(cls, facet_type, facet_data):
         """Create or return cached facet instance.
