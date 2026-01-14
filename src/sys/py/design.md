@@ -25,9 +25,62 @@ fanc py haystack
 
 Generated code is output to `<fan_home>/gen/py/fan/<podName>/`.
 
-## Standard Build
+## Build Integration (pyDirs/pyFiles)
 
-To build the Python natives into pod files:
+The Python transpiler is integrated into Fantom's build system using the same pattern as
+JavaScript's `jsDirs`:
+
+### BuildPod.fan
+Pods declare native Python directories in their `build.fan`:
+
+```fantom
+class Build : BuildPod
+{
+  pyDirs = [`py/`]  // Directory containing Python natives
+}
+```
+
+### CompilerInput.fan
+The `pyFiles` field passes resolved native directories to the compiler:
+
+```fantom
+class CompilerInput
+{
+  Uri[]? pyFiles  // Resolved Python native directories
+}
+```
+
+### PythonCmd.fan
+The transpiler reads `pyFiles` from the compiler input:
+
+```fantom
+// Uses compiler.input.pyFiles to find native directory
+pyFiles := compiler?.input?.pyFiles
+```
+
+### Native Directory Locations
+
+| Pod | Native Directory | build.fan |
+|-----|------------------|-----------|
+| sys | `src/sys/py/fan/` | (special handling) |
+| concurrent | `src/concurrent/py/` | `pyDirs = [\`py/\`]` |
+| util | `src/util/py/` | `pyDirs = [\`py/\`]` |
+
+The sys pod uses `py/fan/` to match its source structure. Other pods use `py/` directly.
+
+## Native Code Merging
+
+When transpiling, the Python transpiler:
+1. Checks if a hand-written native file exists in the pod's `py/` directory
+2. If found, copies the native file and appends type metadata from the transpiled output
+3. If not found, uses the fully transpiled output
+
+This allows hand-written runtime code (like `Actor.py`, `List.py`) to coexist with
+transpiled code, similar to how JavaScript natives work.
+
+## Standard Build (Packaging into Pods)
+
+To package Python natives into `.pod` files (for distribution):
 
 ```bash
 fan src/sys/py/build.fan compile        # Package natives into sys.pod
@@ -37,19 +90,6 @@ fan src/util/py/build.fan compile       # Package into util.pod
 
 This packages Python natives inside `.pod` files at `/py/fan/<podName>/`, matching the
 JavaScript pattern of `/esm/` and `/cjs/` directories.
-
-## Running Tests
-
-To run transpiled Python code:
-
-```bash
-# Transpile a pod
-fanc py testSys
-
-# Copy natives from src/sys/py/fan/ to gen/py/fan/sys/
-# Then run with Python 3
-python3 -c "from fan.testSys.BoolTest import BoolTest; BoolTest().testDefVal()"
-```
 
 # Porting Native Code
 
