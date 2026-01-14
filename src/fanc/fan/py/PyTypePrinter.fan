@@ -742,21 +742,34 @@ class PyTypePrinter : PyPrinter
       if (pyMethod == null) return
 
       // Generate Python operator method
+      // Handle different parameter counts:
+      // - 0 params: __neg__ (negate)
+      // - 1 param: __add__, __sub__, __getitem__, etc.
+      // - 2 params: __setitem__ (set)
       nl
       w("def ${pyMethod}(self")
-      if (m.params.size > 0)
+      if (m.params.size == 1)
       {
         w(", other")
       }
+      else if (m.params.size == 2)
+      {
+        // For __setitem__, Python uses (key, value)
+        w(", key, value")
+      }
       w(")").colon
       indent
-      if (m.params.size > 0)
+      if (m.params.size == 0)
+      {
+        w("return self.${escapeName(m.name)}()").eos
+      }
+      else if (m.params.size == 1)
       {
         w("return self.${escapeName(m.name)}(other)").eos
       }
-      else
+      else if (m.params.size == 2)
       {
-        w("return self.${escapeName(m.name)}()").eos
+        w("return self.${escapeName(m.name)}(key, value)").eos
       }
       unindent
     }
