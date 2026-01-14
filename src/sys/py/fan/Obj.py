@@ -25,7 +25,7 @@ class Obj:
     def compare(self, that):
         """Compare this object to that for ordering.
 
-        Default implementation uses hash for ordering.
+        Default implementation checks equals() first, then uses string representation.
         Subclasses can override for custom ordering.
         Returns -1 if this < that, 0 if equal, 1 if this > that.
         """
@@ -33,11 +33,15 @@ class Obj:
             return 0
         if that is None:
             return 1
-        my_hash = self.hash()
-        that_hash = that.hash() if hasattr(that, 'hash') and callable(that.hash) else hash(that)
-        if my_hash < that_hash:
+        # If objects are equal by value, compare as 0
+        if self.equals(that):
+            return 0
+        # Fall back to string comparison for consistent ordering
+        my_str = self.to_str() if hasattr(self, 'to_str') else str(self)
+        that_str = that.to_str() if hasattr(that, 'to_str') else str(that)
+        if my_str < that_str:
             return -1
-        if my_hash > that_hash:
+        if my_str > that_str:
             return 1
         return 0
 

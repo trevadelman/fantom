@@ -86,11 +86,24 @@ class ObjUtil:
             return Float.compare(a, b)
         if hasattr(a, "compare") and callable(a.compare):
             return a.compare(b)
-        if a < b:
-            return -1
-        if a > b:
-            return 1
-        return 0
+        # Try Python comparison operators
+        try:
+            if a < b:
+                return -1
+            if a > b:
+                return 1
+            return 0
+        except TypeError:
+            # Fall back to string comparison for non-comparable objects
+            # This matches Fantom semantics where objects without Comparable
+            # can still be sorted by their string representation
+            a_str = ObjUtil.to_str(a)
+            b_str = ObjUtil.to_str(b)
+            if a_str < b_str:
+                return -1
+            if a_str > b_str:
+                return 1
+            return 0
 
     @staticmethod
     def compare_ne(a, b):
