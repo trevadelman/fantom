@@ -582,6 +582,18 @@ class _UsingPod:
         self.pod = pod
 
     def resolve(self, name):
+        """Resolve a type name against this pod.
+
+        Only returns the type if it actually exists (module can be imported).
+        This prevents creating phantom types that don't really exist.
+        """
+        # Check if module can be imported before creating the type
+        # This prevents returning types like testSys::DT that don't exist
+        pod_name = self.pod.name()
+        try:
+            __import__(f'fan.{pod_name}.{name}', fromlist=[name])
+        except ImportError:
+            return None
         return self.pod.type(name, False)
 
 

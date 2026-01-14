@@ -135,10 +135,11 @@ class Test(Obj):
         self.fail(f"No err thrown, expected {errType}")
 
     def fail(self, msg=None):
+        from .Err import TestErr
         if msg is None:
-            raise AssertionError("Test failed")
+            raise TestErr.make("Test failed")
         else:
-            raise AssertionError(f"Test failed: {msg}")
+            raise TestErr.make(f"Test failed: {msg}")
 
     def setup(self):
         """Called before each test method"""

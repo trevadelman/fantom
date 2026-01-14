@@ -101,7 +101,7 @@ class TestCmd : FanPyCmd
          from fan.util.TestRunner import TestRunner
          from fan.sys.List import List
 
-         targets = List.fromLiteral([$targetList], "sys::Str")
+         targets = List.from_literal([$targetList], "sys::Str")
          result = TestRunner.main(targets)
          sys.exit(result)
          """

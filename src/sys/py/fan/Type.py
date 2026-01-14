@@ -361,7 +361,9 @@ class Type(Obj):
             try:
                 __import__(f'fan.sys.{type_name_part}', fromlist=[type_name_part])
             except ImportError:
-                raise UnknownTypeErr.make(f"Unknown type: {qname}")
+                if checked:
+                    raise UnknownTypeErr.make(f"Unknown type: {qname}")
+                return None
 
         # For unknown pods, throw UnknownPodErr (only if checked=True)
         # Let Pod.find() handle pod discovery dynamically via import
@@ -3171,3 +3173,4 @@ def _init_type_fields():
     pass  # Will be called by runtime initialization
     pass  # Will be called by runtime initialization
 # These will be set after module initialization
+
