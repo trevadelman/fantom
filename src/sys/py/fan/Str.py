@@ -58,7 +58,11 @@ class Str(Obj):
 
     @staticmethod
     def get_safe(self, index, default=0):
-        if index < 0 or index >= len(self):
+        n = len(self)
+        # Handle negative indices (Fantom style: -1 = last char)
+        if index < 0:
+            index = n + index
+        if index < 0 or index >= n:
             return default
         return ord(self[index])
 
