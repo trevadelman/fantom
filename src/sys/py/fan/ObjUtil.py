@@ -720,9 +720,13 @@ class ObjUtil:
 
         Args:
             obj: Target object
-            name: Method name to invoke
+            name: Method name to invoke (Fantom camelCase)
             args: List of arguments (None for no args, list for args)
         """
+        # Convert camelCase to snake_case for Python method lookup
+        from .Type import _camel_to_snake
+        py_name = _camel_to_snake(name)
+
         # Preserve args as-is (None or list) for Fantom semantics
         # Use (args or []) when we need to spread args for method calls
         call_args = args or []
@@ -740,7 +744,8 @@ class ObjUtil:
         # For Str, route to Str (static methods)
         if isinstance(obj, str):
             from .Str import Str
-            method = getattr(Str, name, None)
+            # Try snake_case first, then original camelCase
+            method = getattr(Str, py_name, None) or getattr(Str, name, None)
             if method:
                 return method(obj, *call_args)
             raise AttributeError(f"Str.{name}")
@@ -748,7 +753,8 @@ class ObjUtil:
         # For list, route to List
         if isinstance(obj, list):
             from .List import List
-            method = getattr(List, name, None)
+            # Try snake_case first, then original camelCase
+            method = getattr(List, py_name, None) or getattr(List, name, None)
             if method:
                 return method(obj, *call_args)
             raise AttributeError(f"List.{name}")
@@ -756,7 +762,8 @@ class ObjUtil:
         # For Map, route to Map
         from .Map import Map
         if isinstance(obj, Map):
-            method = getattr(obj, name, None)
+            # Try snake_case first, then original camelCase
+            method = getattr(obj, py_name, None) or getattr(obj, name, None)
             if method:
                 return method(*call_args) if callable(method) else method
             raise AttributeError(f"Map.{name}")

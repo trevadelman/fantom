@@ -1208,20 +1208,26 @@ class List(Obj, MutableSequence):
         """Dynamic method invocation"""
         if args is None:
             args = []
-        # Handle properties (size, capacity, etc.)
-        attr = getattr(type(self), name, None)
-        if isinstance(attr, property):
-            if args:
-                # Setter
-                setattr(self, name, args[0])
-                return None
-            else:
-                # Getter
-                return getattr(self, name)
-        # Handle methods
-        method = getattr(self, name, None)
-        if method and callable(method):
-            return method(*args)
+        # Convert camelCase to snake_case for Python method lookup
+        from .Type import _camel_to_snake
+        py_name = _camel_to_snake(name)
+
+        # Handle properties (size, capacity, etc.) - try snake_case first
+        for n in (py_name, name):
+            attr = getattr(type(self), n, None)
+            if isinstance(attr, property):
+                if args:
+                    # Setter
+                    setattr(self, n, args[0])
+                    return None
+                else:
+                    # Getter
+                    return getattr(self, n)
+        # Handle methods - try snake_case first
+        for n in (py_name, name):
+            method = getattr(self, n, None)
+            if method and callable(method):
+                return method(*args)
         raise AttributeError(f"List.{name}")
 
     # NOTE: Backward compatibility static methods have been REMOVED
