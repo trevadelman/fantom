@@ -522,7 +522,16 @@ class Type(Obj):
 
         Returns:
             New instance of this type
+
+        Raises:
+            Err: If type is abstract and cannot be instantiated
         """
+        # Check if type is abstract (cannot be instantiated)
+        # Abstract flag is 0x0400 in FConst
+        if self._type_flags & 0x0400:
+            from .Err import Err
+            raise Err.make(f"Cannot instantiate abstract class: {self._qname}")
+
         # Handle primitive types
         if self._qname == "sys::Bool":
             return False

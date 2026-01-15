@@ -500,18 +500,12 @@ class ObjUtil:
             return True
         # Check if object has its own isImmutable method
         # This handles Func instances which track their own immutability
+        # Trust the object's own is_immutable() result
         if hasattr(obj, "is_immutable") and callable(getattr(obj, "is_immutable", None)):
-            result = obj.is_immutable()
-            if result:
-                return True
-            # If obj.is_immutable() returns False, still check if the TYPE is const
-            # This handles const classes where the transpiler may not have generated is_immutable
+            return obj.is_immutable()
         # Python functions/lambdas are considered immutable in Fantom context
         # (const closures in Fantom transpile to Python lambdas/functions)
         if isinstance(obj, (types.FunctionType, types.LambdaType, types.MethodType)):
-            return True
-        if callable(obj) and hasattr(obj, '__call__'):
-            # Generic callable without mutable state marker
             return True
         # Check if object's type is a const class (const classes are inherently immutable)
         from .Type import Type

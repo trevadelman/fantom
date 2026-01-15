@@ -97,7 +97,11 @@ class Func(Obj):
 
         In Fantom, bind([]) returns the same function (identity).
         bind() with args creates a new function with those args pre-bound.
+
+        Throws ArgErr if more args provided than the function accepts.
         """
+        from .Err import ArgErr
+
         if args is None:
             args = []
 
@@ -107,6 +111,10 @@ class Func(Obj):
         # If no args to bind, return self (identity)
         if len(bound_args) == 0:
             return self
+
+        # Validate arg count - cannot bind more args than params
+        if len(bound_args) > len(self._params):
+            raise ArgErr.make(f"Func.bind more args than params: {len(bound_args)} > {len(self._params)}")
 
         original_func = self._func
         remaining_params = self._params[len(bound_args):]
