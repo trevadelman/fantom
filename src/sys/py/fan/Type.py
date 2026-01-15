@@ -1543,12 +1543,15 @@ class Type(Obj):
 
         Returns:
             self for method chaining
+
+        Note: Type resolution is LAZY - type_sig is stored as string and resolved
+        on first access via Field.type_(). This avoids circular imports during
+        module initialization.
         """
         from .Field import Field
-        field_type = Type.find(type_sig, False)
-        if field_type is None:
-            field_type = Type.find("sys::Obj")
-        f = Field(self, name, flags or 0, field_type, facets or {}, setter_flags)
+        # LAZY: Store type_sig as string, NOT resolved Type
+        # Field.type_() will resolve it on first access
+        f = Field(self, name, flags or 0, type_sig, facets or {}, setter_flags)
         self._slots_info.append(f)
         return self
 
@@ -1567,12 +1570,15 @@ class Type(Obj):
 
         Returns:
             self for method chaining
+
+        Note: Type resolution is LAZY - returns_sig is stored as string and resolved
+        on first access via Method.returns(). This avoids circular imports during
+        module initialization.
         """
         from .Method import Method
-        returns_type = Type.find(returns_sig, False)
-        if returns_type is None:
-            returns_type = Type.find("sys::Obj")
-        m = Method(self, name, flags or 0, returns_type, params or [], facets or {})
+        # LAZY: Store returns_sig as string, NOT resolved Type
+        # Method.returns() will resolve it on first access
+        m = Method(self, name, flags or 0, returns_sig, params or [], facets or {})
         self._slots_info.append(m)
         return self
 

@@ -5,20 +5,15 @@
 
 from datetime import datetime as py_datetime, timezone as py_timezone
 from .Obj import Obj
+from .Enum import Enum
 
 
-class Month(Obj):
+class Month(Enum):
     """Month enumeration"""
     _vals = None
 
     def __init__(self, ordinal, name):
-        self._ordinal = ordinal
-        self._name = name
-
-    def ordinal(self): return self._ordinal
-    def name(self): return self._name
-    def to_str(self): return self._name
-    def __str__(self): return self._name
+        super().__init__(ordinal, name)
 
     @staticmethod
     def jan(): return Month._get(0)

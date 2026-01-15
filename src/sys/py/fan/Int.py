@@ -3,11 +3,11 @@
 # Licensed under the Academic Free License version 3.0
 #
 
-from .Obj import Obj
+from .Num import Num
 from .Type import _camel_to_snake
 
 
-class Int(Obj):
+class Int(Num):
     """Integer type - uses static methods on native int"""
 
     @staticmethod

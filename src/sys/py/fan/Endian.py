@@ -3,30 +3,30 @@
 # Licensed under the Academic Free License version 3.0
 #
 
-from .Obj import Obj
+from .Enum import Enum
 
 
-class Endian(Obj):
+class Endian(Enum):
     """Endian represents byte order (big or little endian)."""
 
     _big = None
     _little = None
 
-    def __init__(self, name):
-        self._name = name
+    def __init__(self, ordinal, name):
+        super().__init__(ordinal, name)
 
     @staticmethod
     def big():
         """Big endian byte order."""
         if Endian._big is None:
-            Endian._big = Endian("big")
+            Endian._big = Endian(0, "big")
         return Endian._big
 
     @staticmethod
     def little():
         """Little endian byte order."""
         if Endian._little is None:
-            Endian._little = Endian("little")
+            Endian._little = Endian(1, "little")
         return Endian._little
 
     @staticmethod

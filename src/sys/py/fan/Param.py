@@ -33,12 +33,20 @@ class Param(Obj):
         return self._name
 
     def type(self):
-        """Get parameter type."""
+        """Get parameter type - lazily resolves from string signature if needed.
+
+        Type resolution is deferred to avoid circular imports during module
+        initialization. The param type may be stored as a string and resolved
+        to a Type object on first access.
+        """
+        if isinstance(self._type, str):
+            from .Type import Type
+            self._type = Type.find(self._type, False) or Type.find("sys::Obj")
         return self._type
 
     def type_(self):
         """Alias for type() - Fantom compatible."""
-        return self._type
+        return self.type()
 
     def has_default(self):
         """Check if parameter has a default value."""

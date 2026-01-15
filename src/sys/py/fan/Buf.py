@@ -9,6 +9,8 @@ import random
 import hashlib
 import base64
 from .Obj import Obj
+from .OutStream import OutStream
+from .InStream import InStream
 
 
 class Buf(Obj):
@@ -993,10 +995,11 @@ class Buf(Obj):
         return struct.unpack(fmt, data)[0]
 
 
-class BufOutStream:
+class BufOutStream(OutStream):
     """OutStream wrapper for Buf."""
 
     def __init__(self, buf):
+        super().__init__(None)  # No underlying stream - we wrap a Buf
         self._buf = buf
         self._bitsBuf = 0  # Lower 8 bits = buffered byte, bits 8-15 = buffer size
 
@@ -1198,10 +1201,11 @@ class BufOutStream:
         return self._buf.endian(val)
 
 
-class BufInStream:
+class BufInStream(InStream):
     """InStream wrapper for Buf."""
 
     def __init__(self, buf):
+        super().__init__(None)  # No underlying stream - we wrap a Buf
         self._buf = buf
         self._charset = None  # Own charset field, lazy init to UTF-8 for isolation
         self._bitsBuf = 0  # Lower 8 bits = buffered byte, bits 8-15 = buffer size

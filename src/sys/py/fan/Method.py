@@ -38,7 +38,15 @@ class Method(Slot):
         return True
 
     def returns(self):
-        """Get return type"""
+        """Get return type - lazily resolves from string signature if needed.
+
+        Type resolution is deferred to avoid circular imports during module
+        initialization. The returns type is stored as a string by Type.am_()
+        and resolved to a Type object on first access.
+        """
+        if isinstance(self._returns, str):
+            from .Type import Type
+            self._returns = Type.find(self._returns, False) or Type.find("sys::Obj")
         return self._returns
 
     def params(self):

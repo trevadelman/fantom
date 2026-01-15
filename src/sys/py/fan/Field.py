@@ -37,12 +37,20 @@ class Field(Slot):
         return True
 
     def type(self):
-        """Get field type."""
+        """Get field type - lazily resolves from string signature if needed.
+
+        Type resolution is deferred to avoid circular imports during module
+        initialization. The field type is stored as a string by Type.af_()
+        and resolved to a Type object on first access.
+        """
+        if isinstance(self._type, str):
+            from .Type import Type
+            self._type = Type.find(self._type, False) or Type.find("sys::Obj")
         return self._type
 
     def type_(self):
         """Alias for type() - Fantom compatible."""
-        return self._type
+        return self.type()
 
     def getter(self):
         """Get the synthetic getter method for this field.

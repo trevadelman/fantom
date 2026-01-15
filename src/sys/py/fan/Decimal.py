@@ -2,9 +2,9 @@
 # Decimal - Decimal number for Fantom
 #
 from decimal import Decimal as PyDecimal, ROUND_HALF_UP, ROUND_FLOOR, ROUND_CEILING
-from fan.sys.Obj import Obj
+from fan.sys.Num import Num
 
-class Decimal(Obj):
+class Decimal(Num):
     """
     Decimal represents an immutable arbitrary-precision decimal number.
     """

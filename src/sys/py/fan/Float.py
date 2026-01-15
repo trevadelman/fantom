@@ -4,11 +4,11 @@
 #
 
 import math
-from .Obj import Obj
+from .Num import Num
 from .Type import _camel_to_snake
 
 
-class Float(Obj):
+class Float(Num):
     """Float type - uses static methods on native float"""
 
     @staticmethod

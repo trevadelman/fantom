@@ -358,15 +358,36 @@ Cross-pod imports are placed at the top of the file since pods are built in depe
 ## Type Metadata (Reflection)
 
 Each transpiled type registers metadata for Fantom's reflection system using `af_()` for
-fields and `am_()` for methods:
+fields and `am_()` for methods. **Type signatures are stored as strings and lazily resolved
+on first access** to avoid circular imports during module initialization:
 
 ```python
-# Type metadata registration for reflection
+# Type metadata registration - note: type signatures are STRINGS
 from fan.sys.Param import Param
 _t = Type.find('testSys::Foo')
-_t.af_('name', 1, 'sys::Str', {})
-_t.am_('doSomething', 1, 'sys::Void', [Param('arg', Type.find('sys::Int'), False)], {})
+_t.af_('name', 1, 'sys::Str', {})  # 'sys::Str' is a string, not Type.find()
+_t.am_('doSomething', 1, 'sys::Void', [Param('arg', 'sys::Int', False)], {})
+
+# Type resolution happens lazily when reflection is used:
+# - Method.returns() resolves the return type string on first call
+# - Field.type() resolves the field type string on first call
+# - Param.type() resolves the param type string on first call
 ```
+
+### Why Lazy Resolution?
+
+When Python imports a module, it executes all top-level code immediately. If `am_()` called
+`Type.find()` during module initialization, it would trigger cascading imports:
+
+```
+Str.py loads -> am_() calls Type.find('sys::Int[]') -> Int.py loads ->
+  am_() calls Type.find('sys::Float') -> Float.py loads ->
+    am_() calls Type.find('sys::Decimal') -> ... circular crash
+```
+
+By storing type signatures as strings and resolving them lazily on first access, the module
+initialization completes without triggering cross-type imports. This matches the JavaScript
+transpiler's approach and is critical for the runtime to load without circular import errors.
 
 # Naming
 

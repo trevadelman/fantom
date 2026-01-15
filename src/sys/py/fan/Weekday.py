@@ -1,9 +1,9 @@
 #
 # Weekday - Day of week enum for Fantom
 #
-from fan.sys.Obj import Obj
+from fan.sys.Enum import Enum
 
-class Weekday(Obj):
+class Weekday(Enum):
     """
     Weekday represents a day of the week (enum).
     """
@@ -12,9 +12,8 @@ class Weekday(Obj):
     _byName = None
     _localeValsCache = {}  # Cache per locale start day
 
-    def __init__(self, name, ordinal):
-        self._name = name
-        self._ordinal = ordinal
+    def __init__(self, ordinal, name):
+        super().__init__(ordinal, name)
 
     @staticmethod
     def sun():
