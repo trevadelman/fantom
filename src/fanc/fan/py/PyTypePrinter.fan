@@ -1860,8 +1860,18 @@ class PyTypePrinter : PyPrinter
     {
       indent
       // Even empty methods need default parameter handling
+      // Count how many default checks will actually be emitted
+      checksEmitted := m.params.any |p|
+      {
+        if (!p.hasDefault) return false
+        // Nullable params with non-null defaults don't emit checks
+        defExpr := p->def as Expr
+        isNullDefault := defExpr != null && defExpr.id == ExprId.nullLiteral
+        if (p.type.isNullable && !isNullDefault) return false
+        return true
+      }
       emitDefaultParamChecks(m)
-      if (!m.params.any |p| { p.hasDefault })
+      if (!checksEmitted)
         pass
       unindent
     }
@@ -1904,11 +1914,24 @@ class PyTypePrinter : PyPrinter
   ** Emit default parameter value checks at start of method body
   ** Follows JS transpiler pattern: if (param === undefined) param = defaultExpr;
   ** For Python: if param is None: param = defaultExpr
+  **
+  ** EXCEPTION: For nullable params (Type?) with non-null defaults, we skip the check.
+  ** This allows the method body's own null-handling logic to run when caller passes null.
+  ** Example: `new makeDuration(Duration dur, Unit? unit := hr)` - the body has auto-detection
+  ** logic that runs when unit is null, which should still work when caller passes null.
   private Void emitDefaultParamChecks(MethodDef m)
   {
     m.params.each |p|
     {
       if (!p.hasDefault) return
+
+      // Skip nullable params with non-null defaults - let body code handle null
+      // This preserves the distinction between "param omitted" (gets Fantom default)
+      // and "param is null" (body's null-handling logic runs)
+      defExpr := p->def as Expr
+      isNullDefault := defExpr != null && defExpr.id == ExprId.nullLiteral
+      if (p.type.isNullable && !isNullDefault) return
+
       name := escapeName(p.name)
 
       // Generate: if param is None: param = defaultValue

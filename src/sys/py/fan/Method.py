@@ -239,26 +239,41 @@ class Method(Slot):
         # Get the Python class for this type
         py_cls = self._get_python_class(parent_type)
 
+        # Convert Fantom name to snake_case for Python lookup
+        from .Type import _camel_to_snake
+        snake_name = _camel_to_snake(self._name)
+
         if py_cls is None:
             # Fallback: try to call on target directly
-            if actual_target is not None and hasattr(actual_target, self._name):
-                method = getattr(actual_target, self._name)
-                if callable(method):
-                    return method(*method_args)
+            if actual_target is not None:
+                # Try camelCase first, then snake_case
+                for method_name in [self._name, snake_name]:
+                    if hasattr(actual_target, method_name):
+                        method = getattr(actual_target, method_name)
+                        if callable(method):
+                            return method(*method_args)
             from .Err import Err
             raise Err.make(f"Cannot find implementation for {self.qname()}")
 
-        # Check if method exists on the class
-        if not hasattr(py_cls, self._name):
+        # Check if method exists on the class - try camelCase first, then snake_case
+        method_attr = None
+        actual_method_name = None
+        for method_name in [self._name, snake_name]:
+            if hasattr(py_cls, method_name):
+                method_attr = getattr(py_cls, method_name)
+                actual_method_name = method_name
+                break
+
+        if method_attr is None:
             # Try to call on target directly
-            if actual_target is not None and hasattr(actual_target, self._name):
-                method = getattr(actual_target, self._name)
-                if callable(method):
-                    return method(*method_args)
+            if actual_target is not None:
+                for method_name in [self._name, snake_name]:
+                    if hasattr(actual_target, method_name):
+                        method = getattr(actual_target, method_name)
+                        if callable(method):
+                            return method(*method_args)
             from .Err import Err
             raise Err.make(f"Method {self._name} not found on {parent_type.qname()}")
-
-        method_attr = getattr(py_cls, self._name)
 
         if is_static or is_ctor:
             # Static method or constructor - call directly on class

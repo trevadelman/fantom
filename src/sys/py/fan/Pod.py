@@ -255,7 +255,7 @@ class Pod(Obj):
 
         if checked:
             from .Err import UnknownTypeErr
-            raise UnknownTypeErr(f"Unknown type: {self._name}::{name}")
+            raise UnknownTypeErr(f"{self._name}::{name}")
         return None
 
     # Alias for transpiled code that escapes 'type' to 'type_'

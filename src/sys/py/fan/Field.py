@@ -91,6 +91,9 @@ class Field(Slot):
         Returns:
             Field value
         """
+        # Get snake_case version of field name for Python attribute lookup
+        snake_name = _camel_to_snake(self._name)
+
         if self.is_static():
             # Static field - get from class
             py_cls = self._get_python_class()
@@ -108,6 +111,13 @@ class Field(Slot):
                     val = getattr(py_cls, field_name2)
                     if val is not None:
                         return val
+                # Try snake_case private field (_posInf -> _pos_inf)
+                if snake_name != self._name:
+                    field_name3 = f"_{snake_name}"
+                    if hasattr(py_cls, field_name3):
+                        val = getattr(py_cls, field_name3)
+                        if val is not None:
+                            return val
                 # Try static getter method (e.g., Kind.obj() for field 'obj')
                 if hasattr(py_cls, self._name):
                     attr = getattr(py_cls, self._name)
@@ -116,6 +126,16 @@ class Field(Slot):
                             return attr()  # Static getter method
                         except Exception:
                             pass  # Getter failed (possibly circular init), continue
+                    else:
+                        return attr
+                # Try snake_case getter method (posInf -> pos_inf)
+                if snake_name != self._name and hasattr(py_cls, snake_name):
+                    attr = getattr(py_cls, snake_name)
+                    if callable(attr):
+                        try:
+                            return attr()  # Static getter method
+                        except Exception:
+                            pass
                     else:
                         return attr
             return None

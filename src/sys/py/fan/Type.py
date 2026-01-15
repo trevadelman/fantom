@@ -363,7 +363,7 @@ class Type(Obj):
                 __import__(f'fan.sys.{type_name_part}', fromlist=[type_name_part])
             except ImportError:
                 if checked:
-                    raise UnknownTypeErr.make(f"Unknown type: {qname}")
+                    raise UnknownTypeErr.make(qname)
                 return None
 
         # For unknown pods, throw UnknownPodErr (only if checked=True)
@@ -660,6 +660,7 @@ class Type(Obj):
 
     def is_immutable(self):
         """Types are always immutable"""
+        return True
 
     def literal_encode(self, out):
         """Encode for serialization.
@@ -3199,4 +3200,3 @@ def _init_type_fields():
     pass  # Will be called by runtime initialization
     pass  # Will be called by runtime initialization
     pass  # Will be called by runtime initialization
-
