@@ -273,6 +273,12 @@ class Map(Obj, MutableMapping):
     def ordered(self, val):
         """Set ordered flag"""
         self._check_readonly()
+        if len(self._map) > 0:
+            from .Err import UnsupportedErr
+            raise UnsupportedErr.make("Map not empty")
+        if val and self._caseInsensitive:
+            from .Err import UnsupportedErr
+            raise UnsupportedErr.make("Map cannot be caseInsensitive and ordered")
         self._ordered = val
 
     @property
@@ -283,15 +289,18 @@ class Map(Obj, MutableMapping):
     @case_insensitive.setter
     def case_insensitive(self, val):
         """Set case-insensitive flag"""
-        if len(self._map) > 0:
-            from .Err import UnsupportedErr
-            raise UnsupportedErr("Cannot change caseInsensitive after map has keys")
-        if val and self._keyType is not None:
+        self._check_readonly()
+        if self._keyType is not None:
             sig = self._keyType.signature() if hasattr(self._keyType, 'signature') else str(self._keyType)
             if sig != "sys::Str":
                 from .Err import UnsupportedErr
-                raise UnsupportedErr("caseInsensitive requires Str keys")
-        self._check_readonly()
+                raise UnsupportedErr.make(f"Map not keyed by Str: {sig}")
+        if len(self._map) > 0:
+            from .Err import UnsupportedErr
+            raise UnsupportedErr.make("Map not empty")
+        if val and self._ordered:
+            from .Err import UnsupportedErr
+            raise UnsupportedErr.make("Map cannot be caseInsensitive and ordered")
         self._caseInsensitive = val
 
     #################################################################

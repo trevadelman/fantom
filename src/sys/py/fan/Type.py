@@ -10,11 +10,14 @@ from .Obj import Obj
 # Name Conversion Helpers (Two-Pass Lookup Approach)
 #########################################################################
 
-# Python builtins that get trailing underscore in transpilation
+# Python builtins and keywords that get trailing underscore in transpilation
 # Used by Map.get_checked() and Type.slot() for two-pass lookup
+# NOTE: This is the SINGLE definition - do NOT duplicate elsewhere!
 _PYTHON_BUILTINS = {'hash', 'print', 'abs', 'min', 'max', 'set', 'map',
                     'list', 'dir', 'oct', 'open', 'vars', 'match',
-                    'all', 'any', 'pow', 'round', 'type', 'id', 'and', 'or', 'not'}
+                    'all', 'any', 'pow', 'round', 'type', 'id', 'and', 'or', 'not',
+                    'def', 'is', 'in', 'if', 'for', 'from', 'with', 'as', 'try',
+                    'class', 'return', 'import', 'pass', 'raise', 'break', 'continue'}
 
 
 def _camel_to_snake(name):
@@ -70,9 +73,7 @@ def _snake_to_camel(name):
     """
     # Handle trailing underscore (Python builtin escape)
     # These are Python reserved words/builtins that got _ appended
-    _PYTHON_BUILTINS = {'hash', 'print', 'abs', 'min', 'max', 'set', 'map',
-                        'list', 'dir', 'oct', 'open', 'vars', 'match',
-                        'all', 'any', 'pow', 'round'}
+    # Uses global _PYTHON_BUILTINS defined at module level
     if name.endswith('_') and name[:-1] in _PYTHON_BUILTINS:
         name = name[:-1]
 
@@ -1765,9 +1766,7 @@ class Type(Obj):
         #   hash -> hash_ (Fantom name to Python name)
         #   hash_ -> hash (Python name to Fantom name, for hand-written sys types)
         # Python reserved words/builtins get _ appended in the transpiler
-        _PYTHON_BUILTINS = {'hash', 'print', 'abs', 'min', 'max', 'set', 'map',
-                            'list', 'dir', 'oct', 'open', 'vars', 'match',
-                            'all', 'any', 'pow', 'round', 'type', 'id', 'and', 'or', 'not'}
+        # Uses global _PYTHON_BUILTINS defined at module level
         if name in _PYTHON_BUILTINS:
             # Fantom name -> Python name (hash -> hash_)
             slot = self._slots_by_name.get(name + '_')
