@@ -1185,6 +1185,10 @@ class PyTypePrinter : PyPrinter
       w(")").colon
       indent
 
+      // Emit default parameter value checks at start of body method
+      // This ensures parameters like `unit := hr` get their defaults applied
+      emitDefaultParamChecks(ctorMethod)
+
       emittedStmts := false
 
       // Handle constructor chaining (: this.make(...) or : super(...))
