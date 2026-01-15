@@ -768,7 +768,16 @@ class List(Obj, MutableSequence):
         else:
             for item in self._values:
                 result.append(f(item))
-        return List.from_literal(result, self._elementType if self._elementType else "sys::Obj")
+        # Use function's return type if available, otherwise fall back to source element type
+        from .Func import Func
+        result_type = None
+        if isinstance(f, Func):
+            ret = f.returns()
+            if ret is not None:
+                result_type = ret.signature() if hasattr(ret, 'signature') else str(ret)
+        if result_type is None:
+            result_type = self._elementType if self._elementType else "sys::Obj"
+        return List.from_literal(result, result_type)
 
     def flat_map(self, f):
         """Map and flatten results"""
