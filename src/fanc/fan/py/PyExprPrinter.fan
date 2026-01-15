@@ -1730,6 +1730,18 @@ class PyExprPrinter : PyPrinter
             return
           }
         }
+        // Handle throw statement - convert to ObjUtil.throw_() for lambda
+        if (stmt.id == StmtId.throwStmt)
+        {
+          throwStmt := stmt as ThrowStmt
+          closureLambda(e) |->|
+          {
+            w("ObjUtil.throw_(")
+            expr(throwStmt.exception)
+            w(")")
+          }
+          return
+        }
         if (stmt.id == StmtId.expr)
         {
           exprStmt := stmt as ExprStmt
