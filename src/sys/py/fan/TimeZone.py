@@ -57,7 +57,7 @@ class TimeZoneRule:
 
     def is_wall_time(self):
         """Return True if DST transition times are in wall time (vs standard or UTC)"""
-        return self.dst_start is not None and self.dstStart.atMode == 'w'
+        return self.dst_start is not None and self.dst_start.at_mode == 'w'
 
 
 # ========================================================================
@@ -256,30 +256,30 @@ def _compare_on_day(rule, x, year, mon, day):
         '<': weekday on or before specified day
     """
     # Universal atTime might push us into the previous day
-    if x.atMode == 'u' and rule.offset + x.atTime < 0:
+    if x.at_mode == 'u' and rule.offset + x.at_time < 0:
         day += 1
 
-    if x.onMode == 'd':
+    if x.on_mode == 'd':
         # Specific day of month
-        if x.onDay < day:
+        if x.on_day < day:
             return -1
-        if x.onDay > day:
+        if x.on_day > day:
             return 1
         return 0
 
-    elif x.onMode == 'l':
+    elif x.on_mode == 'l':
         # Last weekday in month
-        last = _weekday_in_month(year, mon, x.onWeekday, -1)
+        last = _weekday_in_month(year, mon, x.on_weekday, -1)
         if last < day:
             return -1
         if last > day:
             return 1
         return 0
 
-    elif x.onMode == '>':
+    elif x.on_mode == '>':
         # Weekday on or after specified day
-        start = _weekday_in_month(year, mon, x.onWeekday, 1)
-        while start < x.onDay:
+        start = _weekday_in_month(year, mon, x.on_weekday, 1)
+        while start < x.on_day:
             start += 7
         if start < day:
             return -1
@@ -287,10 +287,10 @@ def _compare_on_day(rule, x, year, mon, day):
             return 1
         return 0
 
-    elif x.onMode == '<':
+    elif x.on_mode == '<':
         # Weekday on or before specified day
-        lastw = _weekday_in_month(year, mon, x.onWeekday, -1)
-        while lastw > x.onDay:
+        lastw = _weekday_in_month(year, mon, x.on_weekday, -1)
+        while lastw > x.on_day:
             lastw -= 7
         if lastw < day:
             return -1
@@ -299,17 +299,17 @@ def _compare_on_day(rule, x, year, mon, day):
         return 0
 
     else:
-        raise ValueError(f"Unknown onMode: {x.onMode}")
+        raise ValueError(f"Unknown on_mode: {x.on_mode}")
 
 
 def _compare_at_time(rule, x, time):
     """Compare DST transition time to specified time in seconds."""
-    atTime = x.atTime
+    atTime = x.at_time
 
     # If universal time, convert to local time
-    if x.atMode == 'u':
-        if rule.offset + x.atTime < 0:
-            atTime = 24 * 60 * 60 + rule.offset + x.atTime
+    if x.at_mode == 'u':
+        if rule.offset + x.at_time < 0:
+            atTime = 24 * 60 * 60 + rule.offset + x.at_time
         else:
             atTime += rule.offset
 

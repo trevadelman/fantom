@@ -265,9 +265,9 @@ class DateTime(Obj):
                 # Use rule offset (standard time offset)
                 tz_offset_secs = rule.offset
                 # Calculate DST offset using rule
-                from .TimeZone import _dstOffset
+                from .TimeZone import _dst_offset
                 time_in_secs = hour * 3600 + min_ * 60 + sec
-                dst_offset = _dstOffset(rule, year, month_ord, day, time_in_secs)
+                dst_offset = _dst_offset(rule, year, month_ord, day, time_in_secs)
                 if dst_offset != 0:
                     tz_offset_secs += dst_offset
             else:
@@ -624,9 +624,9 @@ class DateTime(Obj):
                     return False
 
                 # If neither exact match (shouldn't happen), fall back to rule-based calculation
-                from .TimeZone import _dstOffset
+                from .TimeZone import _dst_offset
                 time_in_secs = self._hour * 3600 + self._min * 60 + self._sec
-                dst_offset = _dstOffset(rule, self._year, month_ord, self._day, time_in_secs)
+                dst_offset = _dst_offset(rule, self._year, month_ord, self._day, time_in_secs)
                 return dst_offset != 0
 
             # Fall back to Python datetime for timezones without rules
