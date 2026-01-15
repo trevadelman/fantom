@@ -100,16 +100,18 @@ class List(Obj, MutableSequence):
         return self.to_str()
 
     def __eq__(self, other):
-        """Equality comparison"""
+        """Equality comparison - only compares equal to other Lists or Python lists"""
         from .ObjUtil import ObjUtil
         if other is self:
             return True
-        if not hasattr(other, '__len__') or not hasattr(other, '__getitem__'):
+        # Only compare to List instances or Python lists, not strings or other sequences
+        if not isinstance(other, (List, list)):
             return False
         if len(self) != len(other):
             return False
         for i in range(len(self)):
-            if not ObjUtil.equals(self._values[i], other[i]):
+            other_val = other._values[i] if isinstance(other, List) else other[i]
+            if not ObjUtil.equals(self._values[i], other_val):
                 return False
         return True
 
@@ -976,7 +978,7 @@ class List(Obj, MutableSequence):
     #################################################################
 
     def sort(self, f=None, *, key=None, reverse=False):
-        """Sort list in place"""
+        """Sort list in place using Fantom comparison semantics"""
         self._check_readonly()
         if key is not None or reverse:
             self._values.sort(key=key, reverse=reverse)
@@ -984,19 +986,11 @@ class List(Obj, MutableSequence):
             import functools
             self._values.sort(key=functools.cmp_to_key(f))
         else:
-            def sort_key(x):
-                if x is None:
-                    return (0, "")
-                elif isinstance(x, bool):
-                    return (1, int(x))
-                elif isinstance(x, (int, float)):
-                    return (1, x)
-                else:
-                    return (1, str(x))
-            try:
-                self._values.sort(key=sort_key)
-            except TypeError:
-                self._values.sort(key=lambda x: (0, "") if x is None else (1, str(x)))
+            # Use ObjUtil.compare for proper Fantom comparison semantics
+            # This handles objects with compare() methods (like Filter, etc.)
+            from .ObjUtil import ObjUtil
+            import functools
+            self._values.sort(key=functools.cmp_to_key(ObjUtil.compare))
         self._roView = None
         return self
 

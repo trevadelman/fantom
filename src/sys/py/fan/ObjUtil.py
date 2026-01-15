@@ -48,6 +48,7 @@ class ObjUtil:
         Fantom identity semantics:
         - Strings: Use object identity (methods return same object when unchanged)
         - Numbers (int, float, bool): Value types - equal values are "same"
+        - Enum values: Use equality (same ordinal means same identity)
         - Value types (Duration, etc.): Use equals() - same value means same identity
         - Other objects: Python object identity
         """
@@ -64,6 +65,11 @@ class ObjUtil:
                 if not isinstance(a, bool) and not isinstance(b, bool):
                     return a == b
             return False
+        # Enum values use equality (same ordinal = same identity)
+        # This handles cases where enum values may not be singleton instances
+        from .Enum import Enum
+        if isinstance(a, Enum) and isinstance(b, Enum):
+            return type(a) == type(b) and a == b
         # Value types use equals() for identity - same value means same identity
         # Types opt-in to value semantics by defining _same_uses_equals = True
         # This includes Duration, Date, Time, Uri, etc. where 5ns === 5ns is true
