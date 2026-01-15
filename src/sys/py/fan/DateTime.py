@@ -1946,6 +1946,9 @@ class Date(Obj):
             return Date.def_val()
         if month is None:
             month = Month.jan()
+        # Handle integer month (1-12) - convert to Month object
+        if isinstance(month, int):
+            month = Month._get(month - 1)
         if day is None:
             day = 1
         return Date(year, month, day)
@@ -1977,17 +1980,30 @@ class Date(Obj):
         from .Weekday import Weekday
         if startOfWeek is None:
             startOfWeek = Weekday.locale_start_of_week()
-        # Calculate week number using ISO-like logic
+        # Get ordinals for weekday calculations
         jan1 = Date(self._year, Month.jan(), 1)
         jan1_weekday = jan1.weekday().ordinal()
         start_ord = startOfWeek.ordinal()
-        # Days from start of week to Jan 1
-        days_offset = (jan1_weekday - start_ord + 7) % 7
+
         # Day of year (1-based)
         doy = self.day_of_year()
-        # Week number
-        week = (doy + days_offset - 1) // 7 + 1
-        return week
+
+        # Calculate week number based on relationship between Jan 1 and startOfWeek
+        if jan1_weekday >= start_ord:
+            # Jan 1 is on or after startOfWeek in the week
+            # e.g., Jan 1 is Friday (5), startOfWeek is Sunday (0)
+            # The partial week containing Jan 1 counts as week 1
+            days_offset = jan1_weekday - start_ord
+            return (doy + days_offset - 1) // 7 + 1
+        else:
+            # Jan 1 is before startOfWeek
+            # e.g., Jan 1 is Friday (5), startOfWeek is Saturday (6)
+            # Week 1 starts on the first occurrence of startOfWeek
+            days_to_first_start = start_ord - jan1_weekday
+            if doy <= days_to_first_start:
+                return 1  # still in partial week at start
+            else:
+                return (doy - days_to_first_start - 1) // 7 + 1
 
     def to_code(self):
         """Return Fantom code representation"""

@@ -16,7 +16,13 @@ class Obj:
         return self is that
 
     def hash(self):
-        # Lazily initialize _hash if not set (subclasses may not call super().__init__())
+        # If subclass defines hash_(), use it for content-based hashing
+        # This ensures types like Ref that override hash_() have correct hash/equals contract
+        if hasattr(self, 'hash_') and callable(self.hash_):
+            # Check if hash_ is overridden (not inherited from Obj)
+            if type(self).hash_ is not getattr(Obj, 'hash_', None):
+                return self.hash_()
+        # Otherwise use identity-based hash (lazily initialized)
         if not hasattr(self, '_hash'):
             Obj._hash_counter += 1
             self._hash = Obj._hash_counter
