@@ -634,6 +634,12 @@ class TimeZone(Obj):
         "Melbourne", "Australia/Melbourne",
     }
 
+    # Common region prefixes to try when resolving short timezone names
+    _region_prefixes = [
+        "Europe/", "America/", "Asia/", "Africa/", "Australia/",
+        "Pacific/", "Atlantic/", "Indian/", "Antarctica/"
+    ]
+
     @staticmethod
     def from_str(name, checked=True):
         """Find timezone by name"""
@@ -646,8 +652,10 @@ class TimeZone(Obj):
 
         # Check if it's a valid known timezone or a valid zoneinfo name
         is_valid = name in TimeZone._valid_names
+        resolved_name = name  # The name we'll actually use for zoneinfo
+
         if not is_valid:
-            # Try to validate against zoneinfo
+            # Try to validate against zoneinfo directly
             try:
                 import zoneinfo
                 zoneinfo.ZoneInfo(name)
@@ -661,14 +669,31 @@ class TimeZone(Obj):
                 is_valid = True
 
         if not is_valid:
+            # Try common region prefixes (e.g., "Warsaw" -> "Europe/Warsaw")
+            import zoneinfo
+            for prefix in TimeZone._region_prefixes:
+                try:
+                    full_name = prefix + name
+                    zoneinfo.ZoneInfo(full_name)
+                    # Found it! Use the full name
+                    resolved_name = full_name
+                    is_valid = True
+                    break
+                except Exception:
+                    pass
+
+        if not is_valid:
             if checked:
                 from .Err import ParseErr
                 raise ParseErr(f"Invalid TimeZone: {name}")
             return None
 
         try:
-            tz = TimeZone(name)
+            tz = TimeZone(resolved_name)
+            # Cache under both the original name and resolved name
             TimeZone._cache[name] = tz
+            if resolved_name != name:
+                TimeZone._cache[resolved_name] = tz
             return tz
         except Exception as e:
             if checked:

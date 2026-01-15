@@ -14,6 +14,11 @@ class ObjUtil:
         if isinstance(obj, bool):
             from .Bool import Bool
             return Bool.hash(obj)
+        # NaN needs consistent hash (Python gives different hashes for different NaN objects)
+        if isinstance(obj, float):
+            import math
+            if math.isnan(obj):
+                return 0  # Consistent hash for all NaN values
         # Check for hash_ first (Fantom transpiled name to avoid Python builtin conflict)
         if hasattr(obj, "hash_") and callable(obj.hash_):
             return obj.hash_()

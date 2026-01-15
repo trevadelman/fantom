@@ -384,8 +384,14 @@ class Buf(Obj):
 
     def write_i8(self, x):
         """Write 64-bit signed int."""
+        x = int(x)
+        # First mask to 64 bits to handle arbitrary precision Python ints
+        x = x & 0xFFFFFFFFFFFFFFFF
+        # Convert unsigned representation to signed for struct.pack
+        if x >= 0x8000000000000000:
+            x = x - 0x10000000000000000
         fmt = '>q' if self._is_big_endian() else '<q'
-        self._write_struct(fmt, int(x))
+        self._write_struct(fmt, x)
         return self
 
     def write_f4(self, x):

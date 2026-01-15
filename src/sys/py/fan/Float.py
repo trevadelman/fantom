@@ -25,6 +25,9 @@ class Float(Num):
 
     @staticmethod
     def hash(self):
+        # NaN needs consistent hash (Python gives different hashes for different NaN objects)
+        if math.isnan(self):
+            return 0
         return hash(self)
 
     @staticmethod
@@ -35,6 +38,9 @@ class Float(Num):
     def equals(self, other):
         if other is None:
             return False
+        # Fantom: NaN == NaN returns true (unlike IEEE 754)
+        if math.isnan(self):
+            return isinstance(other, float) and math.isnan(other)
         return self == other
 
     # Arithmetic operations
@@ -586,4 +592,3 @@ class Float(Num):
             return method(self, *args)
 
         raise AttributeError(f"Float.{name}")
-

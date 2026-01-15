@@ -49,7 +49,13 @@ class Int(Num):
 
     @staticmethod
     def mult(self, b):
-        return self * b
+        """Multiply with 64-bit overflow wrapping (like Java/JS)."""
+        result = self * b
+        # Wrap to 64-bit signed integer range
+        result = result & 0xFFFFFFFFFFFFFFFF
+        if result >= 0x8000000000000000:
+            result -= 0x10000000000000000
+        return result
 
     @staticmethod
     def div(self, b):
@@ -175,7 +181,21 @@ class Int(Num):
     # Math operations
     @staticmethod
     def abs_(self):
-        return abs(self)
+        """Absolute value with 64-bit wrapping.
+
+        For Fantom semantics, we first wrap to 64-bit signed, then take abs.
+        This matches how Java/JS handle overflow in the multiplication step,
+        then abs() on the already-wrapped result.
+        """
+        # First wrap self to 64-bit signed (in case input is arbitrary precision)
+        val = self & 0xFFFFFFFFFFFFFFFF
+        if val >= 0x8000000000000000:
+            val -= 0x10000000000000000
+        # Now take absolute value (within 64-bit signed range)
+        # Special case: Int.minVal stays as minVal (no positive representation)
+        if val == -0x8000000000000000:
+            return val  # Int.minVal
+        return abs(val)
 
     @staticmethod
     def min_(self, that):

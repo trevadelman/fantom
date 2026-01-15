@@ -1137,11 +1137,13 @@ class PyExprPrinter : PyPrinter
     switch (op)
     {
       case ShortcutOp.eq:
-        // Check the opToken for == vs !=
+        // Use ObjUtil for NaN-aware comparison (NaN == NaN should be true)
+        // This matches JS transpiler behavior which uses ObjUtil.compareNE/compareEQ
         if (e.opToken == Token.notEq)
-          doShortcutBinaryOp(e, "!=")
+          comparison(e, "compare_ne")
         else
-          doShortcutBinaryOp(e, "==")
+          comparison(e, "equals")
+        return
       case ShortcutOp.cmp:
         // Check the opToken for comparison type
         switch (e.opToken)
