@@ -196,40 +196,18 @@ class Func(Obj):
         return True
 
     def to_immutable(self):
-        """Return immutable version of this Func.
+        """Return immutable version of this Func with proper snapshot semantics.
 
         The behavior depends on the compiler-determined immutability case:
         - "always": return self (already immutable)
         - "never": throw NotImmutableErr
         - "maybe": create a copy with toImmutable() called on captured values
 
-        KNOWN LIMITATION (Python runtime):
-        ===================================
-        In Java/JVM, the compiler generates closure classes with a custom
-        toImmutable() method that calls make() with immutable copies of all
-        fields. This creates a true snapshot of captured values.
-
-        In Python, closures are native functions with __closure__ cells that
-        we cannot easily rebind. We use an ARITY-BASED HEURISTIC:
-
-        - Arity 0 closures (e.g., |->Obj| { list }):
-          Assumed to be "value-returning" - we create a new closure that
-          returns the immutable copy of the captured value.
-
-        - Arity 1+ closures (e.g., |msg->Obj?| { f(msg) }):
-          Assumed to be "behavior" closures (like Actor receives) - we verify
-          all captures are/can-be immutable, then use the original function.
-          The original still references the same (now verified immutable) objects.
-
-        Edge cases that may not work correctly:
-        1. Arity-0 closures that do more than return a value (have side effects)
-        2. Arity-1+ closures that capture mutable data expecting snapshot semantics
-
-        If these patterns cause issues, the proper fix is to have the Python
-        transpiler generate closures as classes with proper toImmutable() methods
-        (similar to the Java approach). See: fan/src/compiler/fan/steps/ClosureToImmutable.fan
+        Implementation uses types.CellType (Python 3.8+) to create new closure
+        cells with immutable values, providing true snapshot semantics like Java.
         """
         from .Err import NotImmutableErr
+        import types
 
         immut_case = getattr(self, '_immutable_case', None)
 
@@ -239,86 +217,101 @@ class Func(Obj):
         if immut_case == 'never':
             raise NotImmutableErr.make("Closure captures non-const value")
 
-        if immut_case == 'maybe':
-            # Already immutable? Return self
-            if getattr(self, '_is_immutable', False):
-                return self
-
-            from .ObjUtil import ObjUtil
-
-            # Get the original function
-            original_func = self._func
-            if original_func is None:
-                raise NotImmutableErr.make("Cannot make Func immutable")
-
-            # Get arity for the heuristic decision
-            arity = len(self._params)
-
-            # For closures with __closure__ (Python lexical capture)
-            if hasattr(original_func, '__closure__') and original_func.__closure__:
-                try:
-                    # First, make all captured values immutable (or verify they can be)
-                    immutable_vals = []
-                    for cell in original_func.__closure__:
-                        val = cell.cell_contents
-                        immutable_vals.append(ObjUtil.to_immutable(val))
-
-                    # ARITY-BASED HEURISTIC:
-                    # - Arity 0: Value-returning closure like |->Obj| { list }
-                    #   Create new closure that returns immutable snapshot
-                    # - Arity 1+: Behavior closure like |msg| { f(msg) }
-                    #   Use original function (captures verified immutable)
-
-                    if arity == 0 and len(immutable_vals) == 1:
-                        # Value-returning closure: create new function returning immutable value
-                        captured = immutable_vals[0]
-                        def new_func_arity0():
-                            return captured
-                        new_func = new_func_arity0
-                    else:
-                        # Behavior closure or complex captures:
-                        # Use original function - captures have been verified immutable.
-                        # NOTE: The original still references the same objects, but since
-                        # we verified they're immutable, this is safe for concurrent use.
-                        new_func = original_func
-
-                    # Create new Func instance
-                    result = Func(new_func, self._returns, self._params, immutable=True)
-                    result._immutable_case = 'maybe'
-                    result._is_immutable = True
-                    return result
-                except Exception:
-                    raise NotImmutableErr.make("Cannot make closure immutable")
-
-            # For closures using default parameters (_outer=self pattern)
-            if hasattr(original_func, '__defaults__') and original_func.__defaults__:
-                try:
-                    immutable_defaults = tuple(
-                        ObjUtil.to_immutable(d) for d in original_func.__defaults__
-                    )
-
-                    # Create new function with immutable defaults
-                    import types
-                    new_func = types.FunctionType(
-                        original_func.__code__,
-                        original_func.__globals__,
-                        original_func.__name__,
-                        immutable_defaults,
-                        original_func.__closure__
-                    )
-
-                    result = Func(new_func, self._returns, self._params, immutable=True)
-                    result._immutable_case = 'maybe'
-                    result._is_immutable = True
-                    return result
-                except Exception:
-                    raise NotImmutableErr.make("Cannot make closure immutable")
-
-            # No captured values - already immutable
-            self._is_immutable = True
+        # Already immutable? Return self
+        if getattr(self, '_is_immutable', False):
             return self
 
-        # Legacy fallback - Funcs are immutable by default
+        from .ObjUtil import ObjUtil
+        from .Type import Type
+
+        # Get the original function
+        original_func = self._func
+        if original_func is None:
+            raise NotImmutableErr.make("Cannot make Func immutable")
+
+        # APPROACH 1: Cell rebinding using types.CellType (Python 3.8+)
+        # This creates true snapshot semantics by making new closure cells
+        if (hasattr(original_func, '__closure__') and
+            original_func.__closure__ and
+            hasattr(types, 'CellType')):
+
+            # Get variable names for better error messages
+            freevars = original_func.__code__.co_freevars
+
+            # Make all captured values immutable and create new cells
+            immutable_cells = []
+            for i, cell in enumerate(original_func.__closure__):
+                varname = freevars[i] if i < len(freevars) else f"capture[{i}]"
+                try:
+                    val = cell.cell_contents
+                    immutable_val = ObjUtil.to_immutable(val)
+                    # Create new cell with immutable value
+                    new_cell = types.CellType(immutable_val)
+                    immutable_cells.append(new_cell)
+                except NotImmutableErr as e:
+                    # Re-raise with context about which capture failed
+                    raise NotImmutableErr.make(
+                        f"Closure capture '{varname}' not immutable: {Type.of(val)}"
+                    )
+                except Exception as e:
+                    raise NotImmutableErr.make(
+                        f"Cannot make closure capture '{varname}' immutable: {e}"
+                    )
+
+            # Create new function with new closure cells
+            new_func = types.FunctionType(
+                original_func.__code__,
+                original_func.__globals__,
+                original_func.__name__,
+                original_func.__defaults__,
+                tuple(immutable_cells)  # New closure with immutable values!
+            )
+
+            result = Func(new_func, self._returns, self._params, immutable=True)
+            result._immutable_case = 'maybe'
+            result._is_immutable = True
+            return result
+
+        # APPROACH 2: Default parameter rebinding (_outer=self pattern)
+        # The transpiler captures 'this' via default parameters
+        if hasattr(original_func, '__defaults__') and original_func.__defaults__:
+            # Get parameter names for better error messages
+            code = original_func.__code__
+            varnames = code.co_varnames[:code.co_argcount]
+            num_defaults = len(original_func.__defaults__)
+            default_names = varnames[-num_defaults:] if num_defaults <= len(varnames) else []
+
+            immutable_defaults = []
+            for i, d in enumerate(original_func.__defaults__):
+                varname = default_names[i] if i < len(default_names) else f"default[{i}]"
+                try:
+                    immutable_defaults.append(ObjUtil.to_immutable(d))
+                except NotImmutableErr as e:
+                    raise NotImmutableErr.make(
+                        f"Closure default '{varname}' not immutable: {Type.of(d)}"
+                    )
+                except Exception as e:
+                    raise NotImmutableErr.make(
+                        f"Cannot make closure default '{varname}' immutable: {e}"
+                    )
+
+            # Create new function with immutable defaults
+            new_func = types.FunctionType(
+                original_func.__code__,
+                original_func.__globals__,
+                original_func.__name__,
+                tuple(immutable_defaults),
+                original_func.__closure__
+            )
+
+            result = Func(new_func, self._returns, self._params, immutable=True)
+            result._immutable_case = 'maybe'
+            result._is_immutable = True
+            return result
+
+        # APPROACH 3: No captures - closure is already immutable
+        # Just mark it and return self
+        self._is_immutable = True
         return self
 
     def typeof(self):

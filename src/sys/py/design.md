@@ -283,6 +283,48 @@ a named function is emitted before the usage point.
 Unlike JavaScript where closures are invoked directly (`f(args)`), Python closures through
 `Func.make_closure()` are also callable directly - the wrapper implements `__call__`.
 
+### Closure Immutability
+
+When a closure needs to be made immutable (typically for Actor message passing), the runtime
+must create a "snapshot" of all captured values. This is handled by `Func.to_immutable()`.
+
+The transpiler analyzes each closure and sets an `immutable` case in the closure spec:
+- `"always"` - Closure captures only const types (already immutable)
+- `"never"` - Closure captures non-const types like `InStream` (cannot be made immutable)
+- `"maybe"` - Closure captures types that can be made immutable at runtime
+
+For the `"maybe"` case, `to_immutable()` uses Python's `types.CellType` (Python 3.8+) to
+create new closure cells with immutable copies of captured values:
+
+```python
+# Runtime code in Func.to_immutable()
+import types
+
+# Get the original function's closure cells
+for i, cell in enumerate(original_func.__closure__):
+    val = cell.cell_contents
+    immutable_val = ObjUtil.to_immutable(val)  # Snapshot the value
+    new_cell = types.CellType(immutable_val)   # Create new cell
+    immutable_cells.append(new_cell)
+
+# Create new function with new closure cells
+new_func = types.FunctionType(
+    original_func.__code__,
+    original_func.__globals__,
+    original_func.__name__,
+    original_func.__defaults__,
+    tuple(immutable_cells)  # Attach new cells!
+)
+```
+
+This ensures that when a closure is sent to an Actor:
+1. Each captured variable gets its own frozen copy
+2. The original variables in the sending thread are unaffected
+3. No race conditions can occur on shared mutable state
+
+For closures using default parameter capture (`_outer=self` pattern), the same approach
+rebinds the `__defaults__` tuple with immutable copies.
+
 ## Primitives
 
 Python's type system differs significantly from JavaScript's. Fantom primitives map as follows:
