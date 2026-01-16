@@ -73,6 +73,7 @@ src/testHaystack
 src/testXeto
 src/testAxon
 src/axon
+src/axonsh
 src/def
 src/folio
 src/hx

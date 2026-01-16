@@ -32,6 +32,7 @@ class Build : BuildPod
                 `test/`,
                ]
     javaDirs = Uri[,] // force .class files to be written
+    pyDirs   = [`py/`]
     docSrc   = true
   }
 }
