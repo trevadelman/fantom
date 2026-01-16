@@ -58,18 +58,30 @@ class ActorPool(Obj):
         """Factory method with optional it-block for configuration"""
         return ActorPool(it_block)
 
-    # Property accessors matching Fantom API
+    # Property accessors matching Fantom API (getter/setter pattern)
 
-    def name(self):
-        return self._name
+    def name(self, val=None):
+        if val is None:
+            return self._name
+        else:
+            self._name = val
 
-    def max_threads(self):
-        return self._max_threads
+    def max_threads(self, val=None):
+        if val is None:
+            return self._max_threads
+        else:
+            self._max_threads = val
 
-    def max_queue(self):
-        return self._max_queue
+    def max_queue(self, val=None):
+        if val is None:
+            return self._max_queue
+        else:
+            self._max_queue = val
 
-    def max_time_before_yield(self):
+    def max_time_before_yield(self, val=None):
+        if val is not None:
+            self._max_time_before_yield = val
+            return
         if self._max_time_before_yield is None:
             from fan.sys.Duration import Duration
             return Duration.from_str("1sec")

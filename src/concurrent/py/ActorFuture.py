@@ -43,7 +43,7 @@ class ActorFuture(Obj):
 
     def wrap(self, future):
         """Create new instance of subclass that wraps given future"""
-        return future  # ActorFuture doesn't wrap, just returns the given future
+        raise Err.make("do not use")
 
     def is_done(self):
         """Return if this future has completed"""
