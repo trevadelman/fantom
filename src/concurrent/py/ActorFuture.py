@@ -273,6 +273,15 @@ class ActorFuture(Obj):
         from fan.sys.Err import UnsupportedErr
         raise UnsupportedErr.make("Not available in Python VM")
 
+    # Immutability - Future is a const class
+    def is_immutable(self):
+        """Future is always immutable (it's a const class)"""
+        return True
+
+    def to_immutable(self):
+        """Return self - Future is already immutable"""
+        return self
+
     # Methods for send_when_done/send_when_complete support
 
     def send_when_done(self, actor, future):

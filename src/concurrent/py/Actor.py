@@ -355,6 +355,15 @@ class Actor(Obj):
         from fan.sys.ObjUtil import ObjUtil
         return ObjUtil.to_immutable(obj)
 
+    # Immutability - Actor is a const class
+    def is_immutable(self):
+        """Actor is always immutable (it's a const class)"""
+        return True
+
+    def to_immutable(self):
+        """Return self - Actor is already immutable"""
+        return self
+
     # Inner classes
 
     class _Queue:
