@@ -49,6 +49,7 @@ class Actor(Obj):
         self._submitted = False
         self._receive_count = 0
         self._receive_ticks = 0
+        self._processing_count = 0  # Number of messages currently being processed
 
     @staticmethod
     def make(pool, receive=None):
@@ -258,8 +259,8 @@ class Actor(Obj):
                 future.complete_err(QueueOverflowErr.make(f"queue_size: {self._queue.size}"))
                 return future
 
-            # Add to queue
-            self._queue.add(future)
+            # Add to queue - track peak including currently processing messages
+            self._queue.add(future, self._processing_count)
 
             # Submit to thread pool if not already submitted or running
             if not self._submitted:
@@ -292,12 +293,18 @@ class Actor(Obj):
             future = None
             with self._lock:
                 future = self._queue.get()
+                if future is not None:
+                    self._processing_count += 1
             if future is None:
                 break
 
             # Dispatch the message
             self._cur_msg = future.msg
-            self._dispatch(future)
+            try:
+                self._dispatch(future)
+            finally:
+                with self._lock:
+                    self._processing_count -= 1
             self._cur_msg = Actor._idle_msg
 
             # Check if we should yield our thread
@@ -387,7 +394,7 @@ class Actor(Obj):
             self.size -= 1
             return f
 
-        def add(self, f):
+        def add(self, f, processing_count=0):
             """Add future to tail of queue"""
             if self.tail is None:
                 self.head = self.tail = f
@@ -396,8 +403,10 @@ class Actor(Obj):
                 self.tail.next = f
                 self.tail = f
             self.size += 1
-            if self.size > self.peak:
-                self.peak = self.size
+            # Track peak including messages currently being processed
+            total_pending = self.size + processing_count
+            if total_pending > self.peak:
+                self.peak = total_pending
 
     class _Context:
         """Mutable world state of an actor"""
@@ -429,7 +438,7 @@ class Actor(Obj):
                     pass
             return f
 
-        def add(self, f):
+        def add(self, f, processing_count=0):
             """Add to queue and pending map"""
             try:
                 key = self._to_key(f.msg)
@@ -437,7 +446,7 @@ class Actor(Obj):
                     self.pending[key] = f
             except:
                 pass
-            super().add(f)
+            super().add(f, processing_count)
 
         def coalesce(self, incoming):
             """Try to coalesce with existing pending message"""

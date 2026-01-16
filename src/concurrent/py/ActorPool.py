@@ -140,10 +140,29 @@ class ActorPool(Obj):
             else:
                 timeout_secs = float(timeout) / 1_000_000_000.0
 
-        # Shutdown and wait
-        self._executor.shutdown(wait=True)
+        if timeout_secs is None:
+            # No timeout - wait forever
+            self._executor.shutdown(wait=True)
+            with self._lock:
+                self._state = ActorPool.DONE
+            return self
 
-        # Check if we're really done
+        # With timeout - use a separate thread to wait
+        import time
+        done_event = threading.Event()
+
+        def wait_for_shutdown():
+            self._executor.shutdown(wait=True)
+            done_event.set()
+
+        waiter = threading.Thread(target=wait_for_shutdown, daemon=True)
+        waiter.start()
+
+        # Wait with timeout
+        if not done_event.wait(timeout=timeout_secs):
+            # Timeout expired before shutdown completed
+            raise TimeoutErr.make("ActorPool.join timed out")
+
         with self._lock:
             self._state = ActorPool.DONE
 
