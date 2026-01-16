@@ -33,16 +33,201 @@ class Regex(Obj):
 
     @staticmethod
     def _preprocess_pattern(pattern):
-        """Convert Java regex escapes to Python equivalents."""
+        """Convert Java regex escapes to Python equivalents.
+
+        Java/Fantom regex has features Python doesn't support natively:
+        - \e (escape character)
+        - \p{...} and \P{...} POSIX/Unicode property escapes
+        - \Q...\E quotation
+        - Possessive quantifiers (*+, ++, ?+, {n}+, etc.)
+        """
+        import re as py_re
+        result = pattern
+
         # \e (escape char) -> \x1b
-        result = pattern.replace('\\e', '\\x1b')
+        result = result.replace('\\e', '\\x1b')
+
+        # Handle \Q...\E quotation (quote everything inside literally)
+        def replace_quotation(m):
+            quoted = m.group(1)
+            return py_re.escape(quoted)
+        result = py_re.sub(r'\\Q(.*?)\\E', replace_quotation, result)
+
+        # Handle \p{...} and \P{...} property escapes
+        # We need to be careful about context - inside vs outside character classes
+        result = Regex._convert_property_escapes(result)
+
+        # Handle possessive quantifiers - convert to greedy (not exact but functional)
+        # *+ -> *(?:) atomic group approximation - just use greedy for now
+        # This is an approximation since Python doesn't have possessive quantifiers
+        result = py_re.sub(r'\*\+', '*', result)
+        result = py_re.sub(r'\+\+', '+', result)
+        result = py_re.sub(r'\?\+', '?', result)
+        result = py_re.sub(r'\{(\d+(?:,\d*)?)\}\+', r'{\1}', result)
+
         return result
 
     @staticmethod
-    def from_str(pattern, checked=True):
-        """Parse a Regex from string pattern"""
+    def _convert_property_escapes(pattern):
+        """Convert \p{...} and \P{...} property escapes to Python equivalents."""
+        import re as py_re
+
+        # Property class mappings (positive \p{...})
+        # These map Java/POSIX property names to Python character class equivalents
+        property_map = {
+            # POSIX classes
+            'Lower': 'a-z',
+            'Upper': 'A-Z',
+            'ASCII': '\x00-\x7f',
+            'Alpha': 'a-zA-Z',
+            'Digit': '0-9',
+            'Alnum': 'a-zA-Z0-9',
+            'Punct': '!"#$%&\'()*+,\\-./:;<=>?@\\[\\]^_`{|}~',
+            'Graph': 'a-zA-Z0-9!"#$%&\'()*+,\\-./:;<=>?@\\[\\]^_`{|}~',
+            'Print': 'a-zA-Z0-9!"#$%&\'()*+,\\-./:;<=>?@\\[\\]^_`{|}~ ',
+            'Blank': ' \t',
+            'Cntrl': '\x00-\x1f\x7f',
+            'XDigit': '0-9a-fA-F',
+            'Space': ' \t\n\x0b\f\r',
+            # Unicode categories
+            'L': 'a-zA-Z',  # Letter (simplified)
+            'Lu': 'A-Z',    # Uppercase letter
+            'Ll': 'a-z',    # Lowercase letter
+            'S': '',        # Symbol (simplified - empty for now)
+            'Sc': '$\xa2\xa3\xa4\xa5',  # Currency symbol
+            # Java character classes
+            'javaLowerCase': 'a-z',
+            'javaUpperCase': 'A-Z',
+            'javaWhitespace': ' \t\n\x0b\f\r',
+            'javaMirrored': '',  # Complex - return empty
+        }
+
+        # Negative property class mappings (for use outside character classes)
+        # \P{ASCII} means NOT ASCII, so [^\x00-\x7f]
+        neg_property_map = {
+            'Lower': '^a-z',
+            'Upper': '^A-Z',
+            'ASCII': '^\\x00-\\x7f',
+            'Alpha': '^a-zA-Z',
+            'Digit': '^0-9',
+            'Alnum': '^a-zA-Z0-9',
+            'Punct': '^!"#$%&\'()*+,\\-./:;<=>?@\\[\\]^_`{|}~',
+            'Graph': '^a-zA-Z0-9!"#$%&\'()*+,\\-./:;<=>?@\\[\\]^_`{|}~',
+            'Print': '^a-zA-Z0-9!"#$%&\'()*+,\\-./:;<=>?@\\[\\]^_`{|}~ ',
+            'Blank': '^ \t',
+            'Cntrl': '^\x00-\x1f\x7f',
+            'XDigit': '^0-9a-fA-F',
+            'Space': '^ \t\n\x0b\f\r',
+            'L': '^a-zA-Z',
+            'Lu': '^A-Z',
+            'Ll': '^a-z',
+            'S': '',
+            'Sc': '^$\xa2\xa3\xa4\xa5',
+            'javaLowerCase': '^a-z',
+            'javaUpperCase': '^A-Z',
+            'javaWhitespace': '^ \t\n\x0b\f\r',
+            'javaMirrored': '',
+        }
+
+        # For inside character class - \P{ASCII} becomes \x80-\uffff (non-ASCII range)
+        neg_in_class_map = {
+            'ASCII': '\x80-\uffff',
+            'Lower': 'A-Z0-9_',  # Approximate - not lowercase
+            'Upper': 'a-z0-9_',  # Approximate - not uppercase
+            'Alpha': '0-9_',     # Approximate - not alpha
+            'Digit': 'a-zA-Z_',  # Approximate - not digit
+            'Alnum': '_',        # Approximate - not alnum
+            'Space': 'a-zA-Z0-9',  # Approximate - not space
+        }
+
+        result = []
+        i = 0
+        n = len(pattern)
+        in_char_class = False
+
+        while i < n:
+            # Track if we're inside a character class
+            if pattern[i] == '[' and (i == 0 or pattern[i-1] != '\\'):
+                in_char_class = True
+                result.append(pattern[i])
+                i += 1
+                continue
+            elif pattern[i] == ']' and (i == 0 or pattern[i-1] != '\\'):
+                in_char_class = False
+                result.append(pattern[i])
+                i += 1
+                continue
+
+            # Check for \p{...} or \P{...}
+            if i + 2 < n and pattern[i] == '\\' and pattern[i+1] in 'pP':
+                is_negated = pattern[i+1] == 'P'
+
+                # Find the property name
+                if i + 2 < n and pattern[i+2] == '{':
+                    # \p{PropertyName}
+                    end = pattern.find('}', i+3)
+                    if end != -1:
+                        prop_name = pattern[i+3:end]
+
+                        if in_char_class:
+                            # Inside character class
+                            if is_negated and prop_name in neg_in_class_map:
+                                result.append(neg_in_class_map[prop_name])
+                            elif not is_negated and prop_name in property_map:
+                                result.append(property_map[prop_name])
+                            else:
+                                # Unknown property - try to preserve or use fallback
+                                result.append('')
+                        else:
+                            # Outside character class - wrap in [...]
+                            if is_negated and prop_name in neg_property_map:
+                                result.append('[')
+                                result.append(neg_property_map[prop_name])
+                                result.append(']')
+                            elif not is_negated and prop_name in property_map:
+                                result.append('[')
+                                result.append(property_map[prop_name])
+                                result.append(']')
+                            else:
+                                # Unknown property
+                                result.append('.')
+
+                        i = end + 1
+                        continue
+                elif i + 2 < n:
+                    # \pX - single character property (like \pL)
+                    prop_name = pattern[i+2]
+                    if in_char_class:
+                        if is_negated and prop_name in neg_in_class_map:
+                            result.append(neg_in_class_map[prop_name])
+                        elif not is_negated and prop_name in property_map:
+                            result.append(property_map[prop_name])
+                        else:
+                            result.append('')
+                    else:
+                        if is_negated and prop_name in neg_property_map:
+                            result.append('[')
+                            result.append(neg_property_map[prop_name])
+                            result.append(']')
+                        elif not is_negated and prop_name in property_map:
+                            result.append('[')
+                            result.append(property_map[prop_name])
+                            result.append(']')
+                        else:
+                            result.append('.')
+                    i += 3
+                    continue
+
+            result.append(pattern[i])
+            i += 1
+
+        return ''.join(result)
+
+    @staticmethod
+    def from_str(pattern, flags="", checked=True):
+        """Parse a Regex from string pattern with optional flags"""
         try:
-            return Regex(pattern)
+            return Regex(pattern, flags)
         except re.error as e:
             if checked:
                 from fan.sys.Err import ParseErr
@@ -67,8 +252,8 @@ class Regex(Obj):
 
     @staticmethod
     def quote(s):
-        """Quote special regex characters in string"""
-        return re.escape(s)
+        """Quote special regex characters in string and return as Regex"""
+        return Regex(re.escape(s))
 
     @staticmethod
     def def_val():
