@@ -905,10 +905,26 @@ class PyStmtPrinter : PyPrinter
         return
       }
 
+      // Handle return with index set: return acc[name] = hit -> acc[name] = hit; return hit
       // Handle return with compound assignment: return x += 5 -> x += 5; return x
       if (unwrapped.id == ExprId.shortcut)
       {
         shortcut := unwrapped as ShortcutExpr
+
+        // Index set (container[key] = value)
+        if (shortcut.op == ShortcutOp.set)
+        {
+          // Execute index set first
+          expr(s.expr)
+          eos
+          // Then return the assigned value (the second arg to set)
+          w("return ")
+          expr(shortcut.args[1])
+          eos
+          return
+        }
+
+        // Compound assignment (x += 5, x *= 2, etc.)
         if (shortcut.isAssign)
         {
           // Execute assignment first
