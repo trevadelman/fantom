@@ -1343,6 +1343,7 @@ class PyExprPrinter : PyPrinter
 
   ** Check if this is a string + non-string pattern that needs Str.plus()
   ** In Fantom, string + anything converts the other operand to string
+  ** Also handles nullable strings (Str?) which might be null at runtime
   private Bool isStringPlusNonString(ShortcutExpr e)
   {
     targetSig := e.target?.ctype?.toNonNullable?.signature ?: ""
@@ -1358,7 +1359,14 @@ class PyExprPrinter : PyPrinter
     if (targetIsStr && !argIsStr) return true
     if (argIsStr && !targetIsStr) return true
 
-    // Both are strings - use native Python concatenation
+    // Both are strings - but check if either is nullable (might be null at runtime)
+    // Python can't do "str" + None, so we need Str.plus for null handling
+    targetIsNullable := e.target?.ctype?.isNullable ?: false
+    argIsNullable := e.args.first?.ctype?.isNullable ?: false
+
+    if (targetIsNullable || argIsNullable) return true
+
+    // Both are non-null strings - use native Python concatenation
     return false
   }
 
