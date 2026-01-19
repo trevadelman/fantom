@@ -259,10 +259,9 @@ class Uri(Obj):
         """Decode query string to map.
 
         Handles Fantom's query string format:
-        - + decodes to space
-        - & and ; are delimiters
+        - & and ; are delimiters (unless backslash-escaped)
         - params with no value get value "true"
-        - backslash escapes like \& \= \; \# are respected
+        - backslash escapes: \& \; \= \\ are unescaped
         """
         from fan.sys.Map import Map
         if not s:
@@ -270,106 +269,153 @@ class Uri(Obj):
 
         result = {}
 
-        # Parse query string manually to handle Fantom's format
-        start = 0
-        eq_pos = -1
-        i = 0
-        prev = ''
-        escaped = False
+        # Split into key=value pairs on unescaped & and ;
+        pairs = Uri._split_query_pairs(s)
 
-        while i <= len(s):
-            ch = s[i] if i < len(s) else '\0'  # null terminator for final segment
-
-            # Check for backslash escape
-            if prev == '\\' and ch != '\\':
-                prev = ch
-                i += 1
-                escaped = True
+        for pair in pairs:
+            if not pair:
                 continue
+            # Find unescaped = to split key and value
+            eq_idx = Uri._find_unescaped(pair, '=')
+            if eq_idx < 0:
+                # No = found, key only with value "true"
+                key = Uri._unescape_query_segment(pair)
+                val = "true"
+            else:
+                key = Uri._unescape_query_segment(pair[:eq_idx])
+                val = Uri._unescape_query_segment(pair[eq_idx + 1:])
 
-            # Check for delimiter (& or ;) or end of string
-            if (ch == '&' or ch == ';' or ch == '\0') and prev != '\\':
-                if start < i:
-                    Uri._add_query_param(result, s, start, eq_pos, i, escaped)
-                    escaped = False
-                start = i + 1
-                eq_pos = -1
-            elif ch == '=' and eq_pos < 0 and prev != '\\':
-                eq_pos = i
-
-            prev = ch if ch != '\\' or prev == '\\' else '\\'
-            if prev == '\\' and ch == '\\':
-                prev = ''  # Reset double backslash
-            i += 1
+            # Handle duplicate keys
+            if key in result:
+                result[key] = result[key] + "," + val
+            else:
+                result[key] = val
 
         return Map.from_dict(result)
 
     @staticmethod
-    def _add_query_param(result, q, start, eq_pos, end, escaped):
-        """Add a query parameter to the result dict."""
-        if start == eq_pos:
-            # key with no value: "key" or "=value" (eq at start means empty key)
-            key = Uri._to_query_str(q, start, end, escaped)
-            val = "true"
-        elif eq_pos < 0:
-            # No = found, so this is just a key with value "true"
-            key = Uri._to_query_str(q, start, end, escaped)
-            val = "true"
-        else:
-            key = Uri._to_query_str(q, start, eq_pos, escaped)
-            val = Uri._to_query_str(q, eq_pos + 1, end, escaped)
+    def _split_query_pairs(s):
+        """Split query string on unescaped & and ; delimiters."""
+        pairs = []
+        start = 0
+        i = 0
+        while i < len(s):
+            c = s[i]
+            if c == '\\' and i + 1 < len(s):
+                # Skip escaped character
+                i += 2
+                continue
+            if c == '&' or c == ';':
+                pairs.append(s[start:i])
+                start = i + 1
+            i += 1
+        # Add final segment
+        if start <= len(s):
+            pairs.append(s[start:])
+        return pairs
 
-        # Handle duplicate keys by joining with comma
-        if key in result:
-            result[key] = result[key] + "," + val
-        else:
-            result[key] = val
+    @staticmethod
+    def _find_unescaped(s, char):
+        """Find first unescaped occurrence of char in s."""
+        i = 0
+        while i < len(s):
+            c = s[i]
+            if c == '\\' and i + 1 < len(s):
+                # Skip escaped character
+                i += 2
+                continue
+            if c == char:
+                return i
+            i += 1
+        return -1
+
+    @staticmethod
+    def _unescape_query_segment(s):
+        """Unescape a query segment: remove backslash escapes, decode + to space, and percent-decode."""
+        # Collect bytes, handling backslash escapes, + to space, and percent encoding
+        result = []
+        i = 0
+        while i < len(s):
+            c = s[i]
+            if c == '\\' and i + 1 < len(s):
+                # Backslash escape - take the next char literally
+                # Need to encode as UTF-8 in case it's a non-ASCII char
+                next_char = s[i + 1]
+                result.extend(next_char.encode('utf-8'))
+                i += 2
+            elif c == '%' and i + 2 < len(s):
+                # Percent-encoded byte
+                try:
+                    hex_val = int(s[i+1:i+3], 16)
+                    result.append(hex_val)
+                    i += 3
+                except ValueError:
+                    result.extend(c.encode('utf-8'))
+                    i += 1
+            elif c == '+':
+                # + maps to space in query strings
+                result.append(32)  # space
+                i += 1
+            else:
+                # Regular char - encode as UTF-8
+                result.extend(c.encode('utf-8'))
+                i += 1
+
+        # Decode bytes as UTF-8
+        try:
+            return bytes(result).decode('utf-8')
+        except UnicodeDecodeError:
+            return bytes(result).decode('latin-1')
 
     @staticmethod
     def _to_query_str(q, start, end, escaped):
-        """Convert a query string segment, handling + as space, percent-decoding, and backslash escapes."""
-        # First percent-decode the segment, then handle + and backslash escapes
+        """Convert a query string segment, handling percent-decoding and backslash escapes.
+
+        Note: Fantom does NOT interpret + as space (that's HTML form encoding).
+        Spaces are percent-encoded as %20.
+        """
         segment = q[start:end]
 
-        # Percent-decode
-        result = []
+        # Collect bytes for percent-encoded sequences
+        bytes_list = []
         i = 0
         while i < len(segment):
             c = segment[i]
             if c == '%' and i + 2 < len(segment):
-                # Percent-encoded byte
+                # Percent-encoded byte - collect as raw byte
                 try:
                     hex_val = int(segment[i+1:i+3], 16)
-                    result.append(chr(hex_val))
+                    bytes_list.append(hex_val)
                     i += 3
                     continue
                 except ValueError:
                     pass  # Not valid hex, treat as literal
-            elif c == '+':
-                result.append(' ')
-                i += 1
-                continue
-            result.append(c)
+            # All other chars including + are literal
+            bytes_list.append(ord(c))
             i += 1
 
-        decoded = ''.join(result)
+        # Decode bytes as UTF-8
+        try:
+            decoded = bytes(bytes_list).decode('utf-8')
+        except UnicodeDecodeError:
+            # Fall back to latin-1 if UTF-8 fails
+            decoded = bytes(bytes_list).decode('latin-1')
 
         if not escaped:
             return decoded
 
-        # Handle backslash escapes
+        # Handle backslash escapes - \x becomes x
         result = []
-        prev = ''
-        for c in decoded:
-            if c == '\\':
-                if prev == '\\':
-                    result.append('\\')
-                    prev = ''
-                else:
-                    prev = c
+        i = 0
+        while i < len(decoded):
+            c = decoded[i]
+            if c == '\\' and i + 1 < len(decoded):
+                # Backslash escape - skip the backslash, keep the next char
+                result.append(decoded[i + 1])
+                i += 2
             else:
                 result.append(c)
-                prev = c
+                i += 1
         return ''.join(result)
 
     @staticmethod
