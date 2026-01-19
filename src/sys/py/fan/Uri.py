@@ -1143,23 +1143,17 @@ class Uri(Obj):
     def _encode_query_part(s):
         """Encode a query key or value using Fantom-style encoding.
 
-        - &, ;, = are backslash-escaped
-        - # is percent-encoded (since it starts fragment)
+        - &, ;, =, # are backslash-escaped (these are query delimiters)
         - \\ is backslash-escaped
         """
         if s is None:
             return ""
         result = []
         for c in s:
-            # Backslash-escape query delimiters (but not #)
-            if c in '&;=\\':
+            # Backslash-escape all query delimiters including #
+            if c in '&;=#\\':
                 result.append('\\')
-                result.append(c)
-            elif c == '#':
-                # # must be percent-encoded, not backslash-escaped
-                result.append('%23')
-            else:
-                result.append(c)
+            result.append(c)
         return ''.join(result)
 
     def to_code(self):
