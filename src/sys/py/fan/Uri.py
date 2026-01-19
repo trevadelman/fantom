@@ -711,8 +711,12 @@ class Uri(Obj):
                 if rSeg == "..":
                     if tPath:
                         tPath.pop()
-                    dotLast = True
-                    continue
+                        dotLast = True
+                        continue
+                    if baseIsAbs:
+                        # Skip .. that goes beyond root for absolute paths
+                        continue
+                    # For relative paths, keep the .. segment
                 tPath.append(rSeg)
                 dotLast = False
 
