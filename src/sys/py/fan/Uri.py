@@ -1,7 +1,7 @@
 #
 # Uri - URI handling for Fantom
 #
-from urllib.parse import urlparse, quote, unquote, urlencode, parse_qs
+from urllib.parse import quote
 from fan.sys.Obj import Obj
 
 class Uri(Obj):
@@ -12,10 +12,80 @@ class Uri(Obj):
     # Cache of parsed URIs
     _cache = {}
 
+    # Section constants
+    _SCHEME = 0x01
+    _USER   = 0x02
+    _HOST   = 0x04
+    _PATH   = 0x08
+    _QUERY  = 0x10
+    _FRAG   = 0x20
+
     # Section constants (as class attributes for direct access)
     _sectionPath = 1
     _sectionQuery = 2
     _sectionFrag = 3
+
+    # Character maps (initialized lazily)
+    _charMap = None
+    _delimEscMap = None
+
+    @staticmethod
+    def _init_char_maps():
+        """Initialize character maps (like JS Uri.__charMap and __delimEscMap)"""
+        if Uri._charMap is not None:
+            return
+
+        Uri._charMap = [0] * 128
+        Uri._delimEscMap = [0] * 128
+
+        # Unreserved = SCHEME | USER | HOST | PATH | QUERY | FRAG
+        unreserved = Uri._SCHEME | Uri._USER | Uri._HOST | Uri._PATH | Uri._QUERY | Uri._FRAG
+
+        # alpha/digits characters
+        for i in range(ord('a'), ord('z') + 1):
+            Uri._charMap[i] = unreserved
+        for i in range(ord('A'), ord('Z') + 1):
+            Uri._charMap[i] = unreserved
+        for i in range(ord('0'), ord('9') + 1):
+            Uri._charMap[i] = unreserved
+
+        # unreserved symbols: - . _ ~
+        Uri._charMap[ord('-')] = unreserved
+        Uri._charMap[ord('.')] = unreserved
+        Uri._charMap[ord('_')] = unreserved
+        Uri._charMap[ord('~')] = unreserved
+
+        # sub-delimiter symbols
+        Uri._charMap[ord('!')] = Uri._USER | Uri._HOST | Uri._PATH | Uri._QUERY | Uri._FRAG
+        Uri._charMap[ord('$')] = Uri._USER | Uri._HOST | Uri._PATH | Uri._QUERY | Uri._FRAG
+        Uri._charMap[ord('&')] = Uri._USER | Uri._HOST | Uri._PATH | Uri._QUERY | Uri._FRAG
+        Uri._charMap[ord("'")] = Uri._USER | Uri._HOST | Uri._PATH | Uri._QUERY | Uri._FRAG
+        Uri._charMap[ord('(')] = Uri._USER | Uri._HOST | Uri._PATH | Uri._QUERY | Uri._FRAG
+        Uri._charMap[ord(')')] = Uri._USER | Uri._HOST | Uri._PATH | Uri._QUERY | Uri._FRAG
+        Uri._charMap[ord('*')] = Uri._USER | Uri._HOST | Uri._PATH | Uri._QUERY | Uri._FRAG
+        Uri._charMap[ord('+')] = Uri._SCHEME | Uri._USER | Uri._HOST | Uri._PATH | Uri._FRAG
+        Uri._charMap[ord(',')] = Uri._USER | Uri._HOST | Uri._PATH | Uri._QUERY | Uri._FRAG
+        Uri._charMap[ord(';')] = Uri._USER | Uri._HOST | Uri._PATH | Uri._QUERY | Uri._FRAG
+        Uri._charMap[ord('=')] = Uri._USER | Uri._HOST | Uri._PATH | Uri._QUERY | Uri._FRAG
+
+        # gen-delimiter symbols
+        Uri._charMap[ord(':')] = Uri._HOST | Uri._PATH | Uri._USER | Uri._QUERY | Uri._FRAG
+        Uri._charMap[ord('/')] = Uri._PATH | Uri._QUERY | Uri._FRAG
+        Uri._charMap[ord('?')] = Uri._QUERY | Uri._FRAG
+        Uri._charMap[ord('#')] = 0
+        Uri._charMap[ord('[')] = Uri._HOST
+        Uri._charMap[ord(']')] = Uri._HOST
+        Uri._charMap[ord('@')] = Uri._PATH | Uri._QUERY | Uri._FRAG
+
+        # delimiter escape map - which characters need to be backslash-escaped in each section
+        Uri._delimEscMap[ord(':')] = Uri._PATH
+        Uri._delimEscMap[ord('/')] = Uri._PATH
+        Uri._delimEscMap[ord('?')] = Uri._PATH
+        Uri._delimEscMap[ord('#')] = Uri._PATH | Uri._QUERY
+        Uri._delimEscMap[ord('&')] = Uri._QUERY
+        Uri._delimEscMap[ord(';')] = Uri._QUERY
+        Uri._delimEscMap[ord('=')] = Uri._QUERY
+        Uri._delimEscMap[ord('\\')] = Uri._SCHEME | Uri._USER | Uri._HOST | Uri._PATH | Uri._QUERY | Uri._FRAG
 
     @staticmethod
     def section_path():
@@ -32,92 +102,52 @@ class Uri(Obj):
         """Return Int constant for fragment section"""
         return 3
 
+    @staticmethod
+    def _section_to_mask(section):
+        """Convert section constant to internal mask"""
+        if section == 1:
+            return Uri._PATH
+        elif section == 2:
+            return Uri._QUERY
+        elif section == 3:
+            return Uri._FRAG
+        else:
+            from fan.sys.Err import ArgErr
+            raise ArgErr.make(f"Invalid section flag: {section}")
+
     def __init__(self, scheme=None, userInfo=None, host=None, port=None,
-                 pathStr="", queryStr=None, frag=None):
+                 pathStr="", path=None, queryStr=None, query=None, frag=None, str_val=None):
         self._scheme = scheme
         self._userInfo = userInfo
         self._host = host
         self._port = port
-        self._pathStr = pathStr
+        self._pathStr = pathStr if pathStr is not None else ""
         self._queryStr = queryStr
         self._frag = frag
-        self._pathSegs = None  # Lazy parsed
+        self._pathSegs = path  # May be None (lazy parsed) or pre-parsed
+        self._query = query  # May be None (lazy parsed) or pre-parsed
+        self._str = str_val  # Cached string representation
 
     @staticmethod
     def from_str(s, checked=True):
-        """Parse a URI from string"""
+        """Parse a URI from string using custom parser matching JS behavior"""
         if s in Uri._cache:
             return Uri._cache[s]
 
         try:
-            # Preprocess: convert backslash escapes to percent encoding for urlparse
-            # Fantom uses \# \? etc. but urlparse doesn't understand this
-            preprocessed, had_escapes = Uri._preprocess_backslash_escapes(s)
-            parsed = urlparse(preprocessed)
-            # Parse userInfo and host from netloc - preserve host case
-            userInfo = None
-            host = None
-            netloc = parsed.netloc
-
-            if netloc:
-                # Extract userInfo@host:port
-                at_idx = netloc.find('@')
-                if at_idx >= 0:
-                    userInfo = netloc[:at_idx]
-                    host_port = netloc[at_idx + 1:]
-                else:
-                    host_port = netloc
-
-                # Extract host (preserve case) and port
-                if host_port:
-                    if host_port.startswith('['):
-                        # IPv6 [host]:port
-                        bracket_idx = host_port.find(']')
-                        if bracket_idx >= 0:
-                            host = host_port[:bracket_idx + 1]  # Include brackets
-                            # Check for port after ]
-                            rest = host_port[bracket_idx + 1:]
-                            # port is parsed by urlparse
-                        else:
-                            host = host_port
-                    elif ':' in host_port:
-                        # Regular host:port
-                        colon_idx = host_port.rfind(':')
-                        host = host_port[:colon_idx]
-                    else:
-                        host = host_port
-
-            # Get scheme (normalize to lowercase)
-            scheme = parsed.scheme.lower() if parsed.scheme else None
-
-            # Get port
-            port = parsed.port
-
-            # Normalize pathStr - restore backslash escapes from percent encoding
-            path = parsed.path
-            if had_escapes:
-                path = Uri._restore_backslash_escapes(path)
-
-            # Apply scheme normalization
-            path, port = Uri._normalize_scheme(scheme, path, port)
-
-            # If host but no path, use "/"
-            if host and (not path or path == ""):
-                path = "/"
-
-            # Normalize path following JS logic:
-            # - "." removed only if path.size > 1 OR host != null
-            # - ".." removed only if preceded by non-".." segment
-            path = Uri._normalize_path_with_host(path, host)
-
+            decoder = UriDecoder(s, decoding=False)
+            sections = decoder.decode()
             uri = Uri(
-                scheme=scheme,
-                userInfo=userInfo,
-                host=host,
-                port=port,
-                pathStr=path,
-                queryStr=parsed.query or None,
-                frag=parsed.fragment or None
+                scheme=sections.get('scheme'),
+                userInfo=sections.get('userInfo'),
+                host=sections.get('host'),
+                port=sections.get('port'),
+                pathStr=sections.get('pathStr', ''),
+                path=sections.get('path'),
+                queryStr=sections.get('queryStr'),
+                query=sections.get('query'),
+                frag=sections.get('frag'),
+                str_val=s if not decoder.had_backslash_normalization else None
             )
             Uri._cache[s] = uri
             return uri
@@ -130,7 +160,25 @@ class Uri(Obj):
     @staticmethod
     def decode(s, checked=True):
         """Decode a URI, unescaping percent-encoded characters"""
-        return Uri.from_str(unquote(s), checked)
+        try:
+            decoder = UriDecoder(s, decoding=True)
+            sections = decoder.decode()
+            return Uri(
+                scheme=sections.get('scheme'),
+                userInfo=sections.get('userInfo'),
+                host=sections.get('host'),
+                port=sections.get('port'),
+                pathStr=sections.get('pathStr', ''),
+                path=sections.get('path'),
+                queryStr=sections.get('queryStr'),
+                query=sections.get('query'),
+                frag=sections.get('frag'),
+            )
+        except Exception as e:
+            if checked:
+                from fan.sys.Err import ParseErr
+                raise ParseErr(f"Invalid URI: {s}")
+            return None
 
     @staticmethod
     def encode(s, section=None):
@@ -198,9 +246,14 @@ class Uri(Obj):
     @staticmethod
     def decode_token(s, section=None):
         """Decode a percent-encoded URI token and apply backslash escaping"""
-        # First percent-decode, then apply backslash escaping
-        decoded = unquote(s)
-        return Uri.escape_token(decoded, section)
+        if section is None:
+            section = 1  # sectionPath
+        mask = Uri._section_to_mask(section)
+        if not s:
+            return ""
+        Uri._init_char_maps()
+        decoder = UriDecoder(s, decoding=True)
+        return decoder._substring(0, len(s), mask)
 
     @staticmethod
     def encode_query(map):
@@ -1174,11 +1227,11 @@ class Uri(Obj):
 
     def encode_(self):
         """Encode URI with percent-encoding"""
-        return quote(self.to_str(), safe=":/?#[]@!$&'()*+,;=")
+        return UriEncoder(self, encoding=True).encode()
 
     def encode(self):
         """Instance encode method - encode this URI's string representation"""
-        return quote(self.to_str(), safe=":/?#[]@!$&'()*+,;=")
+        return UriEncoder(self, encoding=True).encode()
 
     def equals(self, other):
         """Test equality"""
@@ -1359,3 +1412,605 @@ UriScheme._schemes["http"] = UriScheme("http")
 UriScheme._schemes["https"] = UriScheme("https")
 UriScheme._schemes["file"] = UriScheme("file")
 UriScheme._schemes["fan"] = UriScheme("fan")
+
+
+class UriDecoder:
+    """
+    URI Decoder that handles Fantom's backslash escape normalization.
+
+    Port of the JavaScript UriDecoder class.
+    Key insight: When NOT in decoding mode, backslashes before non-delimiter
+    characters are stripped (e.g., \y becomes y, but \# stays \#).
+    """
+
+    def __init__(self, s, decoding=False):
+        self.str = s
+        self.decoding = decoding
+        self.dpos = 0
+        self.next_char_was_escaped = False
+        self.had_backslash_normalization = False
+
+        # Initialize character maps if not done
+        Uri._init_char_maps()
+
+    def decode(self):
+        """Parse the URI string and return a dict of sections."""
+        s = self.str
+        length = len(s)
+        pos = 0
+
+        result = {
+            'scheme': None,
+            'userInfo': None,
+            'host': None,
+            'port': None,
+            'pathStr': '',
+            'path': None,
+            'queryStr': None,
+            'query': None,
+            'frag': None,
+        }
+
+        # ==== scheme ====
+        # Scan looking for colon or any character that doesn't fit a valid scheme
+        has_upper = False
+        for i in range(length):
+            c = ord(s[i]) if i < length else 0
+            if self._is_scheme_char(c):
+                if 65 <= c <= 90:  # A-Z
+                    has_upper = True
+                continue
+            if c != 58:  # ':'
+                break
+            # Found scheme
+            pos = i + 1
+            scheme = s[:i]
+            if has_upper:
+                scheme = scheme.lower()
+            result['scheme'] = scheme
+            break
+
+        # ==== authority ====
+        # Authority must start with //
+        if pos + 1 < length and s[pos:pos+2] == '//':
+            auth_start = pos + 2
+            auth_end = length
+            at = -1
+            colon = -1
+
+            # Find end of authority
+            i = auth_start
+            while i < length:
+                c = s[i]
+                if c == '/' or c == '?' or c == '#':
+                    auth_end = i
+                    break
+                elif c == '@' and at < 0:
+                    at = i
+                    colon = -1
+                elif c == ':':
+                    colon = i
+                elif c == ']':
+                    colon = -1
+                i += 1
+
+            # Start with assumption that there is no userinfo or port
+            host_start = auth_start
+            host_end = auth_end
+
+            # If we found an @ symbol, parse out userinfo
+            if at > 0:
+                result['userInfo'] = self._substring(auth_start, at, Uri._USER)
+                host_start = at + 1
+
+            # If we found a colon, parse out port
+            if colon > 0:
+                port_str = s[colon + 1:auth_end]
+                try:
+                    result['port'] = int(port_str)
+                except ValueError:
+                    pass
+                host_end = colon
+
+            # Host is everything left in the authority
+            result['host'] = self._substring(host_start, host_end, Uri._HOST)
+            pos = auth_end
+
+        # ==== path ====
+        # Scan looking for '?' or '#' which ends the path section
+        path_start = pos
+        path_end = length
+        num_segs = 1
+        prev = 0
+
+        i = path_start
+        while i < length:
+            c = s[i]
+            if prev != '\\':
+                if c == '?' or c == '#':
+                    path_end = i
+                    break
+                if i != path_start and c == '/':
+                    num_segs += 1
+                prev = c
+            else:
+                prev = c if c != '\\' else 0
+            i += 1
+
+        # We now have the complete path section
+        result['pathStr'] = self._substring(path_start, path_end, Uri._PATH)
+        result['path'] = self._path_segments(result['pathStr'], num_segs)
+        pos = path_end
+
+        # ==== query ====
+        if pos < length and s[pos] == '?':
+            query_start = pos + 1
+            query_end = length
+            prev = 0
+
+            i = query_start
+            while i < length:
+                c = s[i]
+                if prev != '\\':
+                    if c == '#':
+                        query_end = i
+                        break
+                    prev = c
+                else:
+                    prev = c if c != '\\' else 0
+                i += 1
+
+            # We now have the complete query section
+            result['queryStr'] = self._substring(query_start, query_end, Uri._QUERY)
+            result['query'] = self._parse_query(result['queryStr'])
+            pos = query_end
+
+        # ==== frag ====
+        if pos < length and s[pos] == '#':
+            result['frag'] = self._substring(pos + 1, length, Uri._FRAG)
+
+        # === normalize ===
+        self._normalize(result)
+
+        return result
+
+    def _is_scheme_char(self, c):
+        """Check if character is valid in scheme"""
+        if c >= 128:
+            return False
+        return (Uri._charMap[c] & Uri._SCHEME) != 0
+
+    def _substring(self, start, end, section):
+        """
+        Extract substring with backslash normalization.
+
+        Key logic: When NOT decoding, if backslash is followed by a character
+        that is NOT a delimiter for this section, strip the backslash.
+        """
+        buf = []
+
+        if not self.decoding:
+            # Non-decoding mode: normalize backslash escapes
+            last = 0
+            backslash = ord('\\')
+
+            for i in range(start, end):
+                ch = ord(self.str[i])
+
+                # If last char was backslash and current char is NOT a delimiter,
+                # remove the backslash (it was escaping a non-delimiter)
+                if last == backslash and ch < len(Uri._delimEscMap) and (Uri._delimEscMap[ch] & section) == 0:
+                    buf.pop()  # Remove the backslash we just added
+                    self.had_backslash_normalization = True
+
+                buf.append(self.str[i])
+
+                # Track last char, but double-backslash resets
+                if last == backslash and ch == backslash:
+                    last = 0
+                else:
+                    last = ch
+        else:
+            # Decoding mode: handle percent-encoding and backslash escapes
+            self.dpos = start
+            while self.dpos < end:
+                ch = self._next_char(section)
+                if ch < 0:
+                    break
+
+                # If char was an escaped delimiter, add backslash
+                if self.next_char_was_escaped and ch < len(Uri._delimEscMap) and (Uri._delimEscMap[ch] & section) != 0:
+                    buf.append('\\')
+
+                buf.append(chr(ch))
+
+        return ''.join(buf)
+
+    def _next_char(self, section):
+        """Read next character, handling percent-encoding and UTF-8."""
+        c = self._next_octet(section)
+        if c < 0:
+            return -1
+
+        # Handle UTF-8 encoding
+        if (c >> 4) <= 7:
+            # 0xxxxxxx - single byte
+            return c
+        elif (c >> 4) in (12, 13):
+            # 110xxxxx 10xxxxxx - two bytes
+            c2 = self._next_octet(section)
+            if (c2 & 0xC0) != 0x80:
+                raise ValueError("Invalid UTF-8 encoding")
+            return ((c & 0x1F) << 6) | (c2 & 0x3F)
+        elif (c >> 4) == 14:
+            # 1110xxxx 10xxxxxx 10xxxxxx - three bytes
+            c2 = self._next_octet(section)
+            c3 = self._next_octet(section)
+            if ((c2 & 0xC0) != 0x80) or ((c3 & 0xC0) != 0x80):
+                raise ValueError("Invalid UTF-8 encoding")
+            return ((c & 0x0F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F)
+        else:
+            raise ValueError("Invalid UTF-8 encoding")
+
+    def _next_octet(self, section):
+        """Read next octet (byte), handling percent-encoding."""
+        if self.dpos >= len(self.str):
+            return -1
+
+        c = ord(self.str[self.dpos])
+        self.dpos += 1
+
+        # Percent-encoded
+        if c == 37:  # '%'
+            self.next_char_was_escaped = True
+            if self.dpos + 2 > len(self.str):
+                raise ValueError("Incomplete percent encoding")
+            h1 = self._hex_nibble(ord(self.str[self.dpos]))
+            h2 = self._hex_nibble(ord(self.str[self.dpos + 1]))
+            self.dpos += 2
+            return (h1 << 4) | h2
+        else:
+            self.next_char_was_escaped = False
+
+        # + maps to space only in query
+        if c == 43 and section == Uri._QUERY:  # '+'
+            return 32  # space
+
+        return c
+
+    def _hex_nibble(self, c):
+        """Convert hex character to nibble value."""
+        if 48 <= c <= 57:  # 0-9
+            return c - 48
+        elif 65 <= c <= 70:  # A-F
+            return c - 65 + 10
+        elif 97 <= c <= 102:  # a-f
+            return c - 97 + 10
+        else:
+            raise ValueError(f"Invalid hex character: {chr(c)}")
+
+    def _path_segments(self, path_str, num_segs):
+        """Parse path string into list of segments."""
+        from fan.sys.List import List
+
+        if not path_str:
+            return List.from_list([])
+
+        length = len(path_str)
+
+        # If pathStr is "/" then path is the empty list
+        if length == 1 and path_str[0] == '/':
+            return List.from_list([])
+
+        # Check for trailing slash (unless backslash-escaped)
+        if length > 1 and path_str[-1] == '/' and path_str[-2] != '\\':
+            num_segs -= 1
+            length -= 1
+
+        # Parse the segments
+        path = []
+        seg_start = 0
+        prev = 0
+
+        for i in range(len(path_str)):
+            c = path_str[i]
+            if prev != '\\':
+                if c == '/':
+                    if i > 0:
+                        path.append(path_str[seg_start:i])
+                    seg_start = i + 1
+                prev = c
+            else:
+                prev = c if c != '\\' else 0
+
+        if seg_start < length:
+            path.append(path_str[seg_start:len(path_str) if path_str[-1] != '/' else -1])
+
+        return List.from_list(path)
+
+    def _parse_query(self, q):
+        """Parse query string into map."""
+        from fan.sys.Map import Map
+
+        if q is None:
+            return None
+
+        result = Map.make_with_type("sys::Str", "sys::Str")
+
+        start = 0
+        eq = 0
+        length = len(q)
+        prev = 0
+        escaped = False
+
+        for i in range(length):
+            ch = q[i]
+            if prev != '\\':
+                if ch == '=':
+                    eq = i
+                if ch != '&' and ch != ';':
+                    prev = ch
+                    continue
+            else:
+                escaped = True
+                prev = ch if ch != '\\' else 0
+                continue
+
+            if start < i:
+                self._add_query_param(result, q, start, eq, i, escaped)
+                escaped = False
+
+            start = eq = i + 1
+
+        if start < length:
+            self._add_query_param(result, q, start, eq, length, escaped)
+
+        return result
+
+    def _add_query_param(self, map_obj, q, start, eq, end, escaped):
+        """Add a query parameter to the map."""
+        if start == eq and (start >= len(q) or q[start] != '='):
+            key = self._to_query_str(q, start, end, escaped)
+            val = "true"
+        else:
+            key = self._to_query_str(q, start, eq, escaped)
+            val = self._to_query_str(q, eq + 1, end, escaped)
+
+        dup = map_obj.get(key, None)
+        if dup is not None:
+            val = dup + "," + val
+        map_obj[key] = val
+
+    def _to_query_str(self, q, start, end, escaped):
+        """Convert query segment, handling backslash escapes."""
+        if not escaped:
+            return q[start:end]
+
+        result = []
+        prev = 0
+        for i in range(start, end):
+            c = q[i]
+            if c != '\\':
+                result.append(c)
+                prev = c
+            else:
+                if prev == '\\':
+                    result.append(c)
+                    prev = 0
+                else:
+                    prev = c
+
+        return ''.join(result)
+
+    def _normalize(self, result):
+        """Normalize the parsed URI sections."""
+        self._normalize_schemes(result)
+        self._normalize_path(result)
+        self._normalize_query(result)
+
+    def _normalize_schemes(self, result):
+        """Normalize well-known schemes."""
+        scheme = result['scheme']
+        if scheme is None:
+            return
+
+        if scheme == 'http':
+            self._normalize_scheme(result, 80)
+        elif scheme == 'https':
+            self._normalize_scheme(result, 443)
+        elif scheme == 'ftp':
+            self._normalize_scheme(result, 21)
+
+    def _normalize_scheme(self, result, default_port):
+        """Normalize scheme with default port."""
+        # Remove default port
+        if result['port'] == default_port:
+            result['port'] = None
+
+        # If path is empty, set to "/"
+        if not result['pathStr']:
+            result['pathStr'] = "/"
+            if result['path'] is None:
+                from fan.sys.List import List
+                result['path'] = List.from_list([])
+
+    def _normalize_path(self, result):
+        """Normalize path segments (remove . and ..)."""
+        path = result.get('path')
+        if path is None:
+            return
+
+        path_str = result['pathStr']
+        if not path_str:
+            return
+
+        is_abs = path_str.startswith('/')
+        is_dir = path_str.endswith('/')
+        dot_last = False
+        modified = False
+
+        # Work with a mutable list
+        from fan.sys.List import List
+        if hasattr(path, 'to_list'):
+            segments = path.to_list()
+        else:
+            segments = list(path)
+
+        i = 0
+        while i < len(segments):
+            seg = segments[i]
+
+            # Remove "." only if path.size > 1 OR host != null
+            if seg == "." and (len(segments) > 1 or result['host'] is not None):
+                segments.pop(i)
+                modified = True
+                dot_last = True
+                # Don't increment i
+            # Remove ".." only if preceded by non-".." segment
+            elif seg == ".." and i > 0 and segments[i-1] != "..":
+                segments.pop(i)  # Remove ..
+                segments.pop(i-1)  # Remove preceding segment
+                modified = True
+                i -= 1
+                dot_last = True
+            else:
+                dot_last = False
+                i += 1
+
+        if modified:
+            if dot_last:
+                is_dir = True
+            if len(segments) == 0 or (segments and segments[-1] == ".."):
+                is_dir = False
+
+            result['path'] = List.from_list(segments)
+            result['pathStr'] = self._to_path_str(is_abs, segments, is_dir)
+
+    def _normalize_query(self, result):
+        """Ensure query is initialized."""
+        if result['query'] is None:
+            from fan.sys.Map import Map
+            result['query'] = Map.make_with_type("sys::Str", "sys::Str")
+
+    def _to_path_str(self, is_abs, path, is_dir):
+        """Convert path segments back to path string."""
+        buf = ''
+        if is_abs:
+            buf += '/'
+        for i, seg in enumerate(path):
+            if i > 0:
+                buf += '/'
+            buf += seg
+        if is_dir and buf and not buf.endswith('/'):
+            buf += '/'
+        return buf
+
+
+class UriEncoder:
+    """
+    URI Encoder that handles Fantom's encoding rules.
+
+    Port of the JavaScript UriEncoder class.
+    """
+
+    def __init__(self, uri, encoding=True):
+        self.uri = uri
+        self.encoding = encoding
+        self.buf = ''
+
+        # Initialize character maps if not done
+        Uri._init_char_maps()
+
+    def encode(self):
+        """Encode the URI to a string."""
+        uri = self.uri
+
+        # scheme
+        if uri.scheme() is not None:
+            self.buf += uri.scheme() + ':'
+
+        # authority
+        if uri.user_info() is not None or uri.host() is not None or uri.port() is not None:
+            self.buf += '//'
+            if uri.user_info() is not None:
+                self._do_encode(uri.user_info(), Uri._USER)
+                self.buf += '@'
+            if uri.host() is not None:
+                self._do_encode(uri.host(), Uri._HOST)
+            if uri.port() is not None:
+                self.buf += ':' + str(uri.port())
+
+        # path
+        if uri.path_str() is not None:
+            self._do_encode(uri.path_str(), Uri._PATH)
+
+        # query
+        if uri.query_str() is not None:
+            self.buf += '?'
+            self._do_encode(uri.query_str(), Uri._QUERY)
+
+        # frag
+        if uri.frag() is not None:
+            self.buf += '#'
+            self._do_encode(uri.frag(), Uri._FRAG)
+
+        return self.buf
+
+    def _do_encode(self, s, section):
+        """Encode a section of the URI."""
+        if not self.encoding:
+            self.buf += s
+            return
+
+        prev = 0
+        for c in s:
+            code = ord(c)
+
+            # unreserved character - pass through if not after backslash
+            if code < 128 and (Uri._charMap[code] & section) != 0 and prev != ord('\\'):
+                self.buf += c
+                prev = code
+                continue
+
+            # the backslash esc itself doesn't get encoded
+            if code == ord('\\') and prev != ord('\\'):
+                prev = code
+                continue
+
+            # We have a reserved, escaped, or non-ASCII character
+
+            # Encode
+            if code == ord(' ') and section == Uri._QUERY:
+                self.buf += '+'
+            else:
+                self.buf = self._percent_encode_char(self.buf, code)
+
+            # If we just encoded backslash, it doesn't escape the next char
+            if code == ord('\\'):
+                prev = 0
+            else:
+                prev = code
+
+    @staticmethod
+    def _percent_encode_char(buf, c):
+        """Percent-encode a character."""
+        if c <= 0x7F:
+            buf = UriEncoder._percent_encode_byte(buf, c)
+        elif c > 0x7FF:
+            buf = UriEncoder._percent_encode_byte(buf, 0xE0 | ((c >> 12) & 0x0F))
+            buf = UriEncoder._percent_encode_byte(buf, 0x80 | ((c >> 6) & 0x3F))
+            buf = UriEncoder._percent_encode_byte(buf, 0x80 | (c & 0x3F))
+        else:
+            buf = UriEncoder._percent_encode_byte(buf, 0xC0 | ((c >> 6) & 0x1F))
+            buf = UriEncoder._percent_encode_byte(buf, 0x80 | (c & 0x3F))
+        return buf
+
+    @staticmethod
+    def _percent_encode_byte(buf, c):
+        """Percent-encode a byte."""
+        buf += '%'
+        hi = (c >> 4) & 0xF
+        lo = c & 0xF
+        buf += chr(48 + hi) if hi < 10 else chr(65 + hi - 10)
+        buf += chr(48 + lo) if lo < 10 else chr(65 + lo - 10)
+        return buf
