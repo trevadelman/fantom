@@ -204,17 +204,173 @@ class Uri(Obj):
 
     @staticmethod
     def encode_query(map):
-        """Encode map as query string"""
-        return urlencode(dict(map))
+        """Encode map as query string using Fantom-style encoding.
+
+        - Spaces become +
+        - Special query chars (&, ;, =, #) are percent-encoded
+        - Backslash is percent-encoded
+        - Other unreserved chars pass through
+        """
+        parts = []
+        # Handle both Map objects and dicts
+        if hasattr(map, 'keys'):
+            keys = map.keys()
+            for i in range(keys.size if hasattr(keys, 'size') else len(keys)):
+                key = keys.get(i) if hasattr(keys, 'get') else keys[i]
+                val = map.get(key) if hasattr(map, 'get') else map[key]
+                parts.append(Uri._percent_encode_query(key) + "=" + Uri._percent_encode_query(val))
+        else:
+            for k, v in map.items():
+                parts.append(Uri._percent_encode_query(k) + "=" + Uri._percent_encode_query(v))
+        return "&".join(parts)
+
+    @staticmethod
+    def _percent_encode_query(s):
+        """Percent-encode a query key or value.
+
+        For encode_query - uses percent-encoding (not backslash escaping).
+        """
+        if s is None:
+            return ""
+        result = []
+        for c in s:
+            code = ord(c)
+            # Unreserved chars pass through (except space -> +)
+            if c == ' ':
+                result.append('+')
+            elif code < 128 and (c.isalnum() or c in '-._~'):
+                result.append(c)
+            # Allow some sub-delimiters that are safe in query values
+            elif c in "!$'()*+,/:@":
+                result.append(c)
+            else:
+                # Percent-encode everything else
+                result.append(Uri._percent_encode_char(c))
+        return ''.join(result)
+
+    @staticmethod
+    def _percent_encode_char(c):
+        """Percent-encode a single character."""
+        encoded = c.encode('utf-8')
+        return ''.join(f'%{b:02X}' for b in encoded)
 
     @staticmethod
     def decode_query(s):
-        """Decode query string to map"""
+        """Decode query string to map.
+
+        Handles Fantom's query string format:
+        - + decodes to space
+        - & and ; are delimiters
+        - params with no value get value "true"
+        - backslash escapes like \& \= \; \# are respected
+        """
         from fan.sys.Map import Map
+        if not s:
+            return Map.make_with_type("sys::Str", "sys::Str")
+
         result = {}
-        for k, v in parse_qs(s, keep_blank_values=True).items():
-            result[k] = v[0] if len(v) == 1 else v
+
+        # Parse query string manually to handle Fantom's format
+        start = 0
+        eq_pos = -1
+        i = 0
+        prev = ''
+        escaped = False
+
+        while i <= len(s):
+            ch = s[i] if i < len(s) else '\0'  # null terminator for final segment
+
+            # Check for backslash escape
+            if prev == '\\' and ch != '\\':
+                prev = ch
+                i += 1
+                escaped = True
+                continue
+
+            # Check for delimiter (& or ;) or end of string
+            if (ch == '&' or ch == ';' or ch == '\0') and prev != '\\':
+                if start < i:
+                    Uri._add_query_param(result, s, start, eq_pos, i, escaped)
+                    escaped = False
+                start = i + 1
+                eq_pos = -1
+            elif ch == '=' and eq_pos < 0 and prev != '\\':
+                eq_pos = i
+
+            prev = ch if ch != '\\' or prev == '\\' else '\\'
+            if prev == '\\' and ch == '\\':
+                prev = ''  # Reset double backslash
+            i += 1
+
         return Map.from_dict(result)
+
+    @staticmethod
+    def _add_query_param(result, q, start, eq_pos, end, escaped):
+        """Add a query parameter to the result dict."""
+        if start == eq_pos:
+            # key with no value: "key" or "=value" (eq at start means empty key)
+            key = Uri._to_query_str(q, start, end, escaped)
+            val = "true"
+        elif eq_pos < 0:
+            # No = found, so this is just a key with value "true"
+            key = Uri._to_query_str(q, start, end, escaped)
+            val = "true"
+        else:
+            key = Uri._to_query_str(q, start, eq_pos, escaped)
+            val = Uri._to_query_str(q, eq_pos + 1, end, escaped)
+
+        # Handle duplicate keys by joining with comma
+        if key in result:
+            result[key] = result[key] + "," + val
+        else:
+            result[key] = val
+
+    @staticmethod
+    def _to_query_str(q, start, end, escaped):
+        """Convert a query string segment, handling + as space, percent-decoding, and backslash escapes."""
+        # First percent-decode the segment, then handle + and backslash escapes
+        segment = q[start:end]
+
+        # Percent-decode
+        result = []
+        i = 0
+        while i < len(segment):
+            c = segment[i]
+            if c == '%' and i + 2 < len(segment):
+                # Percent-encoded byte
+                try:
+                    hex_val = int(segment[i+1:i+3], 16)
+                    result.append(chr(hex_val))
+                    i += 3
+                    continue
+                except ValueError:
+                    pass  # Not valid hex, treat as literal
+            elif c == '+':
+                result.append(' ')
+                i += 1
+                continue
+            result.append(c)
+            i += 1
+
+        decoded = ''.join(result)
+
+        if not escaped:
+            return decoded
+
+        # Handle backslash escapes
+        result = []
+        prev = ''
+        for c in decoded:
+            if c == '\\':
+                if prev == '\\':
+                    result.append('\\')
+                    prev = ''
+                else:
+                    prev = c
+            else:
+                result.append(c)
+                prev = c
+        return ''.join(result)
 
     @staticmethod
     def def_val():
@@ -845,20 +1001,31 @@ class Uri(Obj):
         )
 
     def plus_query(self, query):
-        """Add or merge query parameters"""
+        """Add or merge query parameters.
+
+        Uses Fantom-style query encoding with backslash escapes for special chars.
+        """
         if query is None or (hasattr(query, 'is_empty') and query.is_empty()):
             return self
-        # Convert Map to dict if needed
-        qdict = dict(query) if hasattr(query, '__iter__') else query
+
+        # Merge with existing query if present
+        from fan.sys.Map import Map
         if self._queryStr:
-            # Merge with existing query
-            from fan.sys.Map import Map
-            existing = Uri.decode_query(self._queryStr)
-            existing_dict = dict(existing._map) if hasattr(existing, '_map') else {}
-            existing_dict.update(qdict)
-            new_query = urlencode(existing_dict)
+            merged = self.query().dup()
+            merged.set_all(query)
         else:
-            new_query = urlencode(qdict)
+            merged = query if isinstance(query, Map) else Map.from_dict(dict(query))
+
+        # Build query string with Fantom-style encoding
+        parts = []
+        keys = merged.keys()
+        for i in range(keys.size):
+            key = keys.get(i)
+            val = merged.get(key)
+            parts.append(Uri._encode_query_part(key) + "=" + Uri._encode_query_part(val))
+
+        new_query = "&".join(parts)
+
         return Uri(
             scheme=self._scheme,
             userInfo=self._userInfo,
@@ -868,6 +1035,29 @@ class Uri(Obj):
             queryStr=new_query,
             frag=self._frag
         )
+
+    @staticmethod
+    def _encode_query_part(s):
+        """Encode a query key or value using Fantom-style encoding.
+
+        - &, ;, = are backslash-escaped
+        - # is percent-encoded (since it starts fragment)
+        - \\ is backslash-escaped
+        """
+        if s is None:
+            return ""
+        result = []
+        for c in s:
+            # Backslash-escape query delimiters (but not #)
+            if c in '&;=\\':
+                result.append('\\')
+                result.append(c)
+            elif c == '#':
+                # # must be percent-encoded, not backslash-escaped
+                result.append('%23')
+            else:
+                result.append(c)
+        return ''.join(result)
 
     def to_code(self):
         """Get URI as Fantom source code literal.
