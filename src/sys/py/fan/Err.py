@@ -249,3 +249,8 @@ class UnknownNameErr(Err):
 class UnknownKeyErr(Err):
     """Unknown key error (key not found in map/dict)"""
     pass
+
+
+class FieldNotSetErr(Err):
+    """Field not set error - thrown when required field is not initialized"""
+    pass

@@ -3,150 +3,8 @@
 #
 import logging
 from fan.sys.Obj import Obj
-
-class LogLevel(Obj):
-    """
-    LogLevel represents the severity of a log message.
-    """
-
-    _levels = {}
-    _vals_list = None
-
-    def __init__(self, name, ordinal):
-        self._name = name
-        self._ordinal = ordinal
-
-    @staticmethod
-    def from_str(name, checked=True):
-        """Parse LogLevel from string"""
-        name_lower = name.lower()
-        if name_lower in LogLevel._levels:
-            return LogLevel._levels[name_lower]
-        if checked:
-            from fan.sys.Err import ParseErr
-            raise ParseErr(f"Unknown log level: {name}")
-        return None
-
-    @staticmethod
-    def vals():
-        """Get all log level values"""
-        if LogLevel._vals_list is None:
-            from fan.sys.List import List
-            vals = List.from_literal(
-                [LogLevel._debug, LogLevel._info, LogLevel._warn, LogLevel._err, LogLevel._silent],
-                "sys::LogLevel"
-            )
-            LogLevel._vals_list = List.to_immutable(vals)
-        return LogLevel._vals_list
-
-    @staticmethod
-    def debug():
-        """Get debug level"""
-        return LogLevel._debug
-
-    @staticmethod
-    def info():
-        """Get info level"""
-        return LogLevel._info
-
-    @staticmethod
-    def warn():
-        """Get warn level"""
-        return LogLevel._warn
-
-    @staticmethod
-    def err():
-        """Get err level"""
-        return LogLevel._err
-
-    @staticmethod
-    def silent():
-        """Get silent level"""
-        return LogLevel._silent
-
-    def name(self):
-        """Get level name"""
-        return self._name
-
-    def ordinal(self):
-        """Get numeric ordinal"""
-        return self._ordinal
-
-    def to_str(self):
-        return self._name
-
-    def __lt__(self, other):
-        return self._ordinal < other._ordinal
-
-    def __le__(self, other):
-        return self._ordinal <= other._ordinal
-
-    def __gt__(self, other):
-        return self._ordinal > other._ordinal
-
-    def __ge__(self, other):
-        return self._ordinal >= other._ordinal
-
-    def __eq__(self, other):
-        if not isinstance(other, LogLevel):
-            return False
-        return self._ordinal == other._ordinal
-
-    def __hash__(self):
-        return hash(self._ordinal)
-
-    def hash(self):
-        """Override Obj.hash() - return ordinal-based hash"""
-        return hash(self._ordinal)
-
-    def is_immutable(self):
-        """LogLevel enums are always immutable"""
-        return True
-
-
-# Define log levels - stored in private class attributes
-LogLevel._debug = LogLevel("debug", 0)
-LogLevel._info = LogLevel("info", 1)
-LogLevel._warn = LogLevel("warn", 2)
-LogLevel._err = LogLevel("err", 3)
-LogLevel._silent = LogLevel("silent", 4)
-
-LogLevel._levels["debug"] = LogLevel._debug
-LogLevel._levels["info"] = LogLevel._info
-LogLevel._levels["warn"] = LogLevel._warn
-LogLevel._levels["err"] = LogLevel._err
-LogLevel._levels["silent"] = LogLevel._silent
-
-
-class LogRec(Obj):
-    """
-    LogRec represents a single log record.
-    """
-
-    def __init__(self, time, level, logName, msg, err=None):
-        self._time = time
-        self._level = level
-        self._logName = logName
-        self._msg = msg
-        self._err = err
-
-    def time(self):
-        return self._time
-
-    def level(self):
-        return self._level
-
-    def log_name(self):
-        return self._logName
-
-    def msg(self):
-        return self._msg
-
-    def err(self):
-        return self._err
-
-    def to_str(self):
-        return f"[{self._level.name()}] {self._logName}: {self._msg}"
+from fan.sys.LogLevel import LogLevel
+from fan.sys.LogRec import LogRec
 
 
 class Log(Obj):
@@ -170,7 +28,7 @@ class Log(Obj):
             raise ArgErr(f"Log already registered: {name}")
 
         self._name = name
-        self._level = LogLevel._info
+        self._level = LogLevel.info()
         self._pyLogger = logging.getLogger(name)
 
         if register:
@@ -239,36 +97,36 @@ class Log(Obj):
         return level._ordinal >= self._level._ordinal
 
     def is_debug(self):
-        return self._level._ordinal <= LogLevel._debug._ordinal
+        return self._level._ordinal <= LogLevel.debug()._ordinal
 
     def is_info(self):
-        return self._level._ordinal <= LogLevel._info._ordinal
+        return self._level._ordinal <= LogLevel.info()._ordinal
 
     def is_warn(self):
-        return self._level._ordinal <= LogLevel._warn._ordinal
+        return self._level._ordinal <= LogLevel.warn()._ordinal
 
     def is_err(self):
-        return self._level._ordinal <= LogLevel._err._ordinal
+        return self._level._ordinal <= LogLevel.err()._ordinal
 
     def debug(self, msg, err=None):
         """Log debug message"""
-        if self.is_enabled(LogLevel._debug):
-            self._log(LogLevel._debug, msg, err)
+        if self.is_enabled(LogLevel.debug()):
+            self._log(LogLevel.debug(), msg, err)
 
     def info(self, msg, err=None):
         """Log info message"""
-        if self.is_enabled(LogLevel._info):
-            self._log(LogLevel._info, msg, err)
+        if self.is_enabled(LogLevel.info()):
+            self._log(LogLevel.info(), msg, err)
 
     def warn(self, msg, err=None):
         """Log warning message"""
-        if self.is_enabled(LogLevel._warn):
-            self._log(LogLevel._warn, msg, err)
+        if self.is_enabled(LogLevel.warn()):
+            self._log(LogLevel.warn(), msg, err)
 
     def err(self, msg, err=None):
         """Log error message"""
-        if self.is_enabled(LogLevel._err):
-            self._log(LogLevel._err, msg, err)
+        if self.is_enabled(LogLevel.err()):
+            self._log(LogLevel.err(), msg, err)
 
     def _log(self, level, msg, err):
         """Internal log method - creates LogRec and calls log()"""
@@ -287,14 +145,15 @@ class Log(Obj):
             except:
                 pass
 
-        # Map to Python logging level
+        # Map to Python logging level by ordinal
         level = rec._level
-        py_level = {
-            LogLevel._debug: logging.DEBUG,
-            LogLevel._info: logging.INFO,
-            LogLevel._warn: logging.WARNING,
-            LogLevel._err: logging.ERROR
-        }.get(level, logging.INFO)
+        py_level_map = {
+            0: logging.DEBUG,   # debug ordinal
+            1: logging.INFO,    # info ordinal
+            2: logging.WARNING, # warn ordinal
+            3: logging.ERROR    # err ordinal
+        }
+        py_level = py_level_map.get(level._ordinal, logging.INFO)
 
         self._pyLogger.log(py_level, rec._msg)
         if rec._err:

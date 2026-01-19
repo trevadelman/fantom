@@ -54,117 +54,86 @@ class PyTypePrinter : PyPrinter
 
   private Void imports(TypeDef t)
   {
-    // Always import sys module for ObjUtil, etc.
-    // Use fan.sys namespace to avoid Python's built-in sys module conflict
+    // System path setup
     w("import sys as sys_module").nl
     w("sys_module.path.insert(0, '.')").nl
     nl
 
-    // Import base class (but skip if this IS Obj - no self-import)
+    // For types NOT in sys pod: Import sys pod as namespace (lazy loader)
+    // For types IN sys pod: Import Type directly (needed for metadata registration)
+    if (t.pod.name != "sys")
+    {
+      w("from fan import sys").nl
+    }
+    else
+    {
+      // For sys pod types, import Type directly for metadata registration
+      if (t.qname != "sys::Type")
+        w("from fan.sys.Type import Type").nl
+
+      // For sys pod enums, import List directly (used in vals() method)
+      if (t.isEnum)
+        w("from fan.sys.List import List").nl
+    }
+
+    // Import base class directly (needed for Python class definition)
     if (t.qname != "sys::Obj")
     {
-      // Always import Obj - needed for static methods like Obj.echo()
-      w("from fan.sys.Obj import Obj").nl
-
-      // Also import non-Obj base class if needed
       if (t.base != null && !t.base.isObj)
       {
         podPath := PyUtil.podImport(t.base.pod.name)
         w("from ${podPath}.${t.base.name} import ${t.base.name}").nl
       }
-    }
-
-    // Core sys utilities - always needed for runtime
-    w("from fan.sys.ObjUtil import ObjUtil").nl
-    w("from fan.sys import Bool").nl
-    w("from fan.sys.Num import Num").nl
-    w("from fan.sys.Int import Int").nl
-    w("from fan.sys.Float import Float").nl
-    w("from fan.sys.Str import Str").nl
-    w("from fan.sys.Range import Range").nl
-    w("from fan.sys.Map import Map").nl
-    w("from fan.sys.List import List").nl
-    w("from fan.sys.Duration import Duration").nl
-    w("from fan.sys.Locale import Locale").nl
-    w("from fan.sys.StrBuf import StrBuf").nl
-    // Reflection types
-    w("from fan.sys.Type import Type").nl
-    w("from fan.sys.Pod import Pod").nl
-    w("from fan.sys.Slot import Slot").nl
-    w("from fan.sys.Method import Method").nl
-    w("from fan.sys.Field import Field").nl
-    w("from fan.sys.Func import Func").nl
-    w("from fan.sys.Env import Env").nl
-    w("from fan.sys.Unsafe import Unsafe, make").nl
-    w("from fan.sys.Err import Err, ParseErr, NullErr, CastErr, ArgErr, IndexErr, UnsupportedErr, UnknownTypeErr, UnknownPodErr, UnknownSlotErr, UnknownServiceErr, ReadonlyErr, IOErr, NotImmutableErr, CancelledErr, ConstErr, InterruptedErr, NameErr, TimeoutErr, TestErr, ReturnErr, NotFilterErr, UnknownNameErr, UnknownKeyErr, UnresolvedErr").nl
-    w("from fan.sys.Buf import Buf").nl
-    w("from fan.sys.File import File").nl
-    w("from fan.sys.Zip import Zip").nl
-    w("from fan.sys.Process import Process").nl
-    w("from fan.sys.Service import Service").nl
-    // Additional runtime types
-    w("from fan.sys.Regex import Regex, RegexMatcher").nl
-    w("from fan.sys.Uri import Uri, UriScheme").nl
-    w("from fan.sys.Unit import Unit").nl
-    w("from fan.sys.MimeType import MimeType").nl
-    w("from fan.sys.Charset import Charset").nl
-    w("from fan.sys.Log import Log, LogLevel, LogRec").nl
-    w("from fan.sys.Version import Version").nl
-    w("from fan.sys.Weekday import Weekday").nl
-    w("from fan.sys.TimeZone import TimeZone").nl
-    w("from fan.sys.DateTime import DateTime, Month, Date, Time").nl
-    w("from fan.sys.Uuid import Uuid").nl
-    w("from fan.sys.Depend import Depend").nl
-    w("from fan.sys.Decimal import Decimal").nl
-    w("from fan.sys.Endian import Endian").nl
-    w("from fan.sys.Enum import Enum").nl
-    w("from fan.sys.Facet import Facet").nl
-    w("from fan.sys.OutStream import OutStream").nl
-
-    // Collect and import cross-pod types
-    crossPodTypes := collectCrossPodTypes(t)
-    crossPodTypes.each |types, podName|
-    {
-      if (podName == "sys") return  // Already imported above
-      if (podName == t.pod.name) return  // Skip same-pod (handled at runtime)
-      // Skip Java FFI pods - they can't be imported in Python
-      if (PyUtil.isJavaFfi(podName)) return
-
-      podPath := PyUtil.podImport(podName)
-      types.each |typeName|
+      else
       {
-        // Skip Java FFI types
-        if (PyUtil.isJavaFfi(typeName)) return
-        w("from ${podPath}.${typeName} import ${typeName}").nl
+        w("from fan.sys.Obj import Obj").nl
       }
     }
 
-    // Import same-pod mixins that are used in class definition
-    // These must be imported at module load time since Python needs base classes defined
+    // Import ObjUtil directly (used everywhere)
+    w("from fan.sys.ObjUtil import ObjUtil").nl
+
+    // Import mixins directly (needed for Python class definition)
     t.mixins.each |m|
     {
       if (m.qname == "sys::Obj") return  // Skip Obj
-      if (m.pod.name == t.pod.name)
-      {
-        // Same-pod mixin - needs explicit import for class definition
-        podPath := PyUtil.podImport(m.pod.name)
-        w("from ${podPath}.${m.name} import ${m.name}").nl
-      }
+      podPath := PyUtil.podImport(m.pod.name)
+      w("from ${podPath}.${m.name} import ${m.name}").nl
     }
 
-    // NOTE: Other same-pod imports are handled at runtime via reflection or lazy imports
-    // Automatic same-unit imports can cause circular import issues when helper classes
-    // reference each other (e.g., FacetsA imports FacetsB imports FacetsA)
+    // Import dependent pods as namespaces
+    t.pod.depends.each |depend|
+    {
+      podName := depend.name
+      if (podName == "sys") return  // Already imported above (or skipped for sys pod)
+      if (podName == t.pod.name) return  // Skip same pod
+      if (podName.startsWith("[")) return  // Skip FFI
+      if (PyUtil.isJavaFfi(podName)) return
 
-    // Exception: Same-pod exception types used in catch clauses need explicit imports
-    // because they're used at statement level (except ErrType as e:) not via reflection
+      // Escape reserved pod names (e.g., "def" -> "def_")
+      escapedPod := PyUtil.escapePodName(podName)
+      w("from fan import ${escapedPod}").nl
+    }
+
+    // Exception types used in catch clauses need explicit imports
+    // because Python's except clause needs the class in local scope
     samePodCatchTypes := collectSamePodCatchTypes(t)
     samePodCatchTypes.each |typeName|
     {
-      // Skip self-import
-      if (typeName == t.name) return
+      if (typeName == t.name) return  // Skip self-import
       podPath := PyUtil.podImport(t.pod.name)
       w("from ${podPath}.${typeName} import ${typeName}").nl
+    }
+
+    // Cross-pod exception types used in catch clauses also need explicit imports
+    crossPodCatchTypes := collectCrossPodCatchTypes(t)
+    crossPodCatchTypes.each |typeNames, podName|
+    {
+      podPath := PyUtil.podImport(podName)
+      typeNames.each |typeName|
+      {
+        w("from ${podPath}.${typeName} import ${typeName}").nl
+      }
     }
 
     nl
@@ -273,6 +242,76 @@ class PyTypePrinter : PyPrinter
     }
 
     return result
+  }
+
+  ** Collect cross-pod exception types used in catch clauses
+  ** Returns a map of podName -> list of type names
+  private Str:Str[] collectCrossPodCatchTypes(TypeDef t)
+  {
+    result := Str:Str[][:]
+
+    // Scan all methods for catch clauses with cross-pod exception types
+    t.methodDefs.each |m|
+    {
+      if (m.code != null)
+        scanBlockForCrossPodCatchTypes(m.code, t.pod.name, result)
+    }
+
+    return result
+  }
+
+  ** Scan a block for cross-pod catch types
+  private Void scanBlockForCrossPodCatchTypes(Block block, Str curPodName, Str:Str[] result)
+  {
+    block.stmts.each |stmt|
+    {
+      if (stmt.id == StmtId.tryStmt)
+      {
+        tryStmt := stmt as TryStmt
+        tryStmt.catches.each |c|
+        {
+          if (c.errType != null)
+          {
+            errPod := c.errType.pod.name
+            errName := c.errType.name
+            // Cross-pod: not sys (already imported) and not same pod
+            if (errPod != "sys" && errPod != curPodName)
+            {
+              if (result[errPod] == null) result[errPod] = Str[,]
+              if (!result[errPod].contains(errName))
+                result[errPod].add(errName)
+            }
+          }
+        }
+        // Recurse into try block
+        scanBlockForCrossPodCatchTypes(tryStmt.block, curPodName, result)
+        tryStmt.catches.each |c| { scanBlockForCrossPodCatchTypes(c.block, curPodName, result) }
+        if (tryStmt.finallyBlock != null)
+          scanBlockForCrossPodCatchTypes(tryStmt.finallyBlock, curPodName, result)
+      }
+      else if (stmt.id == StmtId.ifStmt)
+      {
+        ifStmt := stmt as IfStmt
+        scanBlockForCrossPodCatchTypes(ifStmt.trueBlock, curPodName, result)
+        if (ifStmt.falseBlock != null) scanBlockForCrossPodCatchTypes(ifStmt.falseBlock, curPodName, result)
+      }
+      else if (stmt.id == StmtId.forStmt)
+      {
+        forStmt := stmt as ForStmt
+        if (forStmt.block != null) scanBlockForCrossPodCatchTypes(forStmt.block, curPodName, result)
+      }
+      else if (stmt.id == StmtId.whileStmt)
+      {
+        whileStmt := stmt as WhileStmt
+        scanBlockForCrossPodCatchTypes(whileStmt.block, curPodName, result)
+      }
+      else if (stmt.id == StmtId.switchStmt)
+      {
+        switchStmt := stmt as SwitchStmt
+        switchStmt.cases.each |c| { scanBlockForCrossPodCatchTypes(c.block, curPodName, result) }
+        if (switchStmt.defaultBlock != null) scanBlockForCrossPodCatchTypes(switchStmt.defaultBlock, curPodName, result)
+      }
+    }
   }
 
   ** Collect same-pod exception types used in catch clauses
@@ -785,9 +824,9 @@ class PyTypePrinter : PyPrinter
     enumFields := t.fieldDefs.findAll |f| { f.enumDef != null }
       .sort |a, b| { a.enumDef.ordinal <=> b.enumDef.ordinal }
 
-    // Generate static fields (including once storage fields) for enum
-    // This is needed for enums with once methods like UnitQuantity.unitToQuantity
-    staticFields(t)
+    // For enums, only generate static fields for non-enum fields (like once methods)
+    // Skip the standard _static_init() for enums since vals()/_make_enum() handles enum initialization
+    enumStaticFields(t)
 
     // Private cache field for vals
     nl
@@ -812,7 +851,9 @@ class PyTypePrinter : PyPrinter
     indent
     w("if ${t.name}._vals is None").colon
     indent
-    w("${t.name}._vals = List.to_immutable(List.from_list([").nl
+    // Add sys. prefix only when NOT inside the sys pod
+    prefix := t.pod.name != "sys" ? "sys." : ""
+    w("${t.name}._vals = ${prefix}List.to_immutable(${prefix}List.from_list([").nl
     indent
     enumFields.each |f, i|
     {
@@ -850,7 +891,9 @@ class PyTypePrinter : PyPrinter
     unindent
     w("if checked").colon
     indent
-    w("raise ParseErr.make(\"Unknown enum: \" + name)").eos
+    // Add sys. prefix only when NOT inside the sys pod
+    parseErrPrefix := t.pod.name != "sys" ? "sys." : ""
+    w("raise ${parseErrPrefix}ParseErr.make(\"Unknown enum: \" + name)").eos
     unindent
     w("return None").eos
     unindent
@@ -939,11 +982,17 @@ class PyTypePrinter : PyPrinter
     w("return self._name").eos
     unindent
 
-    // equals - enums are singletons, use identity
+    // equals - compare by ordinal for enum equality
+    // NOTE: Using ordinal comparison because enum values may be stored/retrieved
+    // from different contexts (e.g., LogRec._level vs LogLevel.debug())
     nl
     w("def equals(self, other)").colon
     indent
-    w("return self is other").eos
+    w("if not isinstance(other, ${t.name})").colon
+    indent
+    w("return False").eos
+    unindent
+    w("return self._ordinal == other._ordinal").eos
     unindent
 
     // compare by ordinal
@@ -1564,6 +1613,151 @@ class PyTypePrinter : PyPrinter
 // Static Fields
 //////////////////////////////////////////////////////////////////////////
 
+  ** Generate static fields for enum types
+  ** Handles once storage fields, regular computed static fields, but skips vals and enum values
+  ** since those are handled by the enum-specific code generation
+  private Void enumStaticFields(TypeDef t)
+  {
+    // Collect once storage field names
+    onceStorageFieldNames := Str:Bool[:]
+    t.methodDefs.each |m|
+    {
+      if (m.isOnce)
+        onceStorageFieldNames["${m.name}\$Store"] = true
+    }
+
+    // Find static fields for enums (once storage fields AND regular computed static fields)
+    staticFieldDefs := t.fieldDefs.findAll |f|
+    {
+      if (!f.isStatic) return false
+      if (f.enumDef != null) return false  // Skip enum value fields
+      if (f.name == "vals") return false   // Skip vals - handled by enum code
+      // Include once storage fields
+      if (f.isOnce) return true
+      if (onceStorageFieldNames.containsKey(f.name)) return true
+      // Also include regular static fields (like 'keywords' map)
+      if (!f.isSynthetic) return true
+      return false
+    }
+    if (staticFieldDefs.isEmpty) return
+
+    // Check if there's a staticInit method
+    staticInitMethod := t.methodDefs.find |m| { m.isStaticInit }
+
+    // Generate class-level storage for each static field
+    nl
+    staticFieldDefs.each |f|
+    {
+      isOnceStorage := f.isOnce || onceStorageFieldNames.containsKey(f.name)
+      if (isOnceStorage)
+        w("_${escapeName(f.name)} = \"_once_\"").nl
+      else
+        w("_${escapeName(f.name)} = None").nl
+    }
+
+    // Generate static getter for each static field
+    staticFieldDefs.each |f|
+    {
+      isOnceStorage := f.isOnce || onceStorageFieldNames.containsKey(f.name)
+      staticFieldGetter(t, f, staticInitMethod != null && !isOnceStorage, isOnceStorage)
+    }
+
+    // Generate _static_init() method if there's a staticInit block or fields need init
+    if (staticInitMethod != null || staticFieldDefs.any |f| { f.init != null && !f.isOnce && !onceStorageFieldNames.containsKey(f.name) })
+    {
+      enumStaticInit(t, staticInitMethod, staticFieldDefs, onceStorageFieldNames)
+    }
+  }
+
+  ** Generate _static_init() for enum types - handles computed static fields
+  private Void enumStaticInit(TypeDef t, MethodDef? staticInitMethod, FieldDef[] staticFieldDefs, Str:Bool onceStorageFieldNames)
+  {
+    typeName := t.name
+
+    nl
+    w("@staticmethod").nl
+    w("def _static_init()").colon
+    indent
+
+    // Add re-entry guard
+    w("if hasattr(${typeName}, '_static_init_in_progress') and ${typeName}._static_init_in_progress").colon
+    indent
+    w("return").eos
+    unindent
+    w("${typeName}._static_init_in_progress = True").eos
+
+    m.inStaticContext = true
+
+    // Collect enum field names for filtering
+    enumFieldNames := Str:Bool[:]
+    t.fieldDefs.each |f|
+    {
+      if (f.enumDef != null)
+        enumFieldNames[f.name] = true
+    }
+
+    if (staticInitMethod != null && staticInitMethod.code != null)
+    {
+      stmtPrinter := PyStmtPrinter(this)
+      stmtPrinter.scanMethodForClosures(staticInitMethod.code)
+      staticInitMethod.code.stmts.each |s, idx|
+      {
+        this.m.stmtIndex = idx
+        // Skip synthetic return
+        if (s.id == StmtId.returnStmt)
+        {
+          ret := s as ReturnStmt
+          if (ret.expr == null) return
+        }
+        // Skip enum value field assignments
+        if (isEnumFieldAssignment(s, enumFieldNames))
+          return
+        // Skip once field assignments (they use sentinel pattern)
+        if (isOnceFieldAssignment(s, onceStorageFieldNames))
+          return
+        stmtPrinter.stmt(s)
+      }
+      this.m.clearClosures()
+    }
+    else
+    {
+      // No static block - initialize fields with inline initializers
+      staticFieldDefs.each |f|
+      {
+        if (f.init == null) return
+        if (f.isOnce || onceStorageFieldNames.containsKey(f.name)) return
+        name := escapeName(f.name)
+        w("if ${typeName}._${name} is None").colon
+        indent
+        w("${typeName}._${name} = ")
+        PyExprPrinter(this).expr(f.init)
+        eos
+        unindent
+      }
+    }
+
+    w("${typeName}._static_init_in_progress = False").eos
+    m.inStaticContext = false
+
+    unindent
+  }
+
+  ** Check if a statement assigns to a once storage field
+  private Bool isOnceFieldAssignment(Stmt s, Str:Bool onceFieldNames)
+  {
+    if (s.id != StmtId.expr) return false
+    exprStmt := s as ExprStmt
+    if (exprStmt.expr.id != ExprId.assign) return false
+
+    assignExpr := exprStmt.expr as BinaryExpr
+    if (assignExpr.lhs.id != ExprId.field) return false
+
+    fieldExpr := assignExpr.lhs as FieldExpr
+    if (!fieldExpr.field.isStatic) return false
+
+    return onceFieldNames.containsKey(fieldExpr.field.name)
+  }
+
   ** Generate static fields with class-level storage and lazy-init getters
   ** Follows the JavaScript transpiler pattern from JsType.writeStaticField()
   private Void staticFields(TypeDef t)
@@ -1993,7 +2187,12 @@ class PyTypePrinter : PyPrinter
     w("# Type metadata registration for reflection").nl
     w("from fan.sys.Param import Param").nl
     w("from fan.sys.Slot import FConst").nl
-    w("_t = Type.find('${t.qname}')").nl
+    // For sys pod types, Type is already imported directly (no sys. prefix)
+    // For other pods, use sys.Type.find() via namespace import
+    if (t.pod.name == "sys")
+      w("_t = Type.find('${t.qname}')").nl
+    else
+      w("_t = sys.Type.find('${t.qname}')").nl
 
     // Calculate type flags
     typeFlags := typeFlags(t)
@@ -2066,6 +2265,9 @@ class PyTypePrinter : PyPrinter
       methodFacets := facetDict(m.facets)
 
       // Build params list
+      // For sys pod types, Type is already imported directly
+      // For other pods, use sys.Type.find()
+      typeFind := (t.pod.name == "sys") ? "Type.find" : "sys.Type.find"
       if (m.params.isEmpty)
       {
         w("_t.am_('${escapeName(m.name)}', ${flags}, '${retSig}', [], ${methodFacets})").nl
@@ -2078,7 +2280,7 @@ class PyTypePrinter : PyPrinter
           if (i > 0) w(", ")
           pType := PyUtil.sanitizeJavaFfi(p.type.signature)
           hasDefault := p.hasDefault ? "True" : "False"
-          w("Param('${escapeName(p.name)}', Type.find('${pType}'), ${hasDefault})")
+          w("Param('${escapeName(p.name)}', ${typeFind}('${pType}'), ${hasDefault})")
         }
         w("], ${methodFacets})").nl
       }

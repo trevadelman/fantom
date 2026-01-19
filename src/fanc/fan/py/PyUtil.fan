@@ -86,7 +86,9 @@ class PyUtil
       "self",
       // Additional builtins that conflict with Fantom method names
       "abs", "all", "any", "min", "max", "pow", "round", "set", "dir",
-      "oct", "open", "vars", "print"
+      "oct", "open", "vars", "print",
+      // Module name that conflicts with pod namespace import (from fan import sys)
+      "sys"
     ].each |name| { m[name] = "${name}_" }
     reservedWords = m.toImmutable
   }

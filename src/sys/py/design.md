@@ -124,9 +124,8 @@ class Foo(Obj):
         super().__init__()
 ```
 
-The compiler auto-generates import statements for pod dependencies. Cross-pod types are
-imported at the top of the file. Same-pod types use dynamic imports to avoid circular
-import issues (see [Circular Imports](#circular-imports) below).
+See [Import Architecture](#import-architecture) below for details on how imports are
+structured to avoid circular dependencies while maintaining a clean API.
 
 ## Fields
 
@@ -384,18 +383,154 @@ list.each(lambda item: print(item))
 map.get("key")
 ```
 
-## Circular Imports
+## Import Architecture
 
-Python's import system can cause `ImportError` when modules reference each other. The
-transpiler handles this with dynamic imports for same-pod type references:
+Python's import system requires careful handling to avoid circular `ImportError` exceptions.
+The transpiler uses a **hybrid approach** combining lazy loader modules, namespace imports,
+and targeted direct imports.
+
+### Pod-Level Lazy Loaders
+
+Each pod gets a generated `__init__.py` that lazily imports types on first access:
 
 ```python
-# Instead of: from fan.testSys.ObjWrapper import ObjWrapper
-# Use:
+# fan/testSys/__init__.py (auto-generated)
+import importlib
+
+_cache = {}
+_loading = set()  # Prevent circular import loops
+
+_types = {
+    'BoolTest': 'BoolTest',
+    'IntTest': 'IntTest',
+    # ... all types in pod
+}
+
+def __getattr__(name):
+    """Module-level __getattr__ for lazy type loading (Python 3.7+)."""
+    if name in _cache:
+        return _cache[name]
+    if name in _loading:
+        return None  # Circular import protection
+
+    _loading.add(name)
+    try:
+        module = importlib.import_module(f'fan.testSys.{name}')
+        cls = getattr(module, name)
+        _cache[name] = cls
+        return cls
+    finally:
+        _loading.discard(name)
+```
+
+This allows code to reference types via `testSys.BoolTest` without importing all types
+at module initialization time.
+
+### Import Structure per File
+
+Each generated Python file has this import structure:
+
+```python
+# 1. System path setup
+import sys as sys_module
+sys_module.path.insert(0, '.')
+
+# 2. Pod namespace import (for non-sys pods)
+from fan import sys
+
+# 3. Direct imports for class definition
+from fan.sys.Obj import Obj              # Base class
+from fan.sys.ObjUtil import ObjUtil      # Always needed
+from fan.somePod.SomeMixin import SomeMixin  # Mixins
+
+# 4. Dependent pods as namespaces
+from fan import concurrent
+from fan import haystack
+
+# 5. Exception types for catch clauses (Python requires class in local scope)
+from fan.myPod.MyException import MyException
+```
+
+### Namespace-Qualified Type References
+
+In expressions, sys types are accessed via the `sys.` namespace prefix:
+
+```python
+# List literal
+sys.List.from_literal([1, 2, 3], 'sys::Int')
+
+# Map literal
+sys.Map.from_literal(['a'], [1], 'sys::Str', 'sys::Int')
+
+# Type literal
+sys.Type.find('sys::Bool')
+
+# Static method call
+sys.Int.from_str("42")
+```
+
+The transpiler automatically adds `sys.` prefix when:
+- The current type is NOT in the sys pod
+- The target type IS in the sys pod
+
+This eliminates the need for 30+ direct imports of sys types at the top of each file.
+
+### Same-Pod Type References
+
+For types in the same pod, dynamic imports avoid circular dependencies:
+
+```python
+# Direct reference would cause circular import:
+# from fan.testSys.ObjWrapper import ObjWrapper  # BAD
+
+# Dynamic import at point of use:
 __import__('fan.testSys.ObjWrapper', fromlist=['ObjWrapper']).ObjWrapper
 ```
 
-Cross-pod imports are placed at the top of the file since pods are built in dependency order.
+### Cross-Pod Type References
+
+Cross-pod types use the namespace import pattern:
+
+```python
+# Pod imported as namespace at top of file
+from fan import haystack
+
+# Used in expressions
+haystack.Coord.make(lat, lng)
+```
+
+### Exception Types in Catch Clauses
+
+Python's `except` clause requires the exception class in local scope - namespace
+references don't work:
+
+```python
+# This DOES NOT work in Python:
+try:
+    ...
+except sys.ParseErr:  # SyntaxError: invalid syntax
+    ...
+
+# Must have direct import:
+from fan.sys.ParseErr import ParseErr
+try:
+    ...
+except ParseErr:  # Works
+    ...
+```
+
+The transpiler scans for catch clauses and generates direct imports for any exception
+types used. This is the one case where AST scanning is still required.
+
+### Why This Design?
+
+The import architecture balances several constraints:
+
+1. **Avoid circular imports** - Lazy loaders and dynamic imports prevent initialization loops
+2. **Minimize import lines** - Namespace imports instead of 30+ direct imports
+3. **Python language requirements** - Exception classes must be in local scope
+4. **Match JavaScript pattern** - Similar to JS pod bundling conceptually
+5. **Support reflection** - Type metadata uses lazy string resolution
 
 ## Type Metadata (Reflection)
 

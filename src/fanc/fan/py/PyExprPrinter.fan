@@ -107,6 +107,10 @@ class PyExprPrinter : PyPrinter
     // Use Obj? as fallback if we couldn't determine type
     elemSig := elemType?.signature ?: "sys::Obj?"
 
+    // Add sys. prefix only when NOT inside the sys pod
+    curPod := m.curType?.pod?.name
+    if (curPod != "sys")
+      w("sys.")
     w("List.from_literal([")
     e.vals.each |val, i|
     {
@@ -157,6 +161,10 @@ class PyExprPrinter : PyPrinter
     keySig := keyType?.signature ?: "sys::Obj"
     valSig := valType?.signature ?: "sys::Obj?"
 
+    // Add sys. prefix only when NOT inside the sys pod
+    curPod := m.curType?.pod?.name
+    if (curPod != "sys")
+      w("sys.")
     w("Map.from_literal([")
     // Keys array
     e.keys.each |key, i|
@@ -183,6 +191,9 @@ class PyExprPrinter : PyPrinter
   private Void rangeLiteral(RangeLiteralExpr e)
   {
     // Generate Range.make(start, end, exclusive)
+    curPod := m.curType?.pod?.name
+    if (curPod != "sys")
+      w("sys.")
     w("Range.make(")
     expr(e.start)
     w(", ")
@@ -196,13 +207,15 @@ class PyExprPrinter : PyPrinter
   {
     // Duration literal - value is in nanoseconds
     dur := e.val as Duration
+    curPod := m.curType?.pod?.name
+    prefix := curPod != "sys" ? "sys." : ""
     if (dur != null)
     {
-      w("Duration.make(").w(dur.ticks).w(")")
+      w("${prefix}Duration.make(").w(dur.ticks).w(")")
     }
     else
     {
-      w("Duration.make(0)")
+      w("${prefix}Duration.make(0)")
     }
   }
 
@@ -212,6 +225,9 @@ class PyExprPrinter : PyPrinter
     // Matches JS transpiler pattern: sys.Decimal.make(value)
     // Use string constructor to preserve precision for large values
     val := e.val.toStr
+    curPod := m.curType?.pod?.name
+    if (curPod != "sys")
+      w("sys.")
     w("Decimal.make(\"").w(val).w("\")")
   }
 
@@ -219,13 +235,15 @@ class PyExprPrinter : PyPrinter
   {
     // URI literal `http://example.com` -> Uri.from_str("http://example.com")
     uri := e.val as Uri
+    curPod := m.curType?.pod?.name
+    prefix := curPod != "sys" ? "sys." : ""
     if (uri != null)
     {
-      w("Uri.from_str(").str(uri.toStr).w(")")
+      w("${prefix}Uri.from_str(").str(uri.toStr).w(")")
     }
     else
     {
-      w("Uri.from_str(").str(e.val.toStr).w(")")
+      w("${prefix}Uri.from_str(").str(e.val.toStr).w(")")
     }
   }
 
@@ -440,7 +458,27 @@ class PyExprPrinter : PyPrinter
     else if (e.method.isStatic)
     {
       // Static method call without explicit target needs class qualification
-      w(e.method.parent.name).w(".")
+      curPod := m.curType?.pod?.name
+      targetPod := e.method.parent.pod.name
+      typeName := e.method.parent.name
+
+      if (targetPod == "sys" && curPod != "sys")
+      {
+        // Sys pod type from non-sys pod - use sys. prefix
+        w("sys.").w(typeName).w(".")
+      }
+      else if (targetPod != "sys" && curPod != null && curPod != targetPod)
+      {
+        // Cross-pod reference (non-sys to non-sys) - use dynamic import
+        // Pod namespace returns MODULE not CLASS, so need __import__ pattern
+        podPath := PyUtil.podImport(targetPod)
+        w("__import__('${podPath}.${typeName}', fromlist=['${typeName}']).${typeName}.")
+      }
+      else
+      {
+        // Same pod - no prefix needed
+        w(typeName).w(".")
+      }
     }
     else if (m.inStaticContext)
     {
@@ -590,12 +628,16 @@ class PyExprPrinter : PyPrinter
     return t.name
   }
 
-  ** Output primitive type static method call: x.method() -> Type.method(x)
+  ** Output primitive type static method call: x.method() -> sys.Type.method(x)
   private Void primitiveCall(CallExpr e)
   {
     className := primitiveClassName(e.target.ctype)
     methodName := escapeName(e.method.name)
 
+    // Add sys. prefix only when NOT inside the sys pod
+    curPod := m.curType?.pod?.name
+    if (curPod != "sys")
+      w("sys.")
     w(className).w(".").w(methodName).w("(")
     expr(e.target)
     if (!e.args.isEmpty)
@@ -634,11 +676,15 @@ class PyExprPrinter : PyPrinter
       return
     }
 
-    // Primitive type call with safe nav: _safe_.method() -> Type.method(_safe_)
+    // Primitive type call with safe nav: _safe_.method() -> sys.Type.method(_safe_)
     if (e.target != null && isPrimitiveType(e.target.ctype) && e.target.id != ExprId.staticTarget)
     {
       className := primitiveClassName(e.target.ctype)
       methodName := escapeName(e.method.name)
+      // Add sys. prefix for sys pod types when called from non-sys pods
+      curPod := m.curType?.pod?.name
+      if (curPod != "sys")
+        w("sys.")
       w(className).w(".").w(methodName).w("(_safe_")
       if (!e.args.isEmpty)
       {
@@ -720,8 +766,21 @@ class PyExprPrinter : PyPrinter
       podPath := PyUtil.podImport(targetPod)
       w("__import__('${podPath}.${typeName}', fromlist=['${typeName}']).${typeName}")
     }
+    else if (targetPod == "sys" && curPod != "sys")
+    {
+      // Sys pod type referenced from non-sys pod - use namespace prefix
+      w("sys.").w(typeName)
+    }
+    else if (targetPod != "sys" && curPod != null && curPod != targetPod)
+    {
+      // Cross-pod reference (non-sys to non-sys) - use dynamic import
+      // e.g., testSys constructing concurrent::AtomicRef
+      podPath := PyUtil.podImport(targetPod)
+      w("__import__('${podPath}.${typeName}', fromlist=['${typeName}']).${typeName}")
+    }
     else
     {
+      // Same pod (sys) or already imported directly
       w(typeName)
     }
 
@@ -809,7 +868,26 @@ class PyExprPrinter : PyPrinter
     else if (e.field.isStatic)
     {
       // Static field without explicit target - need class prefix
-      w(e.field.parent.name).w(".")
+      curPod := m.curType?.pod?.name
+      targetPod := e.field.parent.pod.name
+      typeName := e.field.parent.name
+
+      if (targetPod == "sys" && curPod != "sys")
+      {
+        // Sys pod type from non-sys pod - use sys. prefix
+        w("sys.").w(typeName).w(".")
+      }
+      else if (targetPod != "sys" && curPod != null && curPod != targetPod)
+      {
+        // Cross-pod reference (non-sys to non-sys) - use dynamic import
+        podPath := PyUtil.podImport(targetPod)
+        w("__import__('${podPath}.${typeName}', fromlist=['${typeName}']).${typeName}.")
+      }
+      else
+      {
+        // Same pod - no prefix needed
+        w(typeName).w(".")
+      }
     }
 
     // useAccessor=false means direct storage access (&field syntax)
@@ -1193,7 +1271,9 @@ class PyExprPrinter : PyPrinter
         // Check for string += null pattern on local var
         if (isStringPlusNullAssign(e))
         {
-          w("(").w(varName).w(" := Str.plus(").w(varName).w(", ")
+          curPod := m.curType?.pod?.name
+          prefix := curPod != "sys" ? "sys." : ""
+          w("(").w(varName).w(" := ${prefix}Str.plus(").w(varName).w(", ")
           expr(e.args.first)
           w("))")
         }
@@ -1293,9 +1373,12 @@ class PyExprPrinter : PyPrinter
     return targetSig == "sys::Str"
   }
 
-  ** Handle string + non-string concatenation using Str.plus()
+  ** Handle string + non-string concatenation using sys.Str.plus()
   private Void stringPlusNonString(ShortcutExpr e)
   {
+    curPod := m.curType?.pod?.name
+    if (curPod != "sys")
+      w("sys.")
     w("Str.plus(")
     expr(e.target)
     w(", ")
@@ -1566,12 +1649,14 @@ class PyExprPrinter : PyPrinter
     argSig := arg.ctype?.toNonNullable?.signature ?: ""
 
     // String indexing: str[i] returns Int codepoint, str[range] returns substring
+    curPod := m.curType?.pod?.name
+    prefix := curPod != "sys" ? "sys." : ""
     if (targetSig == "sys::Str")
     {
       if (argSig == "sys::Range")
       {
-        // str[range] -> Str.get_range(str, range)
-        w("Str.get_range(")
+        // str[range] -> sys.Str.get_range(str, range)
+        w("${prefix}Str.get_range(")
         expr(e.target)
         w(", ")
         expr(arg)
@@ -1579,8 +1664,8 @@ class PyExprPrinter : PyPrinter
       }
       else
       {
-        // str[i] -> Str.get(str, i) returns Int codepoint
-        w("Str.get(")
+        // str[i] -> sys.Str.get(str, i) returns Int codepoint
+        w("${prefix}Str.get(")
         expr(e.target)
         w(", ")
         expr(arg)
@@ -1589,11 +1674,11 @@ class PyExprPrinter : PyPrinter
       return
     }
 
-    // Check if index is a Range - need to use List.get_range() instead
+    // Check if index is a Range - need to use sys.List.get_range() instead
     if (argSig == "sys::Range")
     {
-      // list[range] -> List.get_range(list, range)
-      w("List.get_range(")
+      // list[range] -> sys.List.get_range(list, range)
+      w("${prefix}List.get_range(")
       expr(e.target)
       w(", ")
       expr(arg)
@@ -1627,19 +1712,30 @@ class PyExprPrinter : PyPrinter
     // For same-pod types, use a runtime import to avoid circular import issues
     curPod := m.curType?.pod?.name
     targetPod := e.ctype.pod.name
+    typeName := e.ctype.name
 
     if (curPod != null && curPod != "sys" && curPod == targetPod)
     {
-      // Same pod, non-sys - use dynamic import
-      // __import__('fan.testSys.ObjWrapper', fromlist=['ObjWrapper']).ObjWrapper
-      typeName := e.ctype.name
+      // Same pod, non-sys - use dynamic import to avoid circular imports
+      podPath := PyUtil.podImport(targetPod)
+      w("__import__('${podPath}.${typeName}', fromlist=['${typeName}']).${typeName}")
+    }
+    else if (targetPod == "sys" && curPod != "sys")
+    {
+      // Sys pod type referenced from non-sys pod - use namespace prefix
+      w("sys.").w(typeName)
+    }
+    else if (targetPod != "sys" && curPod != null && curPod != targetPod)
+    {
+      // Cross-pod reference (non-sys to non-sys) - use dynamic import
+      // Pod namespace returns MODULE not CLASS, so need __import__ pattern
       podPath := PyUtil.podImport(targetPod)
       w("__import__('${podPath}.${typeName}', fromlist=['${typeName}']).${typeName}")
     }
     else
     {
-      // Different pod or sys pod - just output class name (imported at top)
-      w(e.ctype.name)
+      // Same pod (sys) or already imported directly
+      w(typeName)
     }
   }
 
@@ -1650,6 +1746,9 @@ class PyExprPrinter : PyPrinter
     if (t != null)
     {
       sig := PyUtil.sanitizeJavaFfi(t.signature)
+      curPod := m.curType?.pod?.name
+      if (curPod != "sys")
+        w("sys.")
       w("Type.find(").str(sig).w(")")
     }
     else
@@ -1664,15 +1763,18 @@ class PyExprPrinter : PyPrinter
     parentSig := e.parent.signature
     slotName := escapeName(e.name)  // Convert to snake_case for Python lookup
 
+    curPod := m.curType?.pod?.name
+    prefix := curPod != "sys" ? "sys." : ""
+
     // Determine if it's a method or field
     if (e.slot != null && e.slot is CField)
     {
-      w("Field.find(").str("${parentSig}.${slotName}").w(")")
+      w("${prefix}Field.find(").str("${parentSig}.${slotName}").w(")")
     }
     else
     {
       // Default to Method
-      w("Method.find(").str("${parentSig}.${slotName}").w(")")
+      w("${prefix}Method.find(").str("${parentSig}.${slotName}").w(")")
     }
   }
 
@@ -1795,6 +1897,9 @@ class PyExprPrinter : PyPrinter
     immutCase := m.closureImmutability(e)
 
     // Generate Func.make_closure(spec, lambda)
+    curPod := m.curType?.pod?.name
+    if (curPod != "sys")
+      w("sys.")
     w("Func.make_closure({")
 
     // Returns type

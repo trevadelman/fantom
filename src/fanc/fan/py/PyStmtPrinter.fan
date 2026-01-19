@@ -582,7 +582,7 @@ class PyStmtPrinter : PyPrinter
     nl
 
     // Wrap the closure with Func.make_closure for proper Fantom Func methods
-    w("_closure_${closureId} = Func.make_closure({")
+    w("_closure_${closureId} = sys.Func.make_closure({")
 
     // Returns type
     retType := sig?.returns?.signature ?: "sys::Void"
@@ -1034,6 +1034,11 @@ class PyStmtPrinter : PyPrinter
       if (c.errType != null)
       {
         w(" ")
+        // For sys pod exception types, add sys. prefix when in non-sys pods
+        curPod := m.curType?.pod?.name
+        errPod := c.errType.pod.name
+        if (errPod == "sys" && curPod != "sys")
+          w("sys.")
         w(c.errType.name)
       }
       else

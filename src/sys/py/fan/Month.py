@@ -68,6 +68,11 @@ class Month(Enum):
         m._locale_full_key = f"{name}Full"
         return m
 
+    @staticmethod
+    def _get(ordinal):
+        """Get Month by ordinal (0-11). Used internally by DateTime."""
+        return Month.vals().get(ordinal)
+
     # Static accessors for each month
     @staticmethod
     def jan(): return Month.vals().get(0)
@@ -156,10 +161,22 @@ class Month(Enum):
         """Get previous month (wraps from Jan to Dec)."""
         return Month.vals().get(11 if self._ordinal == 0 else self._ordinal - 1)
 
+    def __add__(self, val):
+        """Month + Int -> Month (with wrapping)."""
+        return Month.vals().get((self._ordinal + val) % 12)
+
+    def __sub__(self, val):
+        """Month - Int -> Month (with wrapping)."""
+        return Month.vals().get((self._ordinal - val) % 12)
+
     def num_days(self, year):
         """Get number of days in this month for the given year."""
-        from .DateTime import DateTime
-        return DateTime._num_days_in_month(year, self._ordinal)
+        days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        if self._ordinal == 1:  # February
+            # Leap year check
+            if (year & 3) == 0 and (year % 100 != 0 or year % 400 == 0):
+                return 29
+        return days_in_month[self._ordinal]
 
     def to_locale(self, pattern=None, locale=None):
         """Format month using pattern.
@@ -171,7 +188,6 @@ class Month(Enum):
           MMMM -> January-December (full)
         """
         from .Locale import Locale
-        from .Str import Str
         from .Err import ArgErr
 
         if locale is None:
@@ -182,7 +198,7 @@ class Month(Enum):
             return self.__abbr(locale)
 
         # Check if pattern is all 'M' characters
-        if Str.is_every_char(pattern, ord('M')):
+        if pattern and all(c == 'M' for c in pattern):
             length = len(pattern)
             if length == 1:
                 return str(self._ordinal + 1)
