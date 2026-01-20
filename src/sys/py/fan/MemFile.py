@@ -101,9 +101,13 @@ class MemFile(File):
         raise UnsupportedErr.make("MemFile")
 
     def in_(self, buf_size=None):
-        """Return InStream for reading buffer contents."""
-        # Reset buffer position to start for reading
-        self._buf.seek(0)
+        """Return InStream for reading buffer contents.
+
+        For ConstBuf, in_() already resets to position 0.
+        For regular Buf, we need to seek to 0 first.
+        """
+        if not self._buf.is_immutable():
+            self._buf.seek(0)
         return self._buf.in_()
 
     def out(self, append=False, buf_size=None):
@@ -113,13 +117,17 @@ class MemFile(File):
 
     def read_all_buf(self):
         """Read entire buffer content."""
-        self._buf.seek(0)
+        if not self._buf.is_immutable():
+            self._buf.seek(0)
         return self._buf.read_all_buf()
 
     def read_all_str(self, normalize=True):
-        """Read entire content as string."""
-        self._buf.seek(0)
-        return self._buf.read_all_str(normalize)
+        """Read entire content as string.
+
+        For ConstBuf, use in_() which handles position correctly.
+        For regular Buf, seek to 0 and read.
+        """
+        return self.in_().read_all_str(normalize)
 
     def to_str(self):
         """Return URI string."""

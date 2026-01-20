@@ -173,7 +173,10 @@ class Buf(Obj):
         return self._size - self._pos > 0
 
     def seek(self, pos):
-        """Seek to position. Negative seeks from end."""
+        """Seek to position. Negative seeks from end.
+
+        Clears any unread byte/char stacks to ensure clean read state.
+        """
         pos = int(pos)
         if pos < 0:
             pos = self._size + pos
@@ -181,6 +184,9 @@ class Buf(Obj):
             from .Err import IndexErr
             raise IndexErr.make(str(pos))
         self._pos = pos
+        # Clear unread stacks - seeking invalidates any pushed-back bytes/chars
+        self._unread_stack = []
+        self._unread_char_stack = []
         return self
 
     def flip(self):
@@ -349,13 +355,25 @@ class Buf(Obj):
         return self
 
     def write_buf(self, other, n=None):
-        """Write from another Buf."""
+        """Write from another Buf.
+
+        For immutable source buffers (ConstBuf), always read from position 0
+        since they present their full content regardless of internal state.
+        """
         if n is None:
             n = other.remaining()
         n = int(n)
-        other._bytes.seek(other._pos)
-        data = other._bytes.read(n)
-        other._pos += len(data)
+
+        # For immutable buffers, always read from start
+        if other.is_immutable():
+            other._bytes.seek(0)
+            data = other._bytes.read(n)
+            # Don't modify other._pos for immutable bufs
+        else:
+            other._bytes.seek(other._pos)
+            data = other._bytes.read(n)
+            other._pos += len(data)
+
         self._bytes.seek(self._pos)
         self._bytes.write(data)
         self._pos += len(data)
@@ -543,6 +561,73 @@ class Buf(Obj):
         self.write_char(ord(hex_chars[ch & 0xf]))
         self.write_chars(";")
 
+    def write_props(self, props):
+        """Write map as props file format.
+
+        Props files are always UTF-8 encoded.
+        Keys and values are escaped for special characters.
+        """
+        from .Charset import Charset
+
+        # Props files are always UTF-8
+        origCharset = self.charset()
+        self.charset(Charset.utf8())
+
+        try:
+            for key, val in props.items():
+                # Escape key
+                escaped_key = self._escape_props_key(str(key))
+                # Escape value
+                escaped_val = self._escape_props_val(str(val))
+                # Write line
+                self.write_chars(f"{escaped_key}={escaped_val}\n")
+        finally:
+            self.charset(origCharset)
+
+        return self
+
+    def _escape_props_key(self, s):
+        """Escape special characters in props key."""
+        result = []
+        for ch in s:
+            if ch == '=':
+                result.append('\\u003d')
+            elif ch == ':':
+                result.append('\\u003a')
+            elif ch == '\\':
+                result.append('\\\\')
+            elif ch == '\n':
+                result.append('\\n')
+            elif ch == '\r':
+                result.append('\\r')
+            elif ch == '\t':
+                result.append('\\t')
+            elif ord(ch) > 127:
+                result.append(f'\\u{ord(ch):04x}')
+            else:
+                result.append(ch)
+        return ''.join(result)
+
+    def _escape_props_val(self, s):
+        """Escape special characters in props value."""
+        result = []
+        for ch in s:
+            if ch == '\\':
+                result.append('\\\\')
+            elif ch == '\n':
+                result.append('\\n')
+            elif ch == '\r':
+                result.append('\\r')
+            elif ch == '\t':
+                result.append('\\t')
+            elif ch == '/':
+                result.append('\\u002f')
+            elif ord(ch) > 127:
+                result.append(f'\\u{ord(ch):04x}')
+            else:
+                result.append(ch)
+        return ''.join(result)
+
     def write_obj(self, obj, options=None):
         """Write serialized object representation using Fantom serialization format.
 
@@ -714,6 +799,13 @@ class Buf(Obj):
     def read_str_token(self, max_chars=None, func=None):
         """Read string token until whitespace or func returns true."""
         return self.in_().read_str_token(max_chars, func)
+
+    def read_props(self):
+        """Read a properties file format and return as a Map.
+
+        Props files are always UTF-8 encoded.
+        """
+        return self.in_().read_props()
 
     def read_char(self):
         """Read character using charset."""
@@ -1256,13 +1348,48 @@ class BufInStream(InStream):
         return self._buf.remaining()
 
     def read(self):
-        return self._buf.read()
+        """Read single byte.
+
+        Checks BufInStream's own unread stack first, then reads directly from
+        underlying bytes. This enables reading from immutable ConstBuf.
+        """
+        if hasattr(self, '_unread_stack') and self._unread_stack:
+            return self._unread_stack.pop()
+        # Read directly from _bytes to avoid ConstBuf.read() throwing
+        if self._buf._pos >= self._buf._size:
+            return None
+        self._buf._bytes.seek(self._buf._pos)
+        b = self._buf._bytes.read(1)
+        if not b:
+            return None
+        self._buf._pos += 1
+        return b[0]
 
     def read_buf(self, other, n):
         return self._buf.read_buf(other, n)
 
     def unread(self, n):
-        self._buf.unread(n)
+        """Push byte to be read next.
+
+        For immutable ConstBuf: only the exact last-read byte can be unread.
+        Unreading a different byte would modify the stream data, which is not allowed.
+        """
+        n = int(n) & 0xFF
+
+        # For ConstBuf, check if we're trying to modify the data
+        if self._buf.is_immutable():
+            # Get the byte at current position (what would be read next)
+            # If unreading would change what's read, throw ReadonlyErr
+            if self._buf._pos > 0:
+                self._buf._bytes.seek(self._buf._pos - 1)
+                expected = self._buf._bytes.read(1)
+                if expected and expected[0] != n:
+                    from .Err import ReadonlyErr
+                    raise ReadonlyErr.make("ConstBuf is immutable")
+
+        if not hasattr(self, '_unread_stack'):
+            self._unread_stack = []
+        self._unread_stack.append(n)
         return self
 
     def read_all_buf(self):
@@ -1388,27 +1515,48 @@ class BufInStream(InStream):
             self._buf.charset(origCharset)
 
     def read_char(self):
-        """Read character using this stream's charset (not the underlying Buf's charset)."""
+        """Read character using THIS stream's charset (not the underlying Buf's charset).
+
+        This is critical for charset isolation - when the test sets in.charset(UTF-16BE),
+        the InStream should read using UTF-16BE, not the underlying Buf's UTF-8.
+        """
         # Check unread char stack first
         if hasattr(self, '_unread_char_stack') and self._unread_char_stack:
             return self._unread_char_stack.pop()
         if self._buf._pos >= self._buf._size:
             return None
+
+        # Use THIS stream's charset, not the underlying Buf's charset
         charset_name = self._get_python_encoding()
         self._buf._bytes.seek(self._buf._pos)
-        # For UTF-8, read up to 4 bytes to decode one char
-        for byte_count in range(1, 5):
-            if self._buf._pos + byte_count > self._buf._size:
-                break
-            self._buf._bytes.seek(self._buf._pos)
-            data = self._buf._bytes.read(byte_count)
+
+        # Determine bytes per char based on encoding
+        if 'utf-16' in charset_name.lower():
+            # UTF-16 is 2 bytes per char
+            if self._buf._pos + 2 > self._buf._size:
+                return None
+            data = self._buf._bytes.read(2)
             try:
                 ch = data.decode(charset_name)
-                if len(ch) == 1:
-                    self._buf._pos += byte_count
-                    return ord(ch)
+                if len(ch) >= 1:
+                    self._buf._pos += 2
+                    return ord(ch[0])
             except:
-                continue
+                return None
+        else:
+            # UTF-8 and others: variable length, read up to 4 bytes
+            for byte_count in range(1, 5):
+                if self._buf._pos + byte_count > self._buf._size:
+                    break
+                self._buf._bytes.seek(self._buf._pos)
+                data = self._buf._bytes.read(byte_count)
+                try:
+                    ch = data.decode(charset_name)
+                    if len(ch) == 1:
+                        self._buf._pos += byte_count
+                        return ord(ch)
+                except:
+                    continue
         return None
 
     def _get_python_encoding(self):
@@ -1484,7 +1632,11 @@ class BufInStream(InStream):
         return ''.join(chars)
 
     def read_all_str(self, normalize=True):
-        """Read all remaining as string using this stream's charset."""
+        """Read all remaining as string using this stream's charset.
+
+        Direct implementation that doesn't delegate to _buf.read_all_str(),
+        because ConstBuf.read_all_str() throws ReadonlyErr.
+        """
         self._buf._bytes.seek(self._buf._pos)
         data = self._buf._bytes.read(self._buf._size - self._buf._pos)
         self._buf._pos = self._buf._size
