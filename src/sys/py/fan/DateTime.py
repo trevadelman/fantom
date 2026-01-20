@@ -804,6 +804,12 @@ class DateTime(Obj):
 
         return day
 
+    @staticmethod
+    def _invalid_num_pattern(c, count):
+        """Check if pattern count is invalid and raise ArgErr"""
+        from .Err import ArgErr
+        raise ArgErr.make(f"Invalid pattern: {c * count}")
+
     def to_locale(self, pattern=None, locale=None):
         """Format DateTime using locale pattern"""
         from .Locale import Locale
@@ -831,14 +837,16 @@ class DateTime(Obj):
             while i + count < len(pattern) and pattern[i + count] == c:
                 count += 1
 
-            if c == 'Y':  # Year
+            if c == 'Y':  # Year - valid: YY, YYYY
+                if count == 1 or count == 3 or count > 4:
+                    DateTime._invalid_num_pattern(c, count)
                 if count >= 4:
                     result.append(f"{self._year:04d}")
                 elif count == 2:
                     result.append(f"{self._year % 100:02d}")
-                else:
-                    result.append(str(self._year))
-            elif c == 'M':  # Month
+            elif c == 'M':  # Month - valid: M, MM, MMM, MMMM
+                if count > 4:
+                    DateTime._invalid_num_pattern(c, count)
                 if count >= 4:
                     # Use locale-aware month name via Month native
                     from .Month import Month as MonthNative
@@ -853,27 +861,33 @@ class DateTime(Obj):
                     result.append(f"{self._month.ordinal() + 1:02d}")
                 else:
                     result.append(str(self._month.ordinal() + 1))
-            elif c == 'D':  # Day of month
+            elif c == 'D':  # Day of month - valid: D, DD, DDD
+                if count > 3:
+                    DateTime._invalid_num_pattern(c, count)
                 if count >= 3:
                     result.append(Date._ordinal(self._day))
                 elif count == 2:
                     result.append(f"{self._day:02d}")
                 else:
                     result.append(str(self._day))
-            elif c == 'W':  # Weekday
+            elif c == 'W':  # Weekday - valid: WWW, WWWW
+                if count < 3 or count > 4:
+                    DateTime._invalid_num_pattern(c, count)
                 wd = self.weekday().ordinal()
                 if count >= 4:
                     result.append(weekday_full[wd])
-                elif count == 3:
-                    result.append(weekday_abbr[wd])
                 else:
-                    result.append(weekday_abbr[wd][:count])
-            elif c == 'h':  # Hour (24-hour, 0-23)
+                    result.append(weekday_abbr[wd])
+            elif c == 'h':  # Hour (24-hour, 0-23) - valid: h, hh
+                if count > 2:
+                    DateTime._invalid_num_pattern(c, count)
                 if count >= 2:
                     result.append(f"{self._hour:02d}")
                 else:
                     result.append(str(self._hour))
-            elif c == 'k':  # Hour (12-hour, 1-12)
+            elif c == 'k':  # Hour (12-hour, 1-12) - valid: k, kk
+                if count > 2:
+                    DateTime._invalid_num_pattern(c, count)
                 h = self._hour % 12
                 if h == 0:
                     h = 12
@@ -881,12 +895,16 @@ class DateTime(Obj):
                     result.append(f"{h:02d}")
                 else:
                     result.append(str(h))
-            elif c == 'm':  # Minute
+            elif c == 'm':  # Minute - valid: m, mm
+                if count > 2:
+                    DateTime._invalid_num_pattern(c, count)
                 if count >= 2:
                     result.append(f"{self._min:02d}")
                 else:
                     result.append(str(self._min))
-            elif c == 's':  # Second
+            elif c == 's':  # Second - valid: s, ss
+                if count > 2:
+                    DateTime._invalid_num_pattern(c, count)
                 if count >= 2:
                     result.append(f"{self._sec:02d}")
                 else:
@@ -922,12 +940,16 @@ class DateTime(Obj):
                     frac %= tenth
                     tenth //= 10
                 result.append(frac_str)
-            elif c == 'a':  # Lowercase am/pm
+            elif c == 'a':  # Lowercase am/pm - valid: a, aa
+                if count > 2:
+                    DateTime._invalid_num_pattern(c, count)
                 if count == 1:
                     result.append("a" if self._hour < 12 else "p")
                 else:
                     result.append("am" if self._hour < 12 else "pm")
-            elif c == 'A':  # Uppercase AM/PM
+            elif c == 'A':  # Uppercase AM/PM - valid: A, AA
+                if count > 2:
+                    DateTime._invalid_num_pattern(c, count)
                 if count == 1:
                     result.append("A" if self._hour < 12 else "P")
                 else:
