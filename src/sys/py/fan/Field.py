@@ -181,10 +181,25 @@ class Field(Slot):
             val: Value to set
             check_const: If True, raise error for const fields
         """
+        from .ObjUtil import ObjUtil
+        from .Err import ReadonlyErr
+
         # Check const constraint
-        if check_const and self.is_const():
-            from .Err import ReadonlyErr
-            raise ReadonlyErr.make(f"Cannot set const field {self.qname()}")
+        if self.is_const():
+            if check_const:
+                raise ReadonlyErr.make(f"Cannot set const field {self.qname()}")
+            # Even when check_const=False (construction mode), verify value is immutable
+            # This matches JS behavior: const fields can only hold immutable values
+            elif val is not None and not ObjUtil.is_immutable(val):
+                raise ReadonlyErr.make(f"Cannot set const field {self.qname()} with mutable value")
+
+        # When check_const=True, check if the target object is already
+        # immutable (const class after construction). This prevents setting
+        # any field on const objects after they're fully constructed.
+        # When check_const=False, we're in construction mode and skip this.
+        if check_const and obj is not None and not self.is_static():
+            if ObjUtil.is_immutable(obj):
+                raise ReadonlyErr.make(f"Cannot set field on immutable object: {self.qname()}")
 
         # Type check: verify value type fits field type
         # This matches Java/JS behavior which validates generic types at runtime
@@ -212,37 +227,46 @@ class Field(Slot):
         if obj is None:
             return
 
-        # Try setter accessor method with trailing underscore first (transpiler pattern)
-        # Transpiled code generates: def map_(self, _val_=None) for field 'map'
-        setter_name = f"{self._name}_"
-        if hasattr(obj, setter_name):
-            attr = getattr(obj, setter_name)
-            if callable(attr):
-                # Check if method accepts a value parameter (combined getter/setter)
-                import inspect
-                try:
-                    sig = inspect.signature(attr)
-                    # If method takes any parameters (besides self), it's a setter
-                    if len(sig.parameters) > 0:
-                        attr(val)  # Call setter method with value
-                        return
-                except (ValueError, TypeError):
-                    pass
+        # For const fields (with checkConst=False) or when setting None,
+        # use direct field access to bypass the combined getter/setter pattern.
+        # The transpiled pattern uses None as a sentinel for "get", so calling
+        # setter(None) would trigger a get, not a set.
+        # Also use direct access for const fields to match JS behavior.
+        use_direct_access = (val is None) or (not check_const and self.is_const())
 
-        # Try setter accessor method without trailing underscore (Fantom pattern)
-        if hasattr(obj, self._name):
-            attr = getattr(obj, self._name)
-            if callable(attr):
-                import inspect
-                try:
-                    sig = inspect.signature(attr)
-                    if len(sig.parameters) > 0:
-                        attr(val)
-                        return
-                except (ValueError, TypeError):
-                    pass
+        if not use_direct_access:
+            # Try setter accessor method with trailing underscore first (transpiler pattern)
+            # Transpiled code generates: def map_(self, _val_=None) for field 'map'
+            setter_name = f"{self._name}_"
+            if hasattr(obj, setter_name):
+                attr = getattr(obj, setter_name)
+                if callable(attr):
+                    # Check if method accepts a value parameter (combined getter/setter)
+                    import inspect
+                    try:
+                        sig = inspect.signature(attr)
+                        # If method takes any parameters (besides self), it's a setter
+                        if len(sig.parameters) > 0:
+                            attr(val)  # Call setter method with value
+                            return
+                    except (ValueError, TypeError):
+                        pass
 
-        # Fallback: Set the private field directly with trailing underscore (_fieldName_)
+            # Try setter accessor method without trailing underscore (Fantom pattern)
+            if hasattr(obj, self._name):
+                attr = getattr(obj, self._name)
+                if callable(attr):
+                    import inspect
+                    try:
+                        sig = inspect.signature(attr)
+                        if len(sig.parameters) > 0:
+                            attr(val)
+                            return
+                    except (ValueError, TypeError):
+                        pass
+
+        # Direct field access: Set the private field directly
+        # Try with trailing underscore first (_fieldName_)
         field_name2 = f"_{self._name}_"
         if hasattr(obj, field_name2):
             setattr(obj, field_name2, val)

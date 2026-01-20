@@ -923,14 +923,25 @@ class PyStmtPrinter : PyPrinter
       // Unwrap coerces to check for assignment
       unwrapped := unwrapCoerce(s.expr)
 
-      // Handle return with assignment: return x = 5 -> x = 5; return x
+      // Handle return with assignment: return x = 5
       if (unwrapped.id == ExprId.assign)
       {
         assign := unwrapped as BinaryExpr
-        // Execute assignment first
+
+        // For field assignments with leave=true, ObjUtil.setattr_return already
+        // returns the assigned value. Just return it directly.
+        // This avoids calling the getter which would trigger extra side effects.
+        if (assign.lhs.id == ExprId.field)
+        {
+          w("return ")
+          expr(s.expr)
+          eos
+          return
+        }
+
+        // For local var assignments: execute assignment, then return the var
         expr(s.expr)
         eos
-        // Then return the value
         w("return ")
         // Return the LHS (the variable that now holds the assigned value)
         // This avoids re-evaluating the RHS which may have side effects

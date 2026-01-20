@@ -776,9 +776,31 @@ class ObjUtil:
         # For list, route to List
         if isinstance(obj, list):
             from .List import List
+            # For plain Python lists, handle common methods directly
+            if not isinstance(obj, List):
+                if py_name == "size" or name == "size":
+                    return len(obj)
+                if py_name == "get" or name == "get":
+                    if call_args:
+                        return obj[call_args[0]]
+                    raise IndexError("Index required for get()")
+                if py_name == "is_empty" or name == "isEmpty":
+                    return len(obj) == 0
             # Try snake_case first, then original camelCase
             method = getattr(List, py_name, None) or getattr(List, name, None)
             if method:
+                # Check if it's a property - if so, access it on the object
+                if isinstance(method, property):
+                    if call_args:
+                        # Setter call
+                        setattr(obj, py_name if hasattr(List, py_name) else name, call_args[0])
+                        return
+                    else:
+                        # Getter call - for plain Python lists, use len()
+                        if (py_name == "size" or name == "size") and not isinstance(obj, List):
+                            return len(obj)
+                        # For List instances, use the property
+                        return getattr(obj, py_name if hasattr(obj, py_name) else name)
                 return method(obj, *call_args)
             raise AttributeError(f"List.{name}")
 
