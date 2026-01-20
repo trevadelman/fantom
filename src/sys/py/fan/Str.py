@@ -688,30 +688,87 @@ class Str(Obj):
 
     @staticmethod
     def locale_upper(self):
-        """Convert to uppercase using current locale"""
+        """Convert to uppercase using current locale.
+
+        Turkish special cases:
+        - 'i' (U+0069) -> 'I' (U+0130 dotted I) in Turkish
+        - 'ı' (U+0131) -> 'I' (U+0049) in Turkish
+        """
+        from .Locale import Locale
+        locale = Locale.cur()
+        lang = locale.lang() if hasattr(locale, 'lang') else 'en'
+
+        if lang == 'tr':
+            # Turkish special case handling
+            result = []
+            for ch in self:
+                c = ord(ch)
+                if c == 0x69:  # 'i' (regular lowercase i)
+                    result.append('\u0130')  # 'İ' (dotted uppercase I)
+                elif c == 0x131:  # 'ı' (dotless lowercase i)
+                    result.append('I')  # 'I' (regular uppercase I)
+                else:
+                    result.append(ch.upper())
+            return ''.join(result)
         return self.upper()
 
     @staticmethod
     def locale_lower(self):
-        """Convert to lowercase using current locale"""
+        """Convert to lowercase using current locale.
+
+        Turkish special cases:
+        - 'I' (U+0049) -> 'ı' (U+0131 dotless i) in Turkish
+        - 'İ' (U+0130) -> 'i' (U+0069) in Turkish
+        """
+        from .Locale import Locale
+        locale = Locale.cur()
+        lang = locale.lang() if hasattr(locale, 'lang') else 'en'
+
+        if lang == 'tr':
+            # Turkish special case handling
+            result = []
+            for ch in self:
+                c = ord(ch)
+                if c == 0x49:  # 'I' (regular uppercase I)
+                    result.append('\u0131')  # 'ı' (dotless lowercase i)
+                elif c == 0x130:  # 'İ' (dotted uppercase I)
+                    result.append('i')  # 'i' (regular lowercase i)
+                else:
+                    result.append(ch.lower())
+            return ''.join(result)
         return self.lower()
 
     @staticmethod
     def locale_compare(self, that):
-        """Compare strings using locale rules"""
-        return Str.compare(self, that)
+        """Compare strings using locale rules (case-insensitive)"""
+        # Locale compare is case-insensitive - compare lowercased versions
+        self_lower = Str.locale_lower(self)
+        that_lower = Str.locale_lower(that)
+        return Str.compare(self_lower, that_lower)
 
     @staticmethod
     def locale_capitalize(self):
-        """Capitalize using current locale"""
-        return self.capitalize()
+        """Capitalize using current locale.
+
+        JS pattern: upper[0] + self.substring(1)
+        Uses localeUpper to get correct first char for locale.
+        """
+        if len(self) == 0:
+            return self
+        upper = Str.locale_upper(self)
+        return upper[0] + self[1:]
 
     @staticmethod
     def locale_decapitalize(self):
-        """Decapitalize using current locale"""
+        """Decapitalize using current locale.
+
+        JS pattern: lower[0] + self.substring(1)
+        Uses localeLower to get correct first char for locale.
+        """
         if len(self) == 0:
             return self
-        return self[0].lower() + self[1:]
+        lower = Str.locale_lower(self)
+        return lower[0] + self[1:]
 
     @staticmethod
     def each_line(self, f):
