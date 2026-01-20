@@ -527,7 +527,45 @@ class Type(Obj):
         Raises:
             Err: If type is abstract and cannot be instantiated
         """
+        # Try to import and call the class's make() method FIRST
+        # This handles abstract types with factory methods (e.g., File.make(Uri) returns LocalFile)
+        if "::" in self._qname:
+            parts = self._qname.split("::")
+            if len(parts) == 2:
+                pod, name = parts
+                cls = None
+                try:
+                    module = __import__(f'fan.{pod}.{name}', fromlist=[name])
+                    cls = getattr(module, name, None)
+                except ImportError:
+                    # For util:: types, try to find them in sys namespace
+                    if pod == "util":
+                        try:
+                            module = __import__(f'fan.sys.{name}', fromlist=[name])
+                            cls = getattr(module, name, None)
+                        except ImportError:
+                            pass
+
+                if cls is not None and hasattr(cls, 'make'):
+                    # Only use class's make() if it has args OR class has a factory make
+                    # Abstract classes with no factory make should fail below
+                    if args is not None:
+                        # Get unwrapped args (from cvar if needed)
+                        unwrapped_args = []
+                        if hasattr(args, '__iter__') and not isinstance(args, str):
+                            for arg in args:
+                                if hasattr(arg, '_val'):
+                                    unwrapped_args.append(arg._val)
+                                else:
+                                    unwrapped_args.append(arg)
+                        else:
+                            unwrapped_args = [args]
+                        # Call make with args (this is a factory call like File.make(Uri))
+                        return cls.make(*unwrapped_args)
+
         # Check if type is abstract (cannot be instantiated)
+        # Only checked after trying class's make() method, since abstract classes
+        # can have factory methods that return concrete subclasses
         from .Slot import FConst
         if self._type_flags & FConst.Abstract:
             from .Err import Err
@@ -2848,6 +2886,24 @@ class FuncType(Type):
 
         return result
 
+    def method(self, name, checked=True):
+        """Get method with type parameters substituted.
+
+        When you get 'call' from |Int->Str|, returns method with:
+        - Return type: Str (not R)
+        - Param types: Int (not A)
+        """
+        # Get method from base Func type
+        baseFuncType = Type.find("sys::Func")
+        baseMethod = baseFuncType.method(name, False)
+        if baseMethod is None:
+            if checked:
+                from .Err import UnknownSlotErr
+                raise UnknownSlotErr.make(f"{self.qname()}.{name}")
+            return None
+        # Return parameterized method wrapper
+        return ParameterizedFuncMethod(baseMethod, self._params, self._ret, self)
+
     def __eq__(self, other):
         if isinstance(other, FuncType):
             if len(self._params) != len(other._params):
@@ -2860,6 +2916,94 @@ class FuncType(Type):
 
     def __hash__(self):
         return hash(self.signature())
+
+
+class ParameterizedFuncMethod:
+    """Wrapper around a generic Func Method that substitutes type parameters.
+
+    Used by FuncType to return methods with concrete types instead of A, B, R, etc.
+    """
+
+    def __init__(self, baseMethod, paramTypes, retType, owner):
+        self._base = baseMethod
+        self._param_types = paramTypes  # List of actual param types
+        self._ret_type = retType  # Actual return type
+        self._owner = owner
+
+    def typeof(self):
+        """Return Method type for reflection"""
+        return Type.find("sys::Method")
+
+    def _substitute_type(self, t):
+        """Substitute A, B, C... and R in a type signature."""
+        if t is None:
+            return t
+
+        sig = t.signature() if hasattr(t, 'signature') else str(t)
+
+        # Check for R (return type)
+        if sig == "sys::R" or sig == "R":
+            return self._ret_type
+        if sig == "sys::R?" or sig == "R?":
+            return self._ret_type.to_nullable() if hasattr(self._ret_type, 'to_nullable') else self._ret_type
+
+        # Check for A, B, C... (parameter types)
+        param_names = ["A", "B", "C", "D", "E", "F", "G", "H"]
+        for i, param_name in enumerate(param_names):
+            if sig == f"sys::{param_name}" or sig == param_name:
+                if i < len(self._param_types):
+                    return self._param_types[i]
+                return Type.find("sys::Obj")
+            if sig == f"sys::{param_name}?" or sig == f"{param_name}?":
+                if i < len(self._param_types):
+                    pt = self._param_types[i]
+                    return pt.to_nullable() if hasattr(pt, 'to_nullable') else pt
+                return Type.find("sys::Obj")
+
+        return t
+
+    def name(self):
+        return self._base.name()
+
+    def qname(self):
+        return f"{self._owner.qname()}.{self._base.name()}"
+
+    def returns(self):
+        """Return type with R substituted"""
+        baseRet = self._base.returns()
+        return self._substitute_type(baseRet)
+
+    def params(self):
+        """Parameters with A, B, C... substituted"""
+        baseParams = self._base.params()
+        if baseParams is None:
+            return []
+        return [ParameterizedFuncParam(p, self) for p in baseParams]
+
+    def is_static(self):
+        return self._base.is_static() if hasattr(self._base, 'is_static') else False
+
+    def is_public(self):
+        return self._base.is_public() if hasattr(self._base, 'is_public') else True
+
+    def call(self, *args):
+        return self._base.call(*args)
+
+
+class ParameterizedFuncParam:
+    """Wrapper around a Param that substitutes type parameters for Func."""
+
+    def __init__(self, baseParam, method):
+        self._base = baseParam
+        self._method = method
+
+    def name(self):
+        return self._base.name()
+
+    def type_(self):
+        """Type with A, B, C..., R substituted"""
+        baseType = self._base.type_()
+        return self._method._substitute_type(baseType)
 
 
 class GenericParamType(Type):
