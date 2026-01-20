@@ -528,8 +528,8 @@ class Type(Obj):
             Err: If type is abstract and cannot be instantiated
         """
         # Check if type is abstract (cannot be instantiated)
-        # Abstract flag is 0x0400 in FConst
-        if self._type_flags & 0x0400:
+        from .Slot import FConst
+        if self._type_flags & FConst.Abstract:
             from .Err import Err
             raise Err.make(f"Cannot instantiate abstract class: {self._qname}")
 
@@ -724,8 +724,8 @@ class Type(Obj):
 
     def is_facet(self):
         """Check if this type is a facet. Uses transpiler flags if available."""
-        # Check transpiler-provided flag (0x80000 = Facet)
-        if self._type_flags & 0x80000:
+        from .Slot import FConst
+        if self._type_flags & FConst.Facet:
             return True
         return False
 
@@ -734,15 +734,15 @@ class Type(Obj):
 
     def is_internal(self):
         """Check if this type is internal. Uses transpiler flags if available."""
-        # Check transpiler-provided flag (0x8 = Internal)
-        if self._type_flags & 0x00000008:
+        from .Slot import FConst
+        if self._type_flags & FConst.Internal:
             return True
         return False
 
     def is_mixin(self):
         """Check if this type is a mixin. Uses transpiler flags if available."""
-        # Check transpiler-provided flag (0x20000 = Mixin)
-        if self._type_flags & 0x20000:
+        from .Slot import FConst
+        if self._type_flags & FConst.Mixin:
             return True
         return False
 
@@ -760,11 +760,11 @@ class Type(Obj):
         """Check if this type is a const class (immutable).
 
         Const classes are always immutable. This checks:
-        1. Transpiler-provided flag (0x00002000 = FConst.Const)
+        1. Transpiler-provided flag (FConst.Const)
         2. Known const types in sys (for hand-written runtime classes)
         """
-        # Check transpiler-provided flag (0x00002000 = FConst.Const)
-        if self._type_flags & 0x00002000:
+        from .Slot import FConst
+        if self._type_flags & FConst.Const:
             return True
         # For hand-written sys types, check known const types
         return self._qname in Type._CONST_TYPES
@@ -1063,9 +1063,10 @@ class Type(Obj):
             sig = inspect.signature(func)
         except (ValueError, TypeError):
             # Can't get signature, create method with no params
-            flags = 0x0001  # Public
+            from .Slot import FConst
+            flags = FConst.Public
             if is_static:
-                flags |= 0x0800  # Static
+                flags |= FConst.Static
             return Method(self, name, flags, Type.find("sys::Obj"), [], {}, func)
 
         # Check if first param is 'self' - if so, this is an instance method
@@ -1094,9 +1095,10 @@ class Type(Obj):
         returns_type = self._infer_return_type(name)
 
         # Build flags
-        flags = 0x0001  # Public
+        from .Slot import FConst
+        flags = FConst.Public
         if fantom_is_static:
-            flags |= 0x0800  # Static
+            flags |= FConst.Static
 
         return Method(self, name, flags, returns_type, params, {}, func)
 
@@ -1266,6 +1268,7 @@ class Type(Obj):
         """
         from .Method import Method
         from .Param import Param
+        from .Slot import FConst
 
         V = GenericParamType.get("V")
         L = GenericParamType.get("L")  # L represents "this list type"
@@ -1273,34 +1276,34 @@ class Type(Obj):
         methods = []
 
         # get(Int index): V
-        methods.append(Method(self, "get", 0x0001, V, [Param("index", Type.find("sys::Int"), False)], {}))
+        methods.append(Method(self, "get", FConst.Public, V, [Param("index", Type.find("sys::Int"), False)], {}))
         # getSafe(Int index, V? def): V?
-        methods.append(Method(self, "getSafe", 0x0001, V_nullable, [Param("index", Type.find("sys::Int"), False), Param("def", V_nullable, True)], {}))
+        methods.append(Method(self, "getSafe", FConst.Public, V_nullable, [Param("index", Type.find("sys::Int"), False), Param("def", V_nullable, True)], {}))
         # first: V?
-        methods.append(Method(self, "first", 0x0001, V_nullable, [], {}))
+        methods.append(Method(self, "first", FConst.Public, V_nullable, [], {}))
         # last: V?
-        methods.append(Method(self, "last", 0x0001, V_nullable, [], {}))
+        methods.append(Method(self, "last", FConst.Public, V_nullable, [], {}))
         # set(Int, V): L (this list type)
-        methods.append(Method(self, "set", 0x0001, L, [Param("index", Type.find("sys::Int"), False), Param("val", V, False)], {}))
+        methods.append(Method(self, "set", FConst.Public, L, [Param("index", Type.find("sys::Int"), False), Param("val", V, False)], {}))
         # add(V): L (this list type)
-        methods.append(Method(self, "add", 0x0001, L, [Param("val", V, False)], {}))
+        methods.append(Method(self, "add", FConst.Public, L, [Param("val", V, False)], {}))
         # insert(Int, V): L (this list type)
-        methods.append(Method(self, "insert", 0x0001, L, [Param("index", Type.find("sys::Int"), False), Param("val", V, False)], {}))
+        methods.append(Method(self, "insert", FConst.Public, L, [Param("index", Type.find("sys::Int"), False), Param("val", V, False)], {}))
         # remove(V): V?
-        methods.append(Method(self, "remove", 0x0001, V_nullable, [Param("val", V, False)], {}))
+        methods.append(Method(self, "remove", FConst.Public, V_nullable, [Param("val", V, False)], {}))
         # removeAt(Int): V
-        methods.append(Method(self, "removeAt", 0x0001, V, [Param("index", Type.find("sys::Int"), False)], {}))
+        methods.append(Method(self, "removeAt", FConst.Public, V, [Param("index", Type.find("sys::Int"), False)], {}))
         # size: Int
-        methods.append(Method(self, "size", 0x0001, Type.find("sys::Int"), [], {}))
+        methods.append(Method(self, "size", FConst.Public, Type.find("sys::Int"), [], {}))
         # isEmpty: Bool
-        methods.append(Method(self, "isEmpty", 0x0001, Type.find("sys::Bool"), [], {}))
+        methods.append(Method(self, "isEmpty", FConst.Public, Type.find("sys::Bool"), [], {}))
         # contains(V): Bool
-        methods.append(Method(self, "contains", 0x0001, Type.find("sys::Bool"), [Param("val", V, False)], {}))
+        methods.append(Method(self, "contains", FConst.Public, Type.find("sys::Bool"), [Param("val", V, False)], {}))
         # index(V): Int?
-        methods.append(Method(self, "index", 0x0001, Type.find("sys::Int?"), [Param("val", V, False)], {}))
+        methods.append(Method(self, "index", FConst.Public, Type.find("sys::Int?"), [Param("val", V, False)], {}))
         # each(|V,Int| f): Void - closure receives (val, index)
         eachFuncType = FuncType([V, Type.find("sys::Int")], Type.find("sys::Void"))
-        methods.append(Method(self, "each", 0x0001, Type.find("sys::Void"), [Param("f", eachFuncType, False)], {}))
+        methods.append(Method(self, "each", FConst.Public, Type.find("sys::Void"), [Param("f", eachFuncType, False)], {}))
 
         # Additional methods used by testReflect
         # Use R for map's return element type
@@ -1308,11 +1311,11 @@ class Type(Obj):
 
         # map(|V,Int->R| f): R[]
         mapFuncType = FuncType([V, Type.find("sys::Int")], R)
-        methods.append(Method(self, "map", 0x0001, R.to_list_of(), [Param("f", mapFuncType, False)], {}))
+        methods.append(Method(self, "map", FConst.Public, R.to_list_of(), [Param("f", mapFuncType, False)], {}))
 
         # flatMap(|V,Int->R[]| f): R[]
         flatMapFuncType = FuncType([V, Type.find("sys::Int")], R.to_list_of())
-        methods.append(Method(self, "flatMap", 0x0001, R.to_list_of(), [Param("f", flatMapFuncType, False)], {}))
+        methods.append(Method(self, "flatMap", FConst.Public, R.to_list_of(), [Param("f", flatMapFuncType, False)], {}))
 
         return methods
 
@@ -1325,6 +1328,7 @@ class Type(Obj):
         """
         from .Method import Method
         from .Param import Param
+        from .Slot import FConst
 
         K = GenericParamType.get("K")
         V = GenericParamType.get("V")
@@ -1333,32 +1337,32 @@ class Type(Obj):
         methods = []
 
         # get(K, V? def): V?
-        methods.append(Method(self, "get", 0x0001, V_nullable, [Param("key", K, False), Param("def", V_nullable, True)], {}))
+        methods.append(Method(self, "get", FConst.Public, V_nullable, [Param("key", K, False), Param("def", V_nullable, True)], {}))
         # getSafe(K, V?): V?
-        methods.append(Method(self, "getSafe", 0x0001, V_nullable, [Param("key", K, False), Param("def", V_nullable, True)], {}))
+        methods.append(Method(self, "getSafe", FConst.Public, V_nullable, [Param("key", K, False), Param("def", V_nullable, True)], {}))
         # set(K, V): M (This map type)
-        methods.append(Method(self, "set", 0x0001, M, [Param("key", K, False), Param("val", V, False)], {}))
+        methods.append(Method(self, "set", FConst.Public, M, [Param("key", K, False), Param("val", V, False)], {}))
         # add(K, V): M (This map type)
-        methods.append(Method(self, "add", 0x0001, M, [Param("key", K, False), Param("val", V, False)], {}))
+        methods.append(Method(self, "add", FConst.Public, M, [Param("key", K, False), Param("val", V, False)], {}))
         # remove(K): V?
-        methods.append(Method(self, "remove", 0x0001, V_nullable, [Param("key", K, False)], {}))
+        methods.append(Method(self, "remove", FConst.Public, V_nullable, [Param("key", K, False)], {}))
         # containsKey(K): Bool
-        methods.append(Method(self, "containsKey", 0x0001, Type.find("sys::Bool"), [Param("key", K, False)], {}))
+        methods.append(Method(self, "containsKey", FConst.Public, Type.find("sys::Bool"), [Param("key", K, False)], {}))
         # size: Int
-        methods.append(Method(self, "size", 0x0001, Type.find("sys::Int"), [], {}))
+        methods.append(Method(self, "size", FConst.Public, Type.find("sys::Int"), [], {}))
         # isEmpty: Bool
-        methods.append(Method(self, "isEmpty", 0x0001, Type.find("sys::Bool"), [], {}))
+        methods.append(Method(self, "isEmpty", FConst.Public, Type.find("sys::Bool"), [], {}))
         # keys: K[]
-        methods.append(Method(self, "keys", 0x0001, K.to_list_of(), [], {}))
+        methods.append(Method(self, "keys", FConst.Public, K.to_list_of(), [], {}))
         # vals: V[]
-        methods.append(Method(self, "vals", 0x0001, V.to_list_of(), [], {}))
+        methods.append(Method(self, "vals", FConst.Public, V.to_list_of(), [], {}))
         # each(|V,K| f): Void - closure receives (val, key) - V not V?
         eachFuncType = FuncType([V, K], Type.find("sys::Void"))
-        methods.append(Method(self, "each", 0x0001, Type.find("sys::Void"), [Param("f", eachFuncType, False)], {}))
+        methods.append(Method(self, "each", FConst.Public, Type.find("sys::Void"), [Param("f", eachFuncType, False)], {}))
         # def: V? - the default value for missing keys
         from .Field import Field
         fields = []
-        fields.append(Field(self, "def", 0x0001, V_nullable, {}, None))
+        fields.append(Field(self, "def", FConst.Public, V_nullable, {}, None))
         return methods + fields
 
     def _obj_metadata(self):
@@ -1380,48 +1384,48 @@ class Type(Obj):
         """
         from .Method import Method
         from .Param import Param
+        from .Slot import FConst
 
         methods = []
 
         # make(): Obj - protected constructor
         # In Fantom, make is the constructor and appears as a slot
-        # Use 0x0004 (Protected) | 0x0100 (Ctor) = 0x0104
-        methods.append(Method(self, "make", 0x0104, self, [], {}))
+        methods.append(Method(self, "make", FConst.Protected | FConst.Ctor, self, [], {}))
 
-        # equals(Obj? that): Bool
-        methods.append(Method(self, "equals", 0x1001, Type.find("sys::Bool"),
+        # equals(Obj? that): Bool - virtual
+        methods.append(Method(self, "equals", FConst.Public | FConst.Virtual, Type.find("sys::Bool"),
                               [Param("that", Type.find("sys::Obj?"), False)], {}))
 
-        # compare(Obj that): Int
-        methods.append(Method(self, "compare", 0x1001, Type.find("sys::Int"),
+        # compare(Obj that): Int - virtual
+        methods.append(Method(self, "compare", FConst.Public | FConst.Virtual, Type.find("sys::Int"),
                               [Param("that", Type.find("sys::Obj"), False)], {}))
 
-        # hash(): Int - uses hash_ because hash is a Python builtin
-        methods.append(Method(self, "hash_", 0x1001, Type.find("sys::Int"), [], {}))
+        # hash(): Int - uses hash_ because hash is a Python builtin, virtual
+        methods.append(Method(self, "hash_", FConst.Public | FConst.Virtual, Type.find("sys::Int"), [], {}))
 
-        # to_str(): Str
-        methods.append(Method(self, "to_str", 0x1001, Type.find("sys::Str"), [], {}))
+        # to_str(): Str - virtual
+        methods.append(Method(self, "to_str", FConst.Public | FConst.Virtual, Type.find("sys::Str"), [], {}))
 
-        # trap(Str name, Obj?[]? args): Obj?
-        methods.append(Method(self, "trap", 0x1001, Type.find("sys::Obj?"),
+        # trap(Str name, Obj?[]? args): Obj? - virtual
+        methods.append(Method(self, "trap", FConst.Public | FConst.Virtual, Type.find("sys::Obj?"),
                               [Param("name", Type.find("sys::Str"), False),
                                Param("args", Type.find("sys::Obj?[]?"), True)], {}))
 
         # is_immutable(): Bool
-        methods.append(Method(self, "is_immutable", 0x0001, Type.find("sys::Bool"), [], {}))
+        methods.append(Method(self, "is_immutable", FConst.Public, Type.find("sys::Bool"), [], {}))
 
         # to_immutable(): Obj
-        methods.append(Method(self, "to_immutable", 0x0001, self, [], {}))
+        methods.append(Method(self, "to_immutable", FConst.Public, self, [], {}))
 
         # typeof(): Type
-        methods.append(Method(self, "typeof", 0x0001, Type.find("sys::Type"), [], {}))
+        methods.append(Method(self, "typeof", FConst.Public, Type.find("sys::Type"), [], {}))
 
         # with(|This| f): This - 'with' is a Python keyword so it's with_
-        methods.append(Method(self, "with_", 0x0001, self,
+        methods.append(Method(self, "with_", FConst.Public, self,
                               [Param("f", Type.find("sys::Func"), False)], {}))
 
         # echo(Obj? x): Void - static
-        methods.append(Method(self, "echo", 0x0801, Type.find("sys::Void"),
+        methods.append(Method(self, "echo", FConst.Public | FConst.Static, Type.find("sys::Void"),
                               [Param("x", Type.find("sys::Obj?"), True)], {}))
 
         return methods
@@ -1441,6 +1445,7 @@ class Type(Obj):
         """
         from .Method import Method
         from .Param import Param
+        from .Slot import FConst
 
         methods = []
 
@@ -1458,7 +1463,7 @@ class Type(Obj):
         # call(...): R - virtual, takes variable args with defaults
         # Uses generic params so FuncType can parameterize them
         # Params are non-nullable generic types - nullability comes from the actual FuncType
-        methods.append(Method(self, "call", 0x1001, R,
+        methods.append(Method(self, "call", FConst.Public | FConst.Virtual, R,
                               [Param("a", A, True),
                                Param("b", B, True),
                                Param("c", C, True),
@@ -1468,40 +1473,40 @@ class Type(Obj):
                                Param("g", G, True),
                                Param("h", H, True)], {}))
 
-        # callList(Obj?[]? args): R
-        methods.append(Method(self, "callList", 0x1001, R,
+        # callList(Obj?[]? args): R - virtual
+        methods.append(Method(self, "callList", FConst.Public | FConst.Virtual, R,
                               [Param("args", Type.find("sys::Obj?[]?"), True)], {}))
 
-        # callOn(Obj? target, Obj?[]? args): R
-        methods.append(Method(self, "callOn", 0x1001, R,
+        # callOn(Obj? target, Obj?[]? args): R - virtual
+        methods.append(Method(self, "callOn", FConst.Public | FConst.Virtual, R,
                               [Param("target", Type.find("sys::Obj?"), False),
                                Param("args", Type.find("sys::Obj?[]?"), True)], {}))
 
         # params(): Param[]
-        methods.append(Method(self, "params", 0x0001, Type.find("sys::Param[]"), [], {}))
+        methods.append(Method(self, "params", FConst.Public, Type.find("sys::Param[]"), [], {}))
 
         # returns(): Type
-        methods.append(Method(self, "returns", 0x0001, Type.find("sys::Type"), [], {}))
+        methods.append(Method(self, "returns", FConst.Public, Type.find("sys::Type"), [], {}))
 
         # arity(): Int
-        methods.append(Method(self, "arity", 0x0001, Type.find("sys::Int"), [], {}))
+        methods.append(Method(self, "arity", FConst.Public, Type.find("sys::Int"), [], {}))
 
         # bind(Obj?[] args): Func
-        methods.append(Method(self, "bind", 0x0001, Type.find("sys::Func"),
+        methods.append(Method(self, "bind", FConst.Public, Type.find("sys::Func"),
                               [Param("args", Type.find("sys::Obj?[]"), False)], {}))
 
         # retype(Type t): Func
-        methods.append(Method(self, "retype", 0x0001, Type.find("sys::Func"),
+        methods.append(Method(self, "retype", FConst.Public, Type.find("sys::Func"),
                               [Param("t", Type.find("sys::Type"), False)], {}))
 
         # typeof(): Type - inherited from Obj but included for completeness
-        methods.append(Method(self, "typeof", 0x0001, Type.find("sys::Type"), [], {}))
+        methods.append(Method(self, "typeof", FConst.Public, Type.find("sys::Type"), [], {}))
 
         # toImmutable(): Func
-        methods.append(Method(self, "toImmutable", 0x0001, Type.find("sys::Func"), [], {}))
+        methods.append(Method(self, "toImmutable", FConst.Public, Type.find("sys::Func"), [], {}))
 
         # isImmutable(): Bool
-        methods.append(Method(self, "isImmutable", 0x0001, Type.find("sys::Bool"), [], {}))
+        methods.append(Method(self, "isImmutable", FConst.Public, Type.find("sys::Bool"), [], {}))
 
         return methods
 
@@ -1530,8 +1535,9 @@ class Type(Obj):
         else:
             field_type = self
 
-        # Static const field: Public (0x0001) | Static (0x0800) | Const (0x0002)
-        flags = 0x0001 | 0x0800 | 0x0002
+        # Static const field: Public | Static | Const
+        from .Slot import FConst
+        flags = FConst.Public | FConst.Static | FConst.Const
 
         return Field(self, field_name, flags, field_type, {}, None)
 
@@ -1645,6 +1651,7 @@ class Type(Obj):
 
         from .Field import Field
         from .Method import Method
+        from .Slot import FConst
 
         slots = []
         slots_by_name = {}
@@ -1656,8 +1663,8 @@ class Type(Obj):
         if base is not None and base._qname != self._qname:
             base._reflect()  # Ensure base is reflected
             for inherited_slot in base._slot_list:
-                # Skip constructors (Ctor flag = 0x0100) - they are not inherited
-                if hasattr(inherited_slot, '_flags') and (inherited_slot._flags & 0x0100):
+                # Skip constructors (Ctor flag) - they are not inherited
+                if hasattr(inherited_slot, '_flags') and (inherited_slot._flags & FConst.Ctor):
                     continue
                 self._merge_slot(inherited_slot, slots, slots_by_name, name_to_index)
 

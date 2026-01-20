@@ -6,29 +6,29 @@
 from .Obj import Obj
 
 
-# Flag constants (from FConst)
+# Flag constants (from FConst) - must match fan/src/sys/es/fan/FConst.js
 class FConst:
     """Fantom compiler flag constants."""
-    Public = 0x00000001
-    Private = 0x00000002
-    Protected = 0x00000004
-    Internal = 0x00000008
-    Native = 0x00000010
-    Enum = 0x00000020
-    Mixin = 0x00000040
-    Final = 0x00000080
-    Ctor = 0x00000100
-    Override = 0x00000200
-    Abstract = 0x00000400
-    Static = 0x00000800
-    Virtual = 0x00001000
-    Const = 0x00000100  # Same bit as Ctor - but Ctor is for methods, Const is for fields
-    Readonly = 0x00004000
-    Facet = 0x00008000
-    Getter = 0x00010000
-    Setter = 0x00020000
-    Synthetic = 0x00100000
-    Once = 0x00200000
+    Abstract = 0x00000001
+    Const = 0x00000002
+    Ctor = 0x00000004
+    Enum = 0x00000008
+    Facet = 0x00000010
+    Final = 0x00000020
+    Getter = 0x00000040
+    Internal = 0x00000080
+    Mixin = 0x00000100
+    Native = 0x00000200
+    Override = 0x00000400
+    Private = 0x00000800
+    Protected = 0x00001000
+    Public = 0x00002000
+    Setter = 0x00004000
+    Static = 0x00008000
+    Storage = 0x00010000
+    Synthetic = 0x00020000
+    Virtual = 0x00040000
+    FlagsMask = 0x0007ffff
 
 
 class Slot(Obj):

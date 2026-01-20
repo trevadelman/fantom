@@ -60,8 +60,9 @@ class Field(Slot):
 
         For enum value fields, returns None (they don't have getters).
         """
-        # Enum value fields don't have getters - the Enum flag is 0x00000020
-        if self._flags & 0x00000020:  # FConst.Enum
+        from .Slot import FConst
+        # Enum value fields don't have getters
+        if self._flags & FConst.Enum:
             return None
         if not hasattr(self, '_getter'):
             self._getter = FieldGetter(self)
@@ -75,8 +76,9 @@ class Field(Slot):
 
         For enum value fields, returns None (they don't have setters).
         """
-        # Enum value fields don't have setters - the Enum flag is 0x00000020
-        if self._flags & 0x00000020:  # FConst.Enum
+        from .Slot import FConst
+        # Enum value fields don't have setters
+        if self._flags & FConst.Enum:
             return None
         if not hasattr(self, '_setter'):
             self._setter = FieldSetter(self)
@@ -528,14 +530,6 @@ class FieldSetter:
     (e.g., 'Int x { private set }' - field is public, setter is private)
     """
 
-    # FConst flag values for visibility checking
-    _PUBLIC = 0x00000001
-    _PRIVATE = 0x00000002
-    _PROTECTED = 0x00000004
-    _INTERNAL = 0x00000008
-    _STATIC = 0x00000800
-    _VIRTUAL = 0x00001000
-
     def __init__(self, field):
         self._field = field
 
@@ -564,18 +558,22 @@ class FieldSetter:
     def is_field(self):
         return False
 
-    # Use setter-specific flags for visibility checks
+    # Use setter-specific flags for visibility checks (using FConst)
     def is_public(self):
-        return bool(self._field._setter_flags & self._PUBLIC)
+        from .Slot import FConst
+        return bool(self._field._setter_flags & FConst.Public)
 
     def is_protected(self):
-        return bool(self._field._setter_flags & self._PROTECTED)
+        from .Slot import FConst
+        return bool(self._field._setter_flags & FConst.Protected)
 
     def is_private(self):
-        return bool(self._field._setter_flags & self._PRIVATE)
+        from .Slot import FConst
+        return bool(self._field._setter_flags & FConst.Private)
 
     def is_internal(self):
-        return bool(self._field._setter_flags & self._INTERNAL)
+        from .Slot import FConst
+        return bool(self._field._setter_flags & FConst.Internal)
 
     def is_static(self):
         # Static is same for getter/setter, use field's value

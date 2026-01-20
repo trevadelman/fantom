@@ -2237,8 +2237,8 @@ class PyTypePrinter : PyPrinter
       // Enum value fields get special flag handling and may have facets
       if (f.enumDef != null)
       {
-        // Enum values are public static const
-        enumFlags := 0x00000001.or(0x00000800).or(0x00002000).or(0x00000020)  // Public | Static | Const | Enum
+        // Enum values are public static const using canonical FConst values
+        enumFlags := FConst.Public.or(FConst.Static).or(FConst.Const).or(FConst.Enum)
         fieldFacets = facetDict(f.enumDef.facets)
         w("_t.af_('${escapeName(f.name)}', ${enumFlags}, '${typeSig}', ${fieldFacets})").nl
       }
@@ -2295,8 +2295,8 @@ class PyTypePrinter : PyPrinter
     if (explicitCtors.isEmpty && !t.isEnum && !t.isMixin)
     {
       // Implicit make() is public static constructor returning This
-      // Flags: Public (0x1) | Ctor (0x100) | Static (0x800) = 0x901
-      w("_t.am_('make', 2305, '${t.qname}', [], {})").nl
+      implicitCtorFlags := FConst.Public.or(FConst.Ctor).or(FConst.Static)
+      w("_t.am_('make', ${implicitCtorFlags}, '${t.qname}', [], {})").nl
     }
   }
 
@@ -2353,22 +2353,22 @@ class PyTypePrinter : PyPrinter
     return e.serialize.toCode
   }
 
-  ** Calculate field flags
+  ** Calculate field flags - uses canonical FConst values from compiler/fan/fcode/FConst.fan
   private Int fieldFlags(FieldDef f)
   {
     flags := 0
-    if (f.isPublic) flags = flags.or(0x00000001)       // FConst.Public
-    if (f.isPrivate) flags = flags.or(0x00000002)      // FConst.Private
-    if (f.isProtected) flags = flags.or(0x00000004)    // FConst.Protected
-    if (f.isInternal) flags = flags.or(0x00000008)     // FConst.Internal
-    if (f.isStatic) flags = flags.or(0x00000800)       // FConst.Static
-    if (f.isVirtual) flags = flags.or(0x00001000)      // FConst.Virtual
-    if (f.isOverride) flags = flags.or(0x00000200)     // FConst.Override
-    if (f.isConst) flags = flags.or(0x00000100)        // FConst.Const
+    if (f.isPublic) flags = flags.or(FConst.Public)
+    if (f.isPrivate) flags = flags.or(FConst.Private)
+    if (f.isProtected) flags = flags.or(FConst.Protected)
+    if (f.isInternal) flags = flags.or(FConst.Internal)
+    if (f.isStatic) flags = flags.or(FConst.Static)
+    if (f.isVirtual) flags = flags.or(FConst.Virtual)
+    if (f.isOverride) flags = flags.or(FConst.Override)
+    if (f.isConst) flags = flags.or(FConst.Const)
     return flags
   }
 
-  ** Calculate setter-specific flags
+  ** Calculate setter-specific flags - uses canonical FConst values
   ** For fields like "Int x { private set }", the setter has different visibility
   ** than the field itself. Returns setter flags if f.set exists, otherwise field flags.
   private Int setterFlags(FieldDef f)
@@ -2376,65 +2376,63 @@ class PyTypePrinter : PyPrinter
     // If field has no setter accessor method, use field flags
     if (f.set == null) return fieldFlags(f)
 
-    // FConst protection values in the compiler (different from Python emission values!)
-    // FConst: Internal=0x80, Private=0x800, Protected=0x1000, Public=0x2000
+    // Use the setter's flags directly - FConst values from compiler
     setFlags := f.set.flags
 
-    // Check setter's protection using FConst values
-    isSetterPublic := setFlags.and(0x00002000) != 0
-    isSetterPrivate := setFlags.and(0x00000800) != 0
-    isSetterProtected := setFlags.and(0x00001000) != 0
-    isSetterInternal := setFlags.and(0x00000080) != 0
+    // Check setter's protection using canonical FConst values
+    isSetterPublic := setFlags.and(FConst.Public) != 0
+    isSetterPrivate := setFlags.and(FConst.Private) != 0
+    isSetterProtected := setFlags.and(FConst.Protected) != 0
+    isSetterInternal := setFlags.and(FConst.Internal) != 0
 
     // If setter has no protection flags, inherit from field
     if (!isSetterPublic && !isSetterPrivate && !isSetterProtected && !isSetterInternal)
       return fieldFlags(f)
 
-    // Build output flags using Python-compatible values
-    // Python emission values: Public=0x1, Private=0x2, Protected=0x4, Internal=0x8
+    // Build output flags using canonical FConst values
     flags := 0
-    if (isSetterPublic) flags = flags.or(0x00000001)
-    if (isSetterPrivate) flags = flags.or(0x00000002)
-    if (isSetterProtected) flags = flags.or(0x00000004)
-    if (isSetterInternal) flags = flags.or(0x00000008)
+    if (isSetterPublic) flags = flags.or(FConst.Public)
+    if (isSetterPrivate) flags = flags.or(FConst.Private)
+    if (isSetterProtected) flags = flags.or(FConst.Protected)
+    if (isSetterInternal) flags = flags.or(FConst.Internal)
 
-    // Non-protection flags from field (using Python emission values)
-    if (f.isStatic) flags = flags.or(0x00000800)       // Static
-    if (f.isVirtual) flags = flags.or(0x00001000)      // Virtual
-    if (f.isOverride) flags = flags.or(0x00000200)     // Override
-    if (f.isConst) flags = flags.or(0x00002000)        // Const
+    // Non-protection flags from field
+    if (f.isStatic) flags = flags.or(FConst.Static)
+    if (f.isVirtual) flags = flags.or(FConst.Virtual)
+    if (f.isOverride) flags = flags.or(FConst.Override)
+    if (f.isConst) flags = flags.or(FConst.Const)
 
     return flags
   }
 
-  ** Calculate method flags
+  ** Calculate method flags - uses canonical FConst values from compiler/fan/fcode/FConst.fan
   private Int methodFlags(MethodDef m)
   {
     flags := 0
-    if (m.isPublic) flags = flags.or(0x00000001)       // FConst.Public
-    if (m.isPrivate) flags = flags.or(0x00000002)      // FConst.Private
-    if (m.isProtected) flags = flags.or(0x00000004)    // FConst.Protected
-    if (m.isInternal) flags = flags.or(0x00000008)     // FConst.Internal
-    if (m.isCtor) flags = flags.or(0x00000100)         // FConst.Ctor
-    if (m.isStatic) flags = flags.or(0x00000800)       // FConst.Static
-    if (m.isVirtual) flags = flags.or(0x00001000)      // FConst.Virtual
-    if (m.isAbstract) flags = flags.or(0x00000400)     // FConst.Abstract
-    if (m.isOverride) flags = flags.or(0x00000200)     // FConst.Override
+    if (m.isPublic) flags = flags.or(FConst.Public)
+    if (m.isPrivate) flags = flags.or(FConst.Private)
+    if (m.isProtected) flags = flags.or(FConst.Protected)
+    if (m.isInternal) flags = flags.or(FConst.Internal)
+    if (m.isCtor) flags = flags.or(FConst.Ctor)
+    if (m.isStatic) flags = flags.or(FConst.Static)
+    if (m.isVirtual) flags = flags.or(FConst.Virtual)
+    if (m.isAbstract) flags = flags.or(FConst.Abstract)
+    if (m.isOverride) flags = flags.or(FConst.Override)
     return flags
   }
 
-  ** Calculate type flags (Mixin, Facet, Internal, Const, etc.)
+  ** Calculate type flags - uses canonical FConst values from compiler/fan/fcode/FConst.fan
   private Int typeFlags(TypeDef t)
   {
     flags := 0
-    if (t.isPublic) flags = flags.or(0x00000001)       // FConst.Public
-    if (t.isInternal) flags = flags.or(0x00000008)     // FConst.Internal
-    if (t.isAbstract) flags = flags.or(0x00000400)     // FConst.Abstract
-    if (t.isConst) flags = flags.or(0x00002000)        // FConst.Const
-    if (t.isFinal) flags = flags.or(0x00010000)        // FConst.Final
-    if (t.isMixin) flags = flags.or(0x00020000)        // FConst.Mixin
-    if (t.isEnum) flags = flags.or(0x00040000)         // FConst.Enum
-    if (t.isFacet) flags = flags.or(0x00080000)        // FConst.Facet
+    if (t.isPublic) flags = flags.or(FConst.Public)
+    if (t.isInternal) flags = flags.or(FConst.Internal)
+    if (t.isAbstract) flags = flags.or(FConst.Abstract)
+    if (t.isConst) flags = flags.or(FConst.Const)
+    if (t.isFinal) flags = flags.or(FConst.Final)
+    if (t.isMixin) flags = flags.or(FConst.Mixin)
+    if (t.isEnum) flags = flags.or(FConst.Enum)
+    if (t.isFacet) flags = flags.or(FConst.Facet)
     return flags
   }
 
