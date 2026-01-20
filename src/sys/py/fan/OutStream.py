@@ -158,6 +158,42 @@ class OutStream(Obj):
         self._endian = val
         return self
 
+    def write_xml(self, s, mask=0):
+        """Write XML-escaped string.
+
+        Args:
+            s: String to write
+            mask: Bitmask (xmlEscNewlines=0x01, xmlEscQuotes=0x02, xmlEscUnicode=0x04)
+
+        Returns:
+            self for chaining
+        """
+        if self._out is not None:
+            self._out.write_xml(s, mask)
+            return self
+
+        # Default implementation
+        xml_esc_newlines = 0x01
+        xml_esc_quotes = 0x02
+        escNewlines = (mask & xml_esc_newlines) != 0
+        escQuotes = (mask & xml_esc_quotes) != 0
+
+        for i, ch in enumerate(str(s)):
+            code = ord(ch)
+            if ch == '<':
+                self.write_chars("&lt;")
+            elif ch == '&':
+                self.write_chars("&amp;")
+            elif ch == '"' and escQuotes:
+                self.write_chars("&quot;")
+            elif ch == "'" and escQuotes:
+                self.write_chars("&#39;")
+            elif (ch == '\n' or ch == '\r') and escNewlines:
+                self.write_chars(f"&#x{code:x};")
+            else:
+                self.write_char(code)
+        return self
+
     def write_obj(self, obj, options=None):
         """Write serialized object representation using Fantom serialization format.
 

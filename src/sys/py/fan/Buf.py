@@ -574,10 +574,12 @@ class Buf(Obj):
     #################################################################
 
     def in_(self):
-        """Get InStream for reading."""
-        if self._in is None:
-            self._in = BufInStream(self)
-        return self._in
+        """Get InStream for reading.
+
+        Each call returns a NEW InStream that starts reading from current position.
+        This matches Fantom's behavior where Buf.in returns a fresh stream.
+        """
+        return BufInStream(self)
 
     def read(self):
         """Read single byte or null at end."""
