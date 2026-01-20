@@ -106,7 +106,7 @@ class Map(Obj, MutableMapping):
         return self.to_str()
 
     def __eq__(self, other):
-        """Equality comparison"""
+        """Equality comparison - maps must have same type and content"""
         from .ObjUtil import ObjUtil
         if other is self:
             return True
@@ -114,6 +114,18 @@ class Map(Obj, MutableMapping):
             return False
         # Handle comparison with plain dicts or Maps
         if isinstance(other, Map):
+            # Check type equality - maps with different types are not equal
+            if self._mapType is not None and other._mapType is not None:
+                if self._mapType != other._mapType:
+                    return False
+            elif self._keyType is not None or other._keyType is not None:
+                # Check key types
+                if self._keyType != other._keyType:
+                    return False
+            if self._valueType is not None or other._valueType is not None:
+                # Check value types
+                if self._valueType != other._valueType:
+                    return False
             other_items = other._map
         elif isinstance(other, dict):
             other_items = other
