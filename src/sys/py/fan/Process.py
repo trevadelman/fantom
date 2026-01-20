@@ -14,6 +14,9 @@ class Process(Obj):
     Process represents an external OS process.
     """
 
+    # Sentinel value to distinguish "no argument" from "argument is None"
+    _UNSET = object()
+
     def __init__(self, command=None):
         self._command = command if command is not None else []
         self._dir = None
@@ -42,9 +45,9 @@ class Process(Obj):
         self._command = list(val)
         return self
 
-    def dir_(self, val=None):
+    def dir_(self, val=_UNSET):
         """Get or set the working directory."""
-        if val is None:
+        if val is Process._UNSET:
             return self._dir
         self._check_not_started()
         self._dir = val
@@ -67,9 +70,9 @@ class Process(Obj):
         self._mergeErr = val
         return self
 
-    def out(self, val=None):
+    def out(self, val=_UNSET):
         """Get or set stdout OutStream."""
-        if val is None:
+        if val is Process._UNSET:
             if self._out is None and not self._out_explicit:
                 from .Env import Env
                 return Env.cur().out()
@@ -79,9 +82,9 @@ class Process(Obj):
         self._out_explicit = True
         return self
 
-    def err(self, val=None):
+    def err(self, val=_UNSET):
         """Get or set stderr OutStream."""
-        if val is None:
+        if val is Process._UNSET:
             if self._err is None and not self._err_explicit:
                 from .Env import Env
                 return Env.cur().err()
@@ -91,9 +94,9 @@ class Process(Obj):
         self._err_explicit = True
         return self
 
-    def in_(self, val=None):
+    def in_(self, val=_UNSET):
         """Get or set stdin InStream."""
-        if val is None:
+        if val is Process._UNSET:
             return self._in
         self._check_not_started()
         self._in = val
