@@ -248,12 +248,32 @@ class DateTime(Obj):
     @staticmethod
     def make(year=None, month=None, day=None, hour=0, min_=0, sec=0, ns=0, tz=None):
         """Create a DateTime. If year is None, returns defVal."""
+        from .Err import ArgErr
         if year is None:
             return DateTime.def_val()
         if month is None:
             month = Month.jan()
         if day is None:
             day = 1
+        # Handle integer month (1-12) - convert to Month object
+        if isinstance(month, int):
+            month = Month._get(month - 1)
+
+        # Validate ranges (matches Fantom: 1901-2099)
+        if year < 1901 or year > 2099:
+            raise ArgErr.make(f"Year out of range: {year}")
+        num_days = month.num_days(year)
+        if day < 1 or day > num_days:
+            raise ArgErr.make(f"Day out of range: {day}")
+        if hour < 0 or hour > 23:
+            raise ArgErr.make(f"Hour out of range: {hour}")
+        if min_ < 0 or min_ > 59:
+            raise ArgErr.make(f"Minute out of range: {min_}")
+        if sec < 0 or sec > 59:
+            raise ArgErr.make(f"Second out of range: {sec}")
+        if ns < 0 or ns >= 1000000000:
+            raise ArgErr.make(f"Nanosecond out of range: {ns}")
+
         return DateTime(year, month, day, hour, min_, sec, ns, tz)
 
     @staticmethod
@@ -307,12 +327,23 @@ class DateTime(Obj):
         result._ticks = ticks
         return result
 
+    # Min/max ticks for valid year range 1901-2099
+    # 1901-01-01 00:00:00 UTC = -3124137600000000000 ns from 2000-01-01
+    # 2099-12-31 23:59:59.999999999 UTC = 3155759999999999999 ns from 2000-01-01
+    _MIN_TICKS = -3124137600000000000
+    _MAX_TICKS = 3155759999999999999
+
     @staticmethod
     def make_ticks(ticks, tz=None):
         """Create DateTime from ticks (nanoseconds since Fantom epoch)"""
         from .TimeZone import TimeZone
+        from .Err import ArgErr
         if tz is None:
             tz = TimeZone.cur()
+
+        # Validate ticks range (1901-2099)
+        if ticks < DateTime._MIN_TICKS or ticks > DateTime._MAX_TICKS:
+            raise ArgErr.make(f"Ticks out of range: {ticks}")
 
         # Convert ticks to Python datetime in UTC
         unix_ns = ticks + DateTime._EPOCH_DIFF_NS
