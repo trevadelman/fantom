@@ -386,19 +386,27 @@ class Env(Obj):
                 return cached_props
 
         # Try to load from file system
+        # In Fantom, etc/ overrides overlay on top of pod source files
+        # So we load pod source FIRST, then overlay etc overrides
         props = Map.make_with_type("sys::Str", "sys::Str")
         home = self.home_dir()
+        work = self.work_dir()
 
-        # Locations to search for props files
-        locations = [
+        # Pod source locations (load first - these are the base values)
+        pod_source_locations = [
             home._path / "fan" / "src" / pod_name / uri_str,       # fan/src/sys/locale/de.props
             home._path / "rel" / "src" / pod_name / uri_str,       # rel/src/sys/locale/de.props
             home._path / "haxall" / "src" / "core" / pod_name / uri_str,  # haxall/src/core/haystack/locale/en.props
             home._path / "src" / pod_name / uri_str,               # src/sys/locale/de.props
-            home._path / f"etc/{pod_name}" / uri_str,              # etc/sys/config.props
         ]
 
-        for props_path in locations:
+        # etc override locations (load second - these overlay on top)
+        etc_locations = [
+            work._path / "etc" / pod_name / uri_str,               # etc/testSys/locale/en.props (workDir - highest priority)
+            home._path / "etc" / pod_name / uri_str,               # etc/testSys/locale/en.props (homeDir)
+        ]
+
+        def load_props_file(props_path, props_map):
             if props_path.exists():
                 try:
                     with open(props_path, 'r', encoding='utf-8') as f:
@@ -408,17 +416,27 @@ class Env(Obj):
                                 continue
                             if '=' in line:
                                 k, v = line.split('=', 1)
-                                props.set_(k.strip(), v.strip())
-                    break  # Found and loaded
+                                props_map.set_(k.strip(), v.strip())
+                    return True
                 except Exception:
-                    continue
+                    pass
+            return False
 
-        # Make immutable and cache
+        # 1. Load from pod source (first found wins for base values)
+        for props_path in pod_source_locations:
+            if load_props_file(props_path, props):
+                break
+
+        # 2. Overlay etc overrides (first found wins, overwrites base values)
+        for props_path in etc_locations:
+            if load_props_file(props_path, props):
+                break
+
+        # Make immutable and cache in instance cache (NOT static cache)
+        # Static cache is only for transpiler-injected props
+        # Instance cache respects maxAge for runtime file changes
         result = props.to_immutable()
         self._propsCache[cache_key] = (now, result)
-
-        # Also add to static cache for faster future lookups
-        Env._props[cache_key] = result
 
         return result
 
