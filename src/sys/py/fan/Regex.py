@@ -346,19 +346,22 @@ class RegexMatcher(Obj):
         self._s = s
         self._match = None
         self._pos = 0
-        self._matches_iter = None
+        self._was_match = None  # None = no match attempted, True/False = result
 
     def matches(self):
         """Return true if entire input matches the pattern"""
         self._match = self._compiled.fullmatch(self._s)
-        return self._match is not None
+        self._was_match = self._match is not None
+        return self._was_match
 
     def find(self):
         """Find next match in input"""
         self._match = self._compiled.search(self._s, self._pos)
         if self._match:
             self._pos = self._match.end()
+            self._was_match = True
             return True
+        self._was_match = False
         return False
 
     def replace_first(self, replacement):
@@ -371,28 +374,40 @@ class RegexMatcher(Obj):
 
     def group(self, group=None):
         """Get matched group (0 = whole match, 1+ = capturing groups)"""
-        if self._match is None:
-            return None
+        from fan.sys.Err import Err, IndexErr
+        if not self._was_match:
+            raise Err.make("No match found")
+        gc = self.group_count()
         if group is None:
             return self._match.group(0)
+        if group < 0 or group > gc:
+            raise IndexErr.make(str(group))
         return self._match.group(group)
 
     def group_count(self):
         """Get number of capturing groups"""
-        if self._match is None:
+        if not self._was_match:
             return 0
         return len(self._match.groups())
 
     def start(self, group=0):
         """Get start index of match"""
-        if self._match is None:
-            return -1
+        from fan.sys.Err import Err, IndexErr
+        if not self._was_match:
+            raise Err.make("No match found")
+        gc = self.group_count()
+        if group < 0 or group > gc:
+            raise IndexErr.make(str(group))
         return self._match.start(group)
 
     def end(self, group=0):
         """Get end index of match"""
-        if self._match is None:
-            return -1
+        from fan.sys.Err import Err, IndexErr
+        if not self._was_match:
+            raise Err.make("No match found")
+        gc = self.group_count()
+        if group < 0 or group > gc:
+            raise IndexErr.make(str(group))
         return self._match.end(group)
 
     def to_str(self):
