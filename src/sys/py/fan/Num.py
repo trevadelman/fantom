@@ -45,13 +45,31 @@ class Num(Obj):
 
     @staticmethod
     def locale_decimal():
-        """Get locale decimal separator"""
-        return "."
+        """Get locale decimal separator for the current locale.
+
+        Returns "." for English locales, "," for most European locales.
+        """
+        from .Locale import Locale
+        locale = Locale.cur()
+        lang = locale.lang() if hasattr(locale, 'lang') else 'en'
+        # English uses period, most European locales use comma
+        if lang == 'en':
+            return "."
+        return ","
 
     @staticmethod
     def locale_grouping():
-        """Get locale grouping separator"""
-        return ","
+        """Get locale grouping separator for the current locale.
+
+        Returns "," for English locales, non-breaking space for most European locales.
+        """
+        from .Locale import Locale
+        locale = Locale.cur()
+        lang = locale.lang() if hasattr(locale, 'lang') else 'en'
+        # English uses comma, most European locales use non-breaking space
+        if lang == 'en':
+            return ","
+        return "\u00a0"  # Non-breaking space
 
     @staticmethod
     def locale_minus():
@@ -65,15 +83,26 @@ class Num(Obj):
 
     @staticmethod
     def locale_pos_inf():
-        """Get locale positive infinity symbol"""
-        return "INF"
+        """Get locale positive infinity symbol.
+
+        Returns the infinity symbol (∞) which matches Java/JVM behavior.
+        JS runtime may return "Infinity" depending on browser/platform.
+        """
+        return "\u221e"  # ∞
 
     @staticmethod
     def locale_neg_inf():
-        """Get locale negative infinity symbol"""
-        return "-INF"
+        """Get locale negative infinity symbol.
+
+        Returns minus sign with infinity symbol (-∞).
+        """
+        return "-\u221e"  # -∞
 
     @staticmethod
     def locale_na_n():
-        """Get locale NaN symbol"""
-        return "NaN"
+        """Get locale NaN symbol.
+
+        Returns the replacement character (U+FFFD) which matches Java/JVM behavior.
+        JS runtime may return "NaN" depending on browser/platform.
+        """
+        return "\ufffd"  # Replacement character

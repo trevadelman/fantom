@@ -37,11 +37,11 @@ class ObjUtil:
             return b is None
         if b is None:
             return False
-        # NaN equality in Fantom: NaN == NaN is true
+        # IEEE 754: NaN is not equal to anything, including itself
         if isinstance(a, float) and isinstance(b, float):
             import math
-            if math.isnan(a) and math.isnan(b):
-                return True
+            if math.isnan(a) or math.isnan(b):
+                return False
         if hasattr(a, "equals") and callable(getattr(a, "equals", None)):
             return a.equals(b)
         return a == b

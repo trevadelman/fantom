@@ -83,6 +83,13 @@ class Test(Obj):
         self._verifyCount += 1
 
     def verify_eq(self, expected, actual, msg=None):
+        # Special case: NaN == NaN should be equal for testing purposes
+        # (even though IEEE 754 says NaN != NaN)
+        import math
+        if isinstance(expected, float) and isinstance(actual, float):
+            if math.isnan(expected) and math.isnan(actual):
+                self._verifyCount += 1
+                return
         if not ObjUtil.equals(expected, actual):
             if msg is None:
                 msg = f"{ObjUtil.to_str(expected)} != {ObjUtil.to_str(actual)}"

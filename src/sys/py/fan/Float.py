@@ -38,9 +38,11 @@ class Float(Num):
     def equals(self, other):
         if other is None:
             return False
-        # Fantom: NaN == NaN returns true (unlike IEEE 754)
+        # IEEE 754: NaN is not equal to anything, including itself
         if math.isnan(self):
-            return isinstance(other, float) and math.isnan(other)
+            return False
+        if isinstance(other, float) and math.isnan(other):
+            return False
         return self == other
 
     # Arithmetic operations
