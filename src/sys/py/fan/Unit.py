@@ -275,23 +275,35 @@ class Unit(Obj):
     @staticmethod
     def define(s):
         """Define a new unit from string specification."""
+        from fan.sys.Err import ParseErr
         Unit._ensure_initialized()
 
         # Parse the definition string
         parts = [p.strip() for p in s.split(';')]
 
-        # Parse ids
+        # Parse ids - don't filter, check for empty ids explicitly
         ids_str = parts[0]
-        ids = [id_.strip() for id_ in ids_str.split(',') if id_.strip()]
-        if not ids:
-            from fan.sys.Err import ParseErr
-            raise ParseErr(f"Invalid unit definition: {s}")
+        ids_raw = [id_.strip() for id_ in ids_str.split(',')]
 
-        # Validate ids
-        for id_ in ids:
-            if not id_ or ' ' in id_ or '-' in id_ or '+' in id_ or '#' in id_ or '(' in id_ or ')' in id_:
-                from fan.sys.Err import ParseErr
-                raise ParseErr(f"Invalid unit id: {id_}")
+        # Check for empty ids (including empty first part or trailing commas)
+        if not ids_raw or all(not id_ for id_ in ids_raw):
+            raise ParseErr.make(f"Unit: {s}: No unit ids defined")
+
+        # Check each id for validity
+        ids = []
+        for id_ in ids_raw:
+            if not id_:
+                raise ParseErr.make(f"Unit: {s}: Invalid unit id length 0")
+            # Validate each character - only allow: alpha, _, %, $, /, or code > 127
+            for ch in id_:
+                code = ord(ch)
+                if ch.isalpha() or ch == '_' or ch == '%' or ch == '$' or ch == '/' or code > 127:
+                    continue
+                raise ParseErr.make(f"Unit: {s}: Invalid unit id {id_} (invalid char '{ch}')")
+            ids.append(id_)
+
+        if not ids:
+            raise ParseErr.make(f"Unit: {s}: No unit ids defined")
 
         # Check if already defined
         first_id = ids[0]
@@ -300,10 +312,10 @@ class Unit(Obj):
             # Check if it's a redefinition (error unless identical)
             raise Exception(f"Unit already defined: {first_id}")
 
-        # Parse dimension
+        # Parse dimension with validation
         dim = [0, 0, 0, 0, 0, 0, 0]
         if len(parts) > 1 and parts[1]:
-            dim = Unit._parse_dim_string(parts[1])
+            dim = Unit._parse_dim_string_checked(parts[1], s)
 
         # Parse scale
         scale = 1.0
@@ -311,8 +323,7 @@ class Unit(Obj):
             try:
                 scale = float(parts[2])
             except ValueError:
-                from fan.sys.Err import ParseErr
-                raise ParseErr(f"Invalid scale: {parts[2]}")
+                raise ParseErr.make(f"Unit: {s}")
 
         # Parse offset
         offset = 0.0
@@ -320,8 +331,7 @@ class Unit(Obj):
             try:
                 offset = float(parts[3])
             except ValueError:
-                from fan.sys.Err import ParseErr
-                raise ParseErr(f"Invalid offset: {parts[3]}")
+                raise ParseErr.make(f"Unit: {s}")
 
         # Create unit
         unit = object.__new__(Unit)
@@ -338,6 +348,40 @@ class Unit(Obj):
             Unit._units_by_id[id_] = unit
 
         return unit
+
+    @classmethod
+    def _parse_dim_string_checked(cls, dim_str, original_str):
+        """Parse dimension string with validation, throwing ParseErr on bad ratios."""
+        from fan.sys.Err import ParseErr
+        dim = [0, 0, 0, 0, 0, 0, 0]
+        if not dim_str or dim_str == 'null':
+            return dim
+
+        # Split by * and parse each component
+        parts = dim_str.replace(' ', '').split('*')
+        for part in parts:
+            if not part:
+                continue
+            # Match dimension name and exponent
+            match = re.match(r'^([a-zA-Z]+)(-?\d+)?$', part)
+            if not match:
+                raise ParseErr.make(f"Unit: {original_str}: Bad ratio '{part}'")
+
+            name = match.group(1)
+            exp_str = match.group(2)
+
+            # Validate dimension name
+            if name not in cls._DIM_NAMES:
+                raise ParseErr.make(f"Unit: {original_str}: Bad ratio '{part}'")
+
+            try:
+                exp = int(exp_str) if exp_str else 1
+            except ValueError:
+                raise ParseErr.make(f"Unit: {original_str}: Bad ratio '{part}'")
+
+            idx = cls._DIM_NAMES.index(name)
+            dim[idx] = exp
+        return dim
 
     # ---- Instance Methods ----
 
