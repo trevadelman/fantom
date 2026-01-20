@@ -528,6 +528,10 @@ class File(Obj):
         if self._path.is_file() and dest_is_dir and not dest_path.exists():
             raise ArgErr.make(f"File destination must not end with slash: {dest}")
 
+        # Cannot move to existing destination
+        if dest_path.exists():
+            raise IOErr.make(f"moveTo destination already exists: {dest}")
+
         shutil.move(str(self._path), str(dest_path))
         return File.os(str(dest_path))
 
@@ -666,7 +670,12 @@ class File(Obj):
 
     def rename(self, newName):
         """Rename this file."""
+        from .Err import IOErr
+
         new_path = self._path.parent / newName
+        # Cannot rename to existing file/directory
+        if new_path.exists():
+            raise IOErr.make(f"rename destination already exists: {newName}")
         self._path.rename(new_path)
         return File.os(str(new_path))
 
