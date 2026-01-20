@@ -1163,15 +1163,25 @@ class Uri(Obj):
 
     def to_code(self):
         """Get URI as Fantom source code literal.
-        Must escape $ and ` characters with backslash for Fantom code.
+        Must escape control characters and special chars for Fantom code.
         """
         s = self.to_str()
-        # Escape $ and ` with backslash for Fantom literal syntax
         result = []
         for c in s:
-            if c == '$' or c == '`':
-                result.append('\\')
-            result.append(c)
+            if c == '\n':
+                result.append('\\n')
+            elif c == '\r':
+                result.append('\\r')
+            elif c == '\f':
+                result.append('\\f')
+            elif c == '\t':
+                result.append('\\t')
+            elif c == '`':
+                result.append('\\`')
+            elif c == '$':
+                result.append('\\$')
+            else:
+                result.append(c)
         return "`" + ''.join(result) + "`"
 
     def literal_encode(self, out):
