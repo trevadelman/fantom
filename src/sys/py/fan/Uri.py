@@ -646,10 +646,15 @@ class Uri(Obj):
     def query(self):
         """Get query parameters as map (Str:Str type, immutable)"""
         from fan.sys.Map import Map
+        # Use pre-parsed query if available (from from_str)
+        # This preserves the correct semantics where + is NOT decoded to space in from_str mode
+        if self._query is not None:
+            return self._query.to_immutable() if hasattr(self._query, 'to_immutable') else self._query
         if self._queryStr is None:
             # Return empty Str:Str map (immutable)
             m = Map.make_with_type("sys::Str", "sys::Str")
             return m.to_immutable() if hasattr(m, 'to_immutable') else m
+        # Fallback: parse the query string (for manually constructed URIs)
         m = Uri.decode_query(self._queryStr)
         return m.to_immutable() if hasattr(m, 'to_immutable') else m
 
@@ -1503,7 +1508,7 @@ class UriDecoder:
                 try:
                     result['port'] = int(port_str)
                 except ValueError:
-                    pass
+                    raise ValueError(f"Invalid port: {port_str}")
                 host_end = colon
 
             # Host is everything left in the authority
@@ -1670,7 +1675,29 @@ class UriDecoder:
         if c == 43 and section == Uri._QUERY:  # '+'
             return 32  # space
 
+        # Verify character is valid for this section
+        if c >= len(Uri._charMap) or (Uri._charMap[c] & section) == 0:
+            section_name = self._section_name(section)
+            raise ValueError(f"Invalid char in {section_name} at index {self.dpos - 1}")
+
         return c
+
+    def _section_name(self, section):
+        """Get section name for error messages."""
+        if section == Uri._SCHEME:
+            return "scheme"
+        elif section == Uri._USER:
+            return "userInfo"
+        elif section == Uri._HOST:
+            return "host"
+        elif section == Uri._PATH:
+            return "path"
+        elif section == Uri._QUERY:
+            return "query"
+        elif section == Uri._FRAG:
+            return "frag"
+        else:
+            return "uri"
 
     def _hex_nibble(self, c):
         """Convert hex character to nibble value."""
@@ -1697,7 +1724,9 @@ class UriDecoder:
             return List.from_list([])
 
         # Check for trailing slash (unless backslash-escaped)
-        if length > 1 and path_str[-1] == '/' and path_str[-2] != '\\':
+        # If the trailing / is escaped (preceded by \), it's part of the path segment
+        trailing_slash_escaped = (length > 1 and path_str[-1] == '/' and path_str[-2] == '\\')
+        if length > 1 and path_str[-1] == '/' and not trailing_slash_escaped:
             num_segs -= 1
             length -= 1
 
@@ -1717,8 +1746,13 @@ class UriDecoder:
             else:
                 prev = c if c != '\\' else 0
 
+        # Add the final segment
+        # If trailing / is escaped, include the whole thing; otherwise strip unescaped trailing /
         if seg_start < length:
-            path.append(path_str[seg_start:len(path_str) if path_str[-1] != '/' else -1])
+            if path_str[-1] == '/' and not trailing_slash_escaped:
+                path.append(path_str[seg_start:-1])
+            else:
+                path.append(path_str[seg_start:])
 
         return List.from_list(path)
 
