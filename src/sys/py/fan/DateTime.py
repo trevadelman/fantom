@@ -347,19 +347,24 @@ class DateTime(Obj):
 
     @staticmethod
     def from_str(s, checked=True, tz=None):
-        """Parse a DateTime from Fantom string format: YYYY-MM-DDTHH:MM:SS[.nnnnnnnnn][+/-HH:MM|Z] [TimeZoneName]"""
+        """Parse a DateTime from Fantom string format: YYYY-MM-DDTHH:MM:SS[.nnnnnnnnn][+/-HH:MM|Z] TimeZoneName
+
+        Note: Fantom format REQUIRES a timezone name at the end (e.g., "2008-11-14T12:00:00Z UTC").
+        ISO format (without timezone name) should use fromIso() instead.
+        """
         try:
             from .TimeZone import TimeZone
             s = s.strip()
 
-            # Check for Fantom format with timezone name at end (e.g., "2008-11-14T12:00:00Z UTC")
+            # Fantom format REQUIRES a timezone name at end (e.g., "2008-11-14T12:00:00Z UTC")
+            # ISO format (no timezone name) is NOT valid for fromStr - use fromIso instead
             parts = s.rsplit(' ', 1)
-            tz_name = None
-            datetime_part = s
-            if len(parts) == 2:
-                datetime_part = parts[0]
-                tz_name = parts[1]
-                tz = TimeZone.from_str(tz_name)
+            if len(parts) != 2:
+                raise ValueError("Fantom DateTime format requires timezone name")
+
+            datetime_part = parts[0]
+            tz_name = parts[1]
+            tz = TimeZone.from_str(tz_name)
 
             # Parse datetime part
             # Format: YYYY-MM-DDTHH:MM:SS[.nnnnnnnnn][+/-HH:MM|Z]
