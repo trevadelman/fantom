@@ -203,6 +203,11 @@ class PyStmtPrinter : PyPrinter
         ee := e as BinaryExpr
         scanExprForClosures(ee.lhs)
         scanExprForClosures(ee.rhs)
+      case ExprId.field:
+        // Field expressions can have targets that contain closures
+        // e.g., ActorPool() { maxThreads = 2 }.maxThreads
+        fe := e as FieldExpr
+        if (fe.target != null) scanExprForClosures(fe.target)
       case ExprId.closure:
         // Scan INSIDE the closure body for nested closures
         // Increment depth so nested closures won't be registered at method level
@@ -220,7 +225,7 @@ class PyStmtPrinter : PyPrinter
           scanInnerBlockForClosures(codeBlock)
           m.closureDepth--
         }
-      // Field, localVar, literals etc have no children with closures
+      // localVar, literals etc have no children with closures
     }
   }
 
@@ -369,17 +374,19 @@ class PyStmtPrinter : PyPrinter
     if (hasLocalVars) return true
 
     // Check if closure has assignments (can't be in lambda body)
+    // Must unwrap coerces since assignments are often wrapped in type coercions
     hasAssign := stmts.any |s|
     {
       if (s.id == StmtId.expr)
       {
         es := s as ExprStmt
-        return es.expr.id == ExprId.assign
+        return isAssignmentExpr(es.expr)
       }
       if (s.id == StmtId.returnStmt)
       {
         ret := s as ReturnStmt
-        return ret.expr?.id == ExprId.assign
+        if (ret.expr != null)
+          return isAssignmentExpr(ret.expr)
       }
       return false
     }
@@ -413,6 +420,33 @@ class PyStmtPrinter : PyPrinter
     }
 
     return realStmtCount > 1
+  }
+
+  ** Check if expression is an assignment (can't be in lambda body)
+  ** Handles coerce wrapping, shortcuts (compound assignments), etc.
+  private Bool isAssignmentExpr(Expr e)
+  {
+    // Unwrap coerce expressions
+    while (e.id == ExprId.coerce)
+    {
+      tc := e as TypeCheckExpr
+      e = tc.target
+    }
+
+    // Direct assignment
+    if (e.id == ExprId.assign) return true
+
+    // Index set (list[i] = x) or compound assignment (x += 5)
+    if (e.id == ExprId.shortcut)
+    {
+      se := e as ShortcutExpr
+      if (se.op == ShortcutOp.set) return true
+      // Compound assignment, but NOT increment/decrement (those return values)
+      if (se.isAssign && se.op != ShortcutOp.increment && se.op != ShortcutOp.decrement)
+        return true
+    }
+
+    return false
   }
 
 //////////////////////////////////////////////////////////////////////////

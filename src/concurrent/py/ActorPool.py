@@ -38,6 +38,9 @@ class ActorPool(Obj):
             raise ArgErr.make(f"ActorPool.max_threads must be >= 1, not {self._max_threads}")
         if self._max_queue < 1:
             raise ArgErr.make(f"ActorPool.max_queue must be >= 1, not {self._max_queue}")
+        # Max queue cannot be >= 0xffff_ffff (32-bit unsigned max) to match Java behavior
+        if self._max_queue >= 0xffffffff:
+            raise ArgErr.make(f"ActorPool.max_queue must be < 0xffff_ffff, not {self._max_queue}")
 
         # Create thread pool with daemon threads to prevent hang on exit
         import concurrent.futures
@@ -228,9 +231,10 @@ class ActorPool(Obj):
 # Type metadata registration for reflection
 from fan.sys.Type import Type
 from fan.sys.Param import Param
+from fan.sys.Slot import FConst
 
 _t = Type.find('concurrent::ActorPool')
-_t.tf_({'sys::Js': {}})
+_t.tf_({'sys::Js': {}}, FConst.Public | FConst.Const, [], None)
 _t.af_('name', 1, 'sys::Str', {})
 _t.af_('max_threads', 1, 'sys::Int', {})
 _t.af_('max_queue', 1, 'sys::Int', {})
