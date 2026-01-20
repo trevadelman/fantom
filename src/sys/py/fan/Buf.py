@@ -225,12 +225,19 @@ class Buf(Obj):
         return Buf(data)
 
     def to_immutable(self):
-        """Return an immutable copy of this Buf."""
-        # In Python, we just return a copy with immutable flag
+        """Return an immutable ConstBuf, stealing content from this Buf.
+
+        After this call, this Buf will be cleared (size=0, capacity=0).
+        This is the expected "steal" semantic - the immutable buffer
+        takes ownership of the data.
+        """
+        from .ConstBuf import ConstBuf
         data = self._get_data()
-        buf = Buf(data)
-        buf._immutable = True
-        return buf
+        result = ConstBuf(data)
+        # Clear the original buffer (steal semantic)
+        self.clear()
+        self._capacity = 0
+        return result
 
     def is_immutable(self):
         """Return true if this Buf is immutable."""
@@ -943,15 +950,42 @@ class Buf(Obj):
                                    int(iterations), int(keyLen))
         return Buf(key)
 
+    # CRC-16 odd parity lookup table (from Fantom JS implementation)
+    _CRC16_ODD_PARITY = [0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0]
+
     def crc(self, algorithm):
         """Compute CRC checksum."""
         import zlib
+        if algorithm == "CRC-16":
+            return self._crc16()
         if algorithm == "CRC-32":
             return zlib.crc32(self._get_data()) & 0xFFFFFFFF
         if algorithm == "CRC-32-Adler":
             return zlib.adler32(self._get_data()) & 0xFFFFFFFF
         from .Err import ArgErr
         raise ArgErr.make(f"Unknown CRC algorithm: {algorithm}")
+
+    def _crc16(self):
+        """Compute CRC-16 checksum using standard algorithm."""
+        data = self._get_data()
+        seed = 0xFFFF
+        for byte in data:
+            seed = self._do_crc16(byte, seed)
+        return seed
+
+    def _do_crc16(self, data_to_crc, seed):
+        """Single byte CRC-16 computation."""
+        dat = (data_to_crc ^ (seed & 0xFF)) & 0xFF
+        seed = (seed & 0xFFFF) >> 8
+        index1 = dat & 0x0F
+        index2 = dat >> 4
+        if (Buf._CRC16_ODD_PARITY[index1] ^ Buf._CRC16_ODD_PARITY[index2]) == 1:
+            seed ^= 0xC001
+        dat <<= 6
+        seed ^= dat
+        dat <<= 1
+        seed ^= dat
+        return seed & 0xFFFF
 
     #################################################################
     # Internal
@@ -1352,7 +1386,41 @@ class BufInStream(InStream):
             self._buf.charset(origCharset)
 
     def read_char(self):
-        return self._buf.read_char()
+        """Read character using this stream's charset (not the underlying Buf's charset)."""
+        # Check unread char stack first
+        if hasattr(self, '_unread_char_stack') and self._unread_char_stack:
+            return self._unread_char_stack.pop()
+        if self._buf._pos >= self._buf._size:
+            return None
+        charset_name = self._get_python_encoding()
+        self._buf._bytes.seek(self._buf._pos)
+        # For UTF-8, read up to 4 bytes to decode one char
+        for byte_count in range(1, 5):
+            if self._buf._pos + byte_count > self._buf._size:
+                break
+            self._buf._bytes.seek(self._buf._pos)
+            data = self._buf._bytes.read(byte_count)
+            try:
+                ch = data.decode(charset_name)
+                if len(ch) == 1:
+                    self._buf._pos += byte_count
+                    return ord(ch)
+            except:
+                continue
+        return None
+
+    def _get_python_encoding(self):
+        """Get Python encoding name for this stream's charset."""
+        name = self.charset().name()
+        encoding_map = {
+            'UTF-8': 'utf-8',
+            'UTF-16BE': 'utf-16-be',
+            'UTF-16LE': 'utf-16-le',
+            'UTF-16': 'utf-16',
+            'US-ASCII': 'ascii',
+            'ISO-8859-1': 'iso-8859-1',
+        }
+        return encoding_map.get(name, name.lower().replace('-', '_'))
 
     def r_char(self):
         """Read character as int code point for Tokenizer compatibility."""
@@ -1360,20 +1428,69 @@ class BufInStream(InStream):
         return c if c is not None else None
 
     def unread_char(self, c):
-        self._buf.unread_char(c)
+        if not hasattr(self, '_unread_char_stack'):
+            self._unread_char_stack = []
+        self._unread_char_stack.append(int(c))
         return self
 
     def peek_char(self):
-        return self._buf.peek_char()
+        """Peek character without advancing, using this stream's charset."""
+        if hasattr(self, '_unread_char_stack') and self._unread_char_stack:
+            return self._unread_char_stack[-1]
+        old_pos = self._buf._pos
+        ch = self.read_char()
+        self._buf._pos = old_pos
+        return ch
 
     def read_chars(self, n):
-        return self._buf.read_chars(n)
+        """Read exactly n characters using this stream's charset."""
+        if n < 0:
+            from .Err import ArgErr
+            raise ArgErr.make(f"readChars n < 0: {n}")
+        chars = []
+        for _ in range(int(n)):
+            ch = self.read_char()
+            if ch is None:
+                from .Err import IOErr
+                raise IOErr.make("Unexpected end of stream")
+            chars.append(chr(ch))
+        return ''.join(chars)
 
     def read_line(self, max_chars=None):
-        return self._buf.read_line(max_chars)
+        """Read line of text using this stream's charset."""
+        if self._buf._pos >= self._buf._size:
+            return None
+        chars = []
+        count = 0
+        while self._buf._pos < self._buf._size:
+            if max_chars is not None and count >= max_chars:
+                break
+            ch = self.read_char()
+            if ch is None:
+                break
+            if ch == ord('\n'):
+                break
+            if ch == ord('\r'):
+                next_ch = self.peek_char()
+                if next_ch == ord('\n'):
+                    self.read_char()
+                break
+            chars.append(chr(ch))
+            count += 1
+        if not chars and self._buf._pos >= self._buf._size:
+            return None
+        return ''.join(chars)
 
     def read_all_str(self, normalize=True):
-        return self._buf.read_all_str(normalize)
+        """Read all remaining as string using this stream's charset."""
+        self._buf._bytes.seek(self._buf._pos)
+        data = self._buf._bytes.read(self._buf._size - self._buf._pos)
+        self._buf._pos = self._buf._size
+        charset_name = self._get_python_encoding()
+        s = data.decode(charset_name)
+        if normalize:
+            s = s.replace('\r\n', '\n').replace('\r', '\n')
+        return s
 
     def read_all_lines(self):
         return self._buf.read_all_lines()

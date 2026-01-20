@@ -283,15 +283,17 @@ class StrBufOutStream:
 
     def __init__(self, buf):
         self._buf = buf
-        self._charset = "UTF-8"
+        self._charset_obj = None  # Lazy init
 
-    @property
-    def charset(self):
-        """Return charset (always UTF-8 for StrBuf)."""
-        class Charset:
-            def __init__(self):
-                self.name = "UTF-8"
-        return Charset()
+    def charset(self, val=None):
+        """Get or set charset (always UTF-8 for StrBuf, set is ignored)."""
+        if val is None:
+            if self._charset_obj is None:
+                from .Charset import Charset
+                self._charset_obj = Charset.utf8()
+            return self._charset_obj
+        # Setting charset is ignored for StrBuf - it's always UTF-8
+        return self
 
     def write_char(self, ch):
         """Write single character."""
@@ -324,11 +326,14 @@ class StrBufOutStream:
 
         Args:
             s: String to write
-            flags: Bitmask of options (xmlEscQuotes=0x01 to escape quotes as entities)
+            flags: Bitmask of options:
+                   - xmlEscNewlines = 0x01
+                   - xmlEscQuotes = 0x02
+                   - xmlEscUnicode = 0x04
 
         Note: Fantom only escapes < and & by default, not >
         """
-        xml_esc_quotes = 1  # OutStream.xmlEscQuotes
+        xml_esc_quotes = 0x02  # OutStream.xmlEscQuotes
         result = []
         for ch in str(s):
             if ch == '<':
@@ -344,12 +349,14 @@ class StrBufOutStream:
         self._buf.add(''.join(result))
         return self
 
-    def write_props(self, props):
+    def write_props(self, props, close=True):
         """Write map as properties file format."""
         for key, val in props.items() if hasattr(props, 'items') else []:
             # Escape special characters in value
             escaped_val = val.replace('\\', '\\\\').replace('\t', '\\t').replace('\n', '\\n')
             self._buf.add(f"{key}={escaped_val}\n")
+        if close:
+            self.close()
         return self
 
     def write_obj(self, obj, options=None):

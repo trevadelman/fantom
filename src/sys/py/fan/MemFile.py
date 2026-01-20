@@ -27,6 +27,11 @@ class MemFile(File):
         """Create MemFile from buffer and URI."""
         return MemFile(buf, uri)
 
+    def typeof(self):
+        """Return MemFile type."""
+        from .Type import Type
+        return Type.find("sys::MemFile")
+
     def exists(self):
         """MemFile always exists."""
         return True
