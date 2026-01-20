@@ -844,7 +844,22 @@ class ObjUtil:
             if callable(cls_attr):
                 # Static method
                 return cls_attr(*call_args)
-            return cls_attr
+            # Static field - if args provided, need to set via reflection for const check
+            if args:
+                # Use reflection to set - this handles const checking
+                from .Type import Type
+                from .Err import ReadonlyErr, ArgErr
+                objType = Type.of(obj)
+                if objType is not None:
+                    slot = objType.slot(name, False)
+                    if slot is not None:
+                        from .Field import Field
+                        if isinstance(slot, Field):
+                            slot.set_(obj, args[0])  # Will throw ReadonlyErr if const
+                            return
+                # Fall through to error if no slot found
+            else:
+                return cls_attr
 
         # Use reflection to find slot - this handles fields registered via af_()
         # including static fields that aren't generated as class attributes

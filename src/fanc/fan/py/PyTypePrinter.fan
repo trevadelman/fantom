@@ -2364,7 +2364,7 @@ class PyTypePrinter : PyPrinter
     if (f.isStatic) flags = flags.or(0x00000800)       // FConst.Static
     if (f.isVirtual) flags = flags.or(0x00001000)      // FConst.Virtual
     if (f.isOverride) flags = flags.or(0x00000200)     // FConst.Override
-    if (f.isConst) flags = flags.or(0x00002000)        // FConst.Const
+    if (f.isConst) flags = flags.or(0x00000100)        // FConst.Const
     return flags
   }
 

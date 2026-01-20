@@ -117,8 +117,19 @@ class Obj:
         if attr is not None:
             if callable(attr):
                 # Check if this is a getter being used as setter (args provided)
-                # In this case, set the backing field instead
+                # In this case, use reflection to set (for const checking)
                 if args:
+                    # Use reflection to set with const check
+                    from .Type import Type
+                    objType = Type.of(self)
+                    if objType is not None:
+                        slot = objType.slot(name, False)
+                        if slot is not None:
+                            from .Field import Field
+                            if isinstance(slot, Field):
+                                slot.set_(self, args[0])  # Will throw ReadonlyErr if const
+                                return args[0]
+                    # Fallback if no slot found
                     priv_name = f"_{name}"
                     if hasattr(self, priv_name):
                         setattr(self, priv_name, args[0])
@@ -126,8 +137,18 @@ class Obj:
                     # Fall through to try calling with args
                 return attr(*(args or []))
             else:
-                # It's a field value - if args provided, it's a setter call
+                # It's a field value - if args provided, use reflection for const check
                 if args:
+                    from .Type import Type
+                    objType = Type.of(self)
+                    if objType is not None:
+                        slot = objType.slot(name, False)
+                        if slot is not None:
+                            from .Field import Field
+                            if isinstance(slot, Field):
+                                slot.set_(self, args[0])  # Will throw ReadonlyErr if const
+                                return args[0]
+                    # Fallback if no slot found
                     setattr(self, f"_{name}", args[0])
                     return args[0]
                 return attr
@@ -167,7 +188,21 @@ class Obj:
         if cls_attr is not None:
             if callable(cls_attr):
                 return cls_attr(*(args or []))
-            return cls_attr
+            # Static field - if args provided, need to set via reflection for const check
+            if args:
+                # Use reflection to set - this handles const checking
+                from .Type import Type
+                objType = Type.of(self)
+                if objType is not None:
+                    slot = objType.slot(name, False)
+                    if slot is not None:
+                        from .Field import Field
+                        if isinstance(slot, Field):
+                            slot.set_(self, args[0])  # Will throw ReadonlyErr if const
+                            return args[0]
+                # Fall through to reflection below if no slot found
+            else:
+                return cls_attr
 
         # Use reflection to find slot
         from .Type import Type

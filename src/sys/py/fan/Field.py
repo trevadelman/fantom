@@ -184,6 +184,16 @@ class Field(Slot):
             from .Err import ReadonlyErr
             raise ReadonlyErr.make(f"Cannot set const field {self.qname()}")
 
+        # Type check: verify value type fits field type
+        # This matches Java/JS behavior which validates generic types at runtime
+        field_type = self.type()
+        if val is not None and field_type is not None:
+            from .ObjUtil import ObjUtil
+            val_type = ObjUtil.typeof(val)
+            if val_type is not None and not val_type.fits(field_type):
+                from .Err import ArgErr
+                raise ArgErr.make(f"Cannot set {self.qname()}: {val_type} does not fit {field_type}")
+
         if self.is_static():
             # Static field - set on class
             py_cls = self._get_python_class()

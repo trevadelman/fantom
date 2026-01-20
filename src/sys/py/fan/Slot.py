@@ -22,7 +22,7 @@ class FConst:
     Abstract = 0x00000400
     Static = 0x00000800
     Virtual = 0x00001000
-    Const = 0x00002000
+    Const = 0x00000100  # Same bit as Ctor - but Ctor is for methods, Const is for fields
     Readonly = 0x00004000
     Facet = 0x00008000
     Getter = 0x00010000
