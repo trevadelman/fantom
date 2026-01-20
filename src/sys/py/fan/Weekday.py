@@ -148,21 +148,37 @@ class Weekday(Enum):
         return names[self._ordinal]
 
     def to_locale(self, pattern=None, locale=None):
-        """Format weekday for locale"""
+        """Format weekday for locale.
+
+        Matches JS: pattern must be all 'W' chars, length 3 or 4.
+        - null -> abbreviated
+        - WWW -> abbreviated
+        - WWWW -> full
+        - anything else -> ArgErr
+        """
+        from .Locale import Locale
+        if locale is None:
+            locale = Locale.cur()
         if pattern is None:
-            pattern = "WWW"
-        full_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+            return self.__abbr(locale)
+        # Pattern must be all 'W' characters with length 3 or 4
+        if pattern and all(c == 'W' for c in pattern):
+            if len(pattern) == 3:
+                return self.__abbr(locale)
+            elif len(pattern) == 4:
+                return self.__full(locale)
+        from fan.sys.Err import ArgErr
+        raise ArgErr.make(f"Invalid pattern: {pattern}")
+
+    def __abbr(self, locale):
+        """Get locale-aware abbreviated name"""
         abbr_names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-        if pattern == "W":
-            return abbr_names[self._ordinal][0]
-        elif pattern == "WW":
-            return abbr_names[self._ordinal][:2]
-        elif pattern == "WWW":
-            return abbr_names[self._ordinal]
-        elif pattern == "WWWW":
-            return full_names[self._ordinal]
-        else:
-            return abbr_names[self._ordinal]
+        return abbr_names[self._ordinal]
+
+    def __full(self, locale):
+        """Get locale-aware full name"""
+        full_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        return full_names[self._ordinal]
 
     def to_str(self):
         return self._name

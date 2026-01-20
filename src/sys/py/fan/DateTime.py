@@ -1163,7 +1163,11 @@ class DateTime(Obj):
 
     @staticmethod
     def _parse_int(s, pos, n):
-        """Parse n digits from string at position"""
+        """Parse n digits from string at position.
+
+        For n=1, allows parsing 1 or 2 digits (flexible).
+        For n>1, requires exactly n digits (strict).
+        """
         num = 0
         count = 0
         while pos + count < len(s) and s[pos + count].isdigit():
@@ -1174,9 +1178,13 @@ class DateTime(Obj):
         # For n=1, allow parsing one or two digits
         if n == 1 and count > 0 and pos + count < len(s) and s[pos + count].isdigit():
             num = num * 10 + (ord(s[pos + count]) - 48)
+            count += 1
         # Raise error if no digits found
         if count == 0:
             raise ValueError(f"Expected digits at position {pos}")
+        # For n>1, require exactly n digits
+        if n > 1 and count < n:
+            raise ValueError(f"Expected {n} digits at position {pos}, got {count}")
         return num
 
     @staticmethod
@@ -2043,9 +2051,10 @@ class Date(Obj):
                 elif c == "'":
                     # Quoted literal
                     if count == 2:
-                        # '' means literal quote
-                        if pos < len(s) and s[pos] == "'":
-                            pos += 1
+                        # '' means literal quote - must match
+                        if pos >= len(s) or s[pos] != "'":
+                            raise ValueError(f"Expected literal quote at position {pos}")
+                        pos += 1
                         i += 2  # Skip both quotes
                         continue
                     else:
@@ -2448,16 +2457,18 @@ class Time(Obj):
                 elif c == "'":
                     # Quoted literal
                     if count == 2:
-                        # '' means literal quote
-                        if pos < len(s) and s[pos] == "'":
-                            pos += 1
+                        # '' means literal quote - must match
+                        if pos >= len(s) or s[pos] != "'":
+                            raise ValueError(f"Expected literal quote at position {pos}")
+                        pos += 1
                         i += 2  # Skip both quotes
                         continue
                     else:
                         i += 1
                         while i < pattern_len and pattern[i] != "'":
-                            if pos < len(s) and s[pos] == pattern[i]:
-                                pos += 1
+                            if pos >= len(s) or s[pos] != pattern[i]:
+                                raise ValueError(f"Expected literal at position {pos}")
+                            pos += 1
                             i += 1
                         count = 1
                 else:
