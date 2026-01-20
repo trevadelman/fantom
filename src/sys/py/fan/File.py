@@ -61,10 +61,18 @@ class File(Obj):
         if isinstance(uri, str):
             uri = Uri.from_str(uri)
 
+        # On non-Windows systems, reject Windows-style drive letter paths
+        # The scheme "c" looks like Windows drive c:, reject single-letter schemes
+        if os.name != 'nt':
+            scheme = uri.scheme() if hasattr(uri, 'scheme') else None
+            if scheme is not None and len(scheme) == 1 and scheme.isalpha():
+                raise ArgErr.make(f"Invalid Uri path: {uri}")
+
         # Create file
         f = File(uri)
 
-        # Check slash consistency with actual file type
+        # Only validate slash consistency if file exists
+        # Non-existing paths are allowed to have any URI form
         if f._path.exists():
             is_dir = f._path.is_dir()
             uri_is_dir = f._uri.is_dir()
@@ -526,10 +534,19 @@ class File(Obj):
     def move_into(self, dest):
         """Move this file into destination directory."""
         from .Uri import Uri
+        from .Err import ArgErr
+
+        # Validate: destination must be a directory
         if isinstance(dest, File):
+            if not dest.is_dir():
+                raise ArgErr.make(f"moveInto requires dir dest: {dest}")
             new_path = dest._path / self._path.name
         else:
-            new_path = Path(str(dest)) / self._path.name
+            dest_path = Path(str(dest))
+            if not str(dest).endswith('/') and not (dest_path.exists() and dest_path.is_dir()):
+                raise ArgErr.make(f"moveInto requires dir dest: {dest}")
+            new_path = dest_path / self._path.name
+
         # Preserve directory nature - add trailing slash if source is directory
         path_str = new_path.as_posix()
         if self._path.is_dir() and not path_str.endswith('/'):
@@ -860,6 +877,12 @@ class File(Obj):
         Returns:
             Result of callback function
         """
+        from .Err import IOErr
+
+        # File must exist to read from it
+        if not self._path.exists():
+            raise IOErr.make(f"File not found: {self._uri}")
+
         inp = self.in_(bufSize)
         try:
             result = callback(inp)
@@ -873,14 +896,28 @@ class File(Obj):
 
     def trap(self, name, args=None):
         """Dynamic method invocation."""
+        from .Type import _camel_to_snake
+
         if args is None:
             args = []
-        method = getattr(self, name, None)
-        if method is not None and callable(method):
-            return method(*args)
-        # Try property access
-        if hasattr(self, name):
-            return getattr(self, name)
+
+        # Handle special names that map to Python-escaped methods
+        special_map = {'list': 'list_', 'in': 'in_', 'open': 'open_'}
+        method_name = special_map.get(name)
+
+        # If not special, try snake_case conversion
+        if method_name is None:
+            method_name = _camel_to_snake(name)
+
+        # Try converted name first, then original
+        for n in (method_name, name):
+            method = getattr(self, n, None)
+            if method is not None and callable(method):
+                return method(*args)
+            # Try property access
+            if hasattr(self, n):
+                return getattr(self, n)
+
         from .Err import UnknownSlotErr
         raise UnknownSlotErr.make(f"sys::File.{name}")
 

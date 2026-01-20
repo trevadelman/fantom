@@ -343,6 +343,10 @@ class Buf(Obj):
 
     def write(self, b):
         """Write single byte."""
+        # Check read-only mode (set by File.open_("r"))
+        if getattr(self, '_mode', None) == 'r':
+            from .Err import IOErr
+            raise IOErr.make("Buf is read-only")
         # Grow capacity if needed (double when exceeded)
         if self._pos >= self._capacity:
             new_capacity = max(self._capacity * 2, self._pos + 1)
