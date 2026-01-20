@@ -351,15 +351,47 @@ class Int(Num):
     @staticmethod
     def locale_upper(ch, locale=None):
         """Convert character to uppercase per locale.
-        Uses Python's Unicode-aware upper() which handles locale-specific cases.
+        Handles Turkish special cases:
+        - i (U+0069) -> İ (U+0130, Turkish dotted I)
+        - ı (U+0131) -> I (U+0049, Turkish dotless i -> ASCII I)
         """
+        from .Locale import Locale
+        if locale is None:
+            locale = Locale.cur()
+
+        lang = locale.lang() if hasattr(locale, 'lang') else 'en'
+
+        # Turkish special cases
+        if lang == 'tr':
+            if ch == 105:  # 'i' -> 'İ'
+                return 304  # U+0130
+            if ch == 305:  # 'ı' -> 'I'
+                return 73  # U+0049
+
+        # Default: use Python's Unicode-aware upper()
         return ord(chr(ch).upper())
 
     @staticmethod
     def locale_lower(ch, locale=None):
         """Convert character to lowercase per locale.
-        Uses Python's Unicode-aware lower() which handles locale-specific cases.
+        Handles Turkish special cases:
+        - I (U+0049) -> ı (U+0131, Turkish dotless i)
+        - İ (U+0130) -> i (U+0069, Turkish dotted I -> ASCII i)
         """
+        from .Locale import Locale
+        if locale is None:
+            locale = Locale.cur()
+
+        lang = locale.lang() if hasattr(locale, 'lang') else 'en'
+
+        # Turkish special cases
+        if lang == 'tr':
+            if ch == 73:  # 'I' -> 'ı'
+                return 305  # U+0131
+            if ch == 304:  # 'İ' -> 'i'
+                return 105  # U+0069
+
+        # Default: use Python's Unicode-aware lower()
         return ord(chr(ch).lower())
 
     @staticmethod
