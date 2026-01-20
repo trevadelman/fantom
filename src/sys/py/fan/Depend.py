@@ -34,12 +34,16 @@ class Depend(Obj):
             if not s or not s.strip():
                 raise ValueError("Empty depend")
 
-            # Normalize whitespace (tabs to spaces, collapse multiple spaces)
-            s = re.sub(r'[\t ]+', ' ', s.strip())
-
-            # Check for invalid characters (newlines, etc)
+            # Check for invalid characters (newlines, etc) - BEFORE any normalization
             if '\n' in s or '\r' in s:
                 raise ValueError("Invalid characters in depend")
+
+            # Must NOT start with whitespace
+            if s[0] in ' \t':
+                raise ValueError("Depend must not start with whitespace")
+
+            # Normalize whitespace (tabs to spaces, collapse multiple spaces)
+            s = re.sub(r'[\t ]+', ' ', s.strip())
 
             # Must start with a letter (pod name)
             if not s[0].isalpha():
