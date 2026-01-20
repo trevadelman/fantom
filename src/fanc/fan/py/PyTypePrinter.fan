@@ -725,7 +725,8 @@ class PyTypePrinter : PyPrinter
         if (m.isInstanceInit) return
         if (m.isStaticInit) return
         // Allow once helper methods (synthetic but needed) - they end with $Once
-        if (m.isSynthetic && !m.name.endsWith("\$Once")) return
+        // Allow checkFields$ methods - they validate non-nullable fields were set
+        if (m.isSynthetic && !m.name.endsWith("\$Once") && !m.name.startsWith("checkFields\$")) return
         // Skip abstract methods in mixins - they must be implemented by concrete class
         // Python MRO would find the mixin's pass-returning method before the base class implementation
         if (m.isAbstract && t.isMixin) return
@@ -1060,7 +1061,8 @@ class PyTypePrinter : PyPrinter
       if (m.isInstanceInit) return
       if (m.isStaticInit) return
       // Allow once helper methods (synthetic but needed) - they end with $Once
-      if (m.isSynthetic && !m.name.endsWith("\$Once")) return
+      // Allow checkFields$ methods - they validate non-nullable fields were set
+      if (m.isSynthetic && !m.name.endsWith("\$Once") && !m.name.startsWith("checkFields\$")) return
       if (m.name == "fromStr") return  // Already generated
 
       method(m)

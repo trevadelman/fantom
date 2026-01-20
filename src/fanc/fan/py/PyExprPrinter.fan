@@ -297,13 +297,12 @@ class PyExprPrinter : PyPrinter
 
   private Void call(CallExpr e)
   {
-    // Skip compiler-injected const field validation calls (checkInCtor, enterCtor, exitCtor, checkFields$*)
-    // These are added by ConstChecks.fan for runtime validation of const field setting.
+    // Skip compiler-injected const protection calls (checkInCtor, enterCtor, exitCtor)
+    // These are added by ConstChecks.fan for preventing const field mutation.
     // In Python we skip these since const protection is not strictly enforced.
-    // They reference 'this' which doesn't exist in static context (e.g., static factory methods).
+    // NOTE: checkFields$* is NOT skipped - it validates non-nullable fields were set.
     methodName := e.method.name
-    if (methodName == "checkInCtor" || methodName == "enterCtor" || methodName == "exitCtor" ||
-        methodName.startsWith("checkFields\$"))
+    if (methodName == "checkInCtor" || methodName == "enterCtor" || methodName == "exitCtor")
     {
       // Output None as a placeholder (these are always no-return statements)
       w("None")
