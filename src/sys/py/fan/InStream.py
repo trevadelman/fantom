@@ -437,20 +437,20 @@ class InStream(Obj):
             return self
 
     def read_all_str(self, normalizeNewlines=True):
-        """Read entire stream as a string"""
-        if hasattr(self, '_stream'):
-            content = self._stream.read()
-        elif self._in is not None:
-            # Check if wrapped stream has readAllStr (it's an InStream)
-            if hasattr(self._in, 'read_all_str'):
-                return self._in.read_all_str(normalizeNewlines)
-            # Otherwise it's a raw Python stream
-            content = self._in.read()
-        else:
-            return ""
+        """Read entire stream as a string.
 
-        if isinstance(content, bytes):
-            content = content.decode('utf-8')
+        For wrapped streams, read character by character using THIS stream's charset,
+        not the wrapped stream's charset. This ensures proper charset isolation.
+        """
+        # Read all chars using this stream's charset
+        chars = []
+        while True:
+            c = self.read_char()
+            if c is None:
+                break
+            chars.append(chr(c))
+        content = ''.join(chars)
+
         if normalizeNewlines:
             content = content.replace('\r\n', '\n').replace('\r', '\n')
         return content
@@ -494,9 +494,65 @@ class InStream(Obj):
         return None
 
     def read_char(self):
-        """Read a single character, return as Int (unicode code point) or None at end"""
-        if self._in is not None and hasattr(self._in, 'read_char'):
-            return self._in.read_char()
+        """Read a single character, return as Int (unicode code point) or None at end.
+
+        For wrapped binary streams, reads raw bytes and decodes using THIS stream's charset.
+        For wrapped character streams (StrInStream), delegates to read_char directly.
+        """
+        if self._in is not None:
+            # Check if wrapped stream is a character stream (StrInStream)
+            # Character streams don't support binary read() - delegate to read_char
+            if isinstance(self._in, StrInStream):
+                return self._in.read_char()
+
+            # For binary streams, read raw bytes and decode with this stream's charset
+            charset_name = self._get_python_encoding()
+
+            if 'utf-16' in charset_name.lower():
+                # UTF-16 is 2 bytes per char
+                b1 = self._in.read()
+                if b1 is None:
+                    return None
+                b2 = self._in.read()
+                if b2 is None:
+                    return None
+                data = bytes([b1, b2])
+                try:
+                    ch = data.decode(charset_name)
+                    return ord(ch[0]) if ch else None
+                except:
+                    return None
+            else:
+                # UTF-8 and others: variable length
+                b = self._in.read()
+                if b is None:
+                    return None
+                # For UTF-8, handle multi-byte chars
+                if b < 0x80:
+                    return b
+                elif b < 0xE0:
+                    b2 = self._in.read()
+                    if b2 is None:
+                        return None
+                    data = bytes([b, b2])
+                elif b < 0xF0:
+                    b2 = self._in.read()
+                    b3 = self._in.read()
+                    if b2 is None or b3 is None:
+                        return None
+                    data = bytes([b, b2, b3])
+                else:
+                    b2 = self._in.read()
+                    b3 = self._in.read()
+                    b4 = self._in.read()
+                    if b2 is None or b3 is None or b4 is None:
+                        return None
+                    data = bytes([b, b2, b3, b4])
+                try:
+                    ch = data.decode(charset_name)
+                    return ord(ch[0]) if ch else None
+                except:
+                    return None
 
         if hasattr(self, '_stream'):
             c = self._stream.read(1)
@@ -506,6 +562,19 @@ class InStream(Obj):
                 c = c.decode('utf-8')
             return ord(c) if c else None
         return None
+
+    def _get_python_encoding(self):
+        """Get Python encoding name for this stream's charset."""
+        name = self._get_charset().name()
+        encoding_map = {
+            'UTF-8': 'utf-8',
+            'UTF-16BE': 'utf-16-be',
+            'UTF-16LE': 'utf-16-le',
+            'UTF-16': 'utf-16',
+            'US-ASCII': 'ascii',
+            'ISO-8859-1': 'iso-8859-1',
+        }
+        return encoding_map.get(name, name.lower().replace('-', '_'))
 
     def read(self):
         """Read a single byte, return as Int or None at end"""
