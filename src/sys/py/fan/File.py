@@ -325,12 +325,15 @@ class File(Obj):
 
         Makes the path absolute but does NOT resolve symlinks.
         This ensures /var stays as /var (not /private/var on macOS).
+        Preserves directory nature from original URI.
         """
         from .Uri import Uri
         # Use absolute() without resolve() to keep symlinks intact
         abs_path = self._path.absolute()
         uri_str = abs_path.as_posix()
-        if abs_path.is_dir() and not uri_str.endswith('/'):
+        # Preserve directory nature: either from actual filesystem OR from original URI
+        is_dir = abs_path.is_dir() or self.is_dir()
+        if is_dir and not uri_str.endswith('/'):
             uri_str += '/'
         if not uri_str.startswith('/'):
             uri_str = '/' + uri_str

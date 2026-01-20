@@ -234,7 +234,7 @@ class Env(Obj):
 
         # Create a case-insensitive map with proper type signature
         env_map = Map.make_with_type("sys::Str", "sys::Str")
-        env_map.caseInsensitive = True
+        env_map.case_insensitive = True
 
         # Add Python environment variables
         for key, value in os.environ.items():
