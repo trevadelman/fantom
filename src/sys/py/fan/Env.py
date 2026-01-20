@@ -362,7 +362,6 @@ class Env(Obj):
         from .Map import Map
         from .Duration import Duration
         from pathlib import Path
-        import time
 
         # Build cache key
         pod_name = pod.name() if hasattr(pod, 'name') else str(pod)
@@ -377,13 +376,13 @@ class Env(Obj):
         if not hasattr(self, '_propsCache'):
             self._propsCache = {}
 
-        # Check instance cache
-        now = time.time()
+        # Check instance cache - once props are loaded, return the cached version
+        # This matches JavaScript behavior where props are cached permanently once loaded
+        # The maxAge parameter is really about "when to check file system", but once
+        # loaded, the same immutable Map should be returned for object identity
         if cache_key in self._propsCache:
             cached_time, cached_props = self._propsCache[cache_key]
-            max_age_secs = maxAge.to_millis() / 1000.0 if hasattr(maxAge, 'to_millis') else float(maxAge) / 1e9
-            if now - cached_time < max_age_secs:
-                return cached_props
+            return cached_props
 
         # Try to load from file system
         # In Fantom, etc/ overrides overlay on top of pod source files
@@ -434,9 +433,8 @@ class Env(Obj):
 
         # Make immutable and cache in instance cache (NOT static cache)
         # Static cache is only for transpiler-injected props
-        # Instance cache respects maxAge for runtime file changes
         result = props.to_immutable()
-        self._propsCache[cache_key] = (now, result)
+        self._propsCache[cache_key] = (0, result)  # timestamp not used since we cache permanently
 
         return result
 

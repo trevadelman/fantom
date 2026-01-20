@@ -116,10 +116,9 @@ class Obj:
         attr = getattr(self, name, None)
         if attr is not None:
             if callable(attr):
-                # Check if this is a getter being used as setter (args provided)
-                # In this case, use reflection to set (for const checking)
+                # Could be a method OR a field accessor
+                # Check reflection to see if it's a Field - if so, use setter
                 if args:
-                    # Use reflection to set with const check
                     from .Type import Type
                     objType = Type.of(self)
                     if objType is not None:
@@ -127,14 +126,10 @@ class Obj:
                         if slot is not None:
                             from .Field import Field
                             if isinstance(slot, Field):
-                                slot.set_(self, args[0])  # Will throw ReadonlyErr if const
+                                # It's a field - use slot.set_() which returns the value
+                                slot.set_(self, args[0])
                                 return args[0]
-                    # Fallback if no slot found
-                    priv_name = f"_{name}"
-                    if hasattr(self, priv_name):
-                        setattr(self, priv_name, args[0])
-                        return args[0]
-                    # Fall through to try calling with args
+                # Not a field, call as method
                 return attr(*(args or []))
             else:
                 # It's a field value - if args provided, use reflection for const check
