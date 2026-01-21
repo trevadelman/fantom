@@ -1714,11 +1714,17 @@ class Type(Obj):
                 self._merge_slot(inherited_slot, slots, slots_by_name, name_to_index)
 
         # Merge slots from mixins
+        # IMPORTANT: Only merge slots that are actually DEFINED on the mixin (parent == mixin),
+        # not slots inherited by the mixin from Obj. Otherwise, a mixin that doesn't override
+        # equals will contribute Obj.equals and overwrite another mixin's override.
         for mixin in self.mixins():
             if hasattr(mixin, '_reflect'):
                 mixin._reflect()
                 for inherited_slot in mixin._slot_list:
-                    self._merge_slot(inherited_slot, slots, slots_by_name, name_to_index)
+                    # Only merge if slot is defined on this mixin or overridden by it
+                    slot_parent = inherited_slot.parent() if hasattr(inherited_slot, 'parent') else None
+                    if slot_parent is not None and slot_parent._qname == mixin._qname:
+                        self._merge_slot(inherited_slot, slots, slots_by_name, name_to_index)
 
         # Merge in this type's own slots from _slots_info (transpiled types)
         for slot in self._slots_info:
