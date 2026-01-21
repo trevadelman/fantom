@@ -291,6 +291,58 @@ class Pod(Obj):
     def __hash__(self):
         return hash(self._name)
 
+    def trap(self, name, args=None):
+        """Handle trap calls (-> operator) for Pod.
+
+        Supports reloadList and reload which are Java-specific methods.
+        """
+        if name == "reloadList":
+            return self._reload_list(args)
+        if name == "reload":
+            return self._reload()
+        # Delegate to parent trap handler
+        from .Err import UnknownSlotErr
+        from .Type import Type
+        raise UnknownSlotErr(f"{Type.of(self)}.{name}")
+
+    def _reload_list(self, args=None):
+        """Reload the list of all pods.
+
+        Invalidates the cached pod list so it will be rebuilt on next access.
+        This is a Java-specific method for hot reloading but we provide a stub.
+        """
+        from .Log import Log
+        log = Log.get("sys")
+        log.info("Pod reload list")
+
+        # Invalidate cached list
+        Pod._list = None
+
+        return "reloadList"
+
+    def _reload(self):
+        """Reload this pod from disk.
+
+        This is a Java-specific method for hot reloading. In Python,
+        pods with types cannot be reloaded.
+        """
+        from .Err import Err
+        from .Log import Log
+
+        # Check if pod has types (like Java does)
+        if len(self._types) > 0:
+            raise Err(f"Cannot reload pod with types: {self._name}")
+
+        log = Log.get("sys")
+        log.info(f"Pod reload: {self._name}")
+
+        # Remove from registry so it gets re-discovered
+        if self._name in Pod._pods:
+            del Pod._pods[self._name]
+        Pod._list = None
+
+        return self
+
     # ============================================================
     # Static Methods
     # ============================================================
