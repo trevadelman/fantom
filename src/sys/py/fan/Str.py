@@ -54,7 +54,11 @@ class Str(Obj):
 
     @staticmethod
     def get(self, index):
-        return ord(self[index])
+        try:
+            return ord(self[index])
+        except IndexError:
+            from .Err import IndexErr
+            raise IndexErr.make(f"Index {index} out of bounds (size={len(self)})")
 
     @staticmethod
     def get_safe(self, index, default=0):
