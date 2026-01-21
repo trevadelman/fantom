@@ -21,6 +21,10 @@ class ConstBuf(Buf):
         from .Type import Type
         return Type.find("sys::ConstBuf")
 
+    def to_str(self):
+        """ConstBuf always reports pos=0 since it's immutable and readable from start."""
+        return f"Buf(pos=0 size={self._size})"
+
     def is_immutable(self):
         return True
 

@@ -121,6 +121,8 @@ class Type(Obj):
         # Stream hierarchy
         "sys::SysOutStream": "sys::OutStream",  # SysOutStream extends OutStream
         "sys::SysInStream": "sys::InStream",    # SysInStream extends InStream
+        # Buf hierarchy
+        "sys::ConstBuf": "sys::Buf",  # ConstBuf extends Buf
         # System enums
         "sys::Weekday": "sys::Enum",
         "sys::Month": "sys::Enum",
