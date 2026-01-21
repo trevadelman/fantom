@@ -398,6 +398,10 @@ class Method(Slot):
             return None
         if isinstance(slot, Method):
             return slot
+        # Also accept parameterized method wrappers (from ListType, MapType, FuncType)
+        # These are method-like objects that wrap a generic Method with type substitution
+        if hasattr(slot, 'returns') and hasattr(slot, 'params') and hasattr(slot, 'name'):
+            return slot
         if checked:
             from .Err import CastErr
             raise CastErr.make(f"{qname} is not a method")

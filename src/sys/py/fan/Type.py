@@ -990,6 +990,30 @@ class Type(Obj):
         "sys::Bool": {"def_val"},
     }
 
+    # Known facets for hand-written sys types (not transpiled)
+    # These match the Fantom source declarations
+    _SYS_TYPE_FACETS = {
+        "sys::Duration": {"sys::Serializable": {"simple": True}},
+        "sys::DateTime": {"sys::Serializable": {"simple": True}},
+        "sys::Date": {"sys::Serializable": {"simple": True}},
+        "sys::Time": {"sys::Serializable": {"simple": True}},
+        "sys::TimeZone": {"sys::Serializable": {"simple": True}},
+        "sys::Uri": {"sys::Serializable": {"simple": True}},
+        "sys::Version": {"sys::Serializable": {"simple": True}},
+        "sys::Uuid": {"sys::Serializable": {"simple": True}},
+        "sys::Locale": {"sys::Serializable": {"simple": True}},
+        "sys::MimeType": {"sys::Serializable": {"simple": True}},
+        "sys::Unit": {"sys::Serializable": {"simple": True}},
+        "sys::Depend": {"sys::Serializable": {"simple": True}},
+        "sys::Regex": {"sys::Serializable": {"simple": True}},
+        "sys::Range": {"sys::Serializable": {"simple": True}},
+        # Enums are @Serializable{simple=true}
+        "sys::Month": {"sys::Serializable": {"simple": True}},
+        "sys::Weekday": {"sys::Serializable": {"simple": True}},
+        "sys::Endian": {"sys::Serializable": {"simple": True}},
+        "sys::LogLevel": {"sys::Serializable": {"simple": True}},
+    }
+
     def _discover_sys_metadata(self):
         """Dynamically discover metadata for hand-written sys types.
 
@@ -2105,6 +2129,11 @@ class Type(Obj):
         if self._type_facets or self._reflected:
             return
 
+        # For hand-written sys types, load known facets from static table
+        # This is necessary because these types don't have transpiled tf_() calls
+        if self._qname in Type._SYS_TYPE_FACETS and not self._type_facets:
+            self._type_facets = Type._SYS_TYPE_FACETS[self._qname].copy()
+
         # Try to import the module to trigger tf_() metadata registration
         if "::" in self._qname:
             parts = self._qname.split("::")
@@ -2299,6 +2328,13 @@ class ListType(Type):
 
     def __hash__(self):
         return hash(self.signature())
+
+    def slot(self, name, checked=True):
+        """Get slot with type parameters substituted.
+
+        For ListType, this delegates to method() since lists only have methods.
+        """
+        return self.method(name, checked)
 
     def method(self, name, checked=True):
         """Get method with type parameters substituted.
@@ -2498,6 +2534,24 @@ class MapType(Type):
 
     def __hash__(self):
         return hash(self.signature())
+
+    def slot(self, name, checked=True):
+        """Get slot with type parameters substituted.
+
+        For MapType, delegates to method() or field() as appropriate.
+        """
+        # Try method first
+        m = self.method(name, False)
+        if m is not None:
+            return m
+        # Then try field
+        f = self.field(name, False)
+        if f is not None:
+            return f
+        if checked:
+            from .Err import UnknownSlotErr
+            raise UnknownSlotErr.make(f"{self.qname()}.{name}")
+        return None
 
     def method(self, name, checked=True):
         """Get method with type parameters substituted.
