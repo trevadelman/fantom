@@ -743,6 +743,9 @@ class ObjUtil:
         Python uses floor division modulo (same sign as divisor)
         Fantom/Java use truncated division modulo (same sign as dividend)
         """
+        # Check if a has a mod method (e.g., Number, Duration)
+        if hasattr(a, 'mod') and callable(a.mod):
+            return a.mod(b)
         if b == 0:
             return float('nan') if isinstance(a, float) else 0
         # For floats, use math.fmod which gives C/Java style modulo

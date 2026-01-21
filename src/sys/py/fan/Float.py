@@ -359,9 +359,12 @@ class Float(Num):
 
         Returns (thousands_sep, decimal_sep) tuple.
 
-        Fantom uses CLDR-based locale formatting:
-        - French/European style: non-breaking space for thousands, comma for decimal
-        - English style: comma for thousands, period for decimal
+        Fantom uses CLDR-based locale formatting. Different locales use different styles:
+        - English (en): comma thousands, period decimal (1,234.57)
+        - French (fr): non-breaking space thousands, comma decimal (1 234,57)
+        - German (de): period thousands, comma decimal (1.234,57)
+        - Spanish (es): period thousands, comma decimal (1.234,57)
+        - Italian (it): period thousands, comma decimal (1.234,57)
         """
         from .Locale import Locale
 
@@ -375,10 +378,13 @@ class Float(Num):
         if lang == 'en':
             return (',', '.')
 
-        # Most European locales use non-breaking space/comma
-        # This includes French (fr), German (de), Italian (it), Spanish (es), etc.
-        # Non-breaking space is \u00a0
-        return ('\u00a0', ',')
+        # French uses non-breaking space for thousands
+        if lang == 'fr':
+            return ('\u00a0', ',')
+
+        # German, Spanish, Italian and most other European locales use period/comma
+        # (period for thousands, comma for decimal)
+        return ('.', ',')
 
     @staticmethod
     def to_locale(self, pattern=None, locale=None):
@@ -440,8 +446,8 @@ class Float(Num):
                         dec_part = dec_part[:-1]
                     formatted = int_part + '.' + dec_part if dec_part else int_part
         else:
-            # No decimal part - truncate to integer
-            formatted = str(abs(int(self)))
+            # No decimal part - round to integer
+            formatted = str(abs(round(self)))
 
         # Handle minimum integer digits (leading zeros)
         if min_int_digits > 0:
