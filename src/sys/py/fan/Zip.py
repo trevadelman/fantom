@@ -505,6 +505,68 @@ class ZipEntryOutStream:
         self._buffer.write((s + "\n").encode('utf-8'))
         return self
 
+    def write_props(self, props, close=True):
+        """Write map as props file format.
+
+        Args:
+            props: Map of string key/value pairs
+            close: Whether to close the stream when done (default True)
+
+        Returns:
+            self for chaining
+        """
+        for key, val in props.items():
+            # Escape key and value
+            escaped_key = self._escape_props_key(str(key))
+            escaped_val = self._escape_props_val(str(val))
+            # Write line
+            line = f"{escaped_key}={escaped_val}\n"
+            self._buffer.write(line.encode('utf-8'))
+
+        if close:
+            self.close()
+        return self
+
+    def _escape_props_key(self, s):
+        """Escape special characters in props key."""
+        result = []
+        for ch in s:
+            if ch == '=':
+                result.append('\\u003d')
+            elif ch == ':':
+                result.append('\\u003a')
+            elif ch == '\\':
+                result.append('\\\\')
+            elif ch == '\n':
+                result.append('\\n')
+            elif ch == '\r':
+                result.append('\\r')
+            elif ch == '\t':
+                result.append('\\t')
+            elif ord(ch) > 127:
+                result.append(f'\\u{ord(ch):04x}')
+            else:
+                result.append(ch)
+        return ''.join(result)
+
+    def _escape_props_val(self, s):
+        """Escape special characters in props value."""
+        result = []
+        for ch in s:
+            if ch == '\\':
+                result.append('\\\\')
+            elif ch == '\n':
+                result.append('\\n')
+            elif ch == '\r':
+                result.append('\\r')
+            elif ch == '\t':
+                result.append('\\t')
+            elif ord(ch) > 127:
+                result.append(f'\\u{ord(ch):04x}')
+            else:
+                result.append(ch)
+        return ''.join(result)
+
     def flush(self):
         return self
 

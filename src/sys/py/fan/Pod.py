@@ -169,6 +169,8 @@ class Pod(Obj):
     def props(self, uri, maxAge):
         """Load properties file from pod resources.
 
+        Delegates to Env.cur().props() which handles caching and file resolution.
+
         Args:
             uri: Uri to the properties file (relative to pod)
             maxAge: Duration for caching
@@ -176,21 +178,8 @@ class Pod(Obj):
         Returns:
             Immutable Str:Str map of properties
         """
-        from .Map import Map
-
-        # Convert uri to string key for caching
-        uri_str = str(uri) if hasattr(uri, '__str__') else uri
-
-        # Check cache
-        if uri_str in self._propsCache:
-            return self._propsCache[uri_str]
-
-        # In Python runtime, we can't read from pod files directly
-        # Return empty immutable map as fallback
-        result = Map.from_literal([], [], "sys::Str", "sys::Str")
-        result = result.to_immutable()
-        self._propsCache[uri_str] = result
-        return result
+        from .Env import Env
+        return Env.cur().props(self, uri, maxAge)
 
     def files(self):
         """Return list of files in this pod.
