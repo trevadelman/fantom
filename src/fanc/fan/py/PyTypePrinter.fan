@@ -1459,13 +1459,19 @@ class PyTypePrinter : PyPrinter
     else
     {
       w("super().__init__(")
+      // Only pass chain args to super().__init__() if chain target is super (not this)
+      // For this.makeFields(...) chains, the args are for the sibling constructor, not parent
       if (hasInstanceCtor && primaryCtor.ctorChain != null)
       {
         chain := primaryCtor.ctorChain
-        chain.args.each |arg, i|
+        isSuperChain := chain.target != null && chain.target.id == ExprId.superExpr
+        if (isSuperChain)
         {
-          if (i > 0) w(", ")
-          PyExprPrinter(this).expr(arg)
+          chain.args.each |arg, i|
+          {
+            if (i > 0) w(", ")
+            PyExprPrinter(this).expr(arg)
+          }
         }
       }
       w(")").eos

@@ -1253,11 +1253,31 @@ class PyStmtPrinter : PyPrinter
         else
         {
           // For specific error types, use the Fantom type
+          // Also catch corresponding Python native exceptions where applicable
           curPod := m.curType?.pod?.name
           errPod := c.errType.pod.name
-          if (errPod == "sys" && curPod != "sys")
-            w("sys.")
-          w(c.errType.name)
+          errName := c.errType.name
+
+          // Map Fantom exceptions to Python native exceptions
+          // These need to catch both Fantom and Python versions
+          pyNative := pythonNativeException(c.errType.qname)
+          if (pyNative != null)
+          {
+            // Catch both Fantom and Python exceptions: except (sys.IndexErr, IndexError)
+            w("(")
+            if (errPod == "sys" && curPod != "sys")
+              w("sys.")
+            w(errName)
+            w(", ")
+            w(pyNative)
+            w(")")
+          }
+          else
+          {
+            if (errPod == "sys" && curPod != "sys")
+              w("sys.")
+            w(errName)
+          }
         }
       }
       else
@@ -1323,6 +1343,20 @@ class PyStmtPrinter : PyPrinter
       else w("if True")
       colon
       block(s.defaultBlock)
+    }
+  }
+
+  ** Map Fantom exception types to corresponding Python native exceptions
+  ** Returns the Python exception name if there's a mapping, null otherwise
+  private Str? pythonNativeException(Str qname)
+  {
+    switch (qname)
+    {
+      case "sys::IndexErr":     return "IndexError"
+      case "sys::ArgErr":       return "ValueError"
+      case "sys::IOErr":        return "IOError"
+      case "sys::UnknownKeyErr": return "KeyError"
+      default:                  return null
     }
   }
 }
