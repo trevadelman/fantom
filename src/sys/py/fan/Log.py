@@ -13,7 +13,24 @@ class Log(Obj):
     """
 
     _logs = {}
-    _handlers = []  # Global handlers (static)
+    _handlers = None  # Initialized in _init_handlers below
+    _handlers_initialized = False
+
+    @staticmethod
+    def _init_handlers():
+        """Initialize default handlers if not done yet - matches JS default handler."""
+        if not Log._handlers_initialized:
+            # Default console handler - matches JS: (rec) => { rec.print(); }
+            # Must wrap in Func so Type.of() returns sys::Func not sys::function
+            from fan.sys.Func import Func
+            from fan.sys.Param import Param
+            from fan.sys.Type import Type
+            console_handler = Func.make_closure(
+                {'returns': 'sys::Void', 'params': [{'name': 'rec', 'type': 'sys::LogRec'}], 'immutable': 'always'},
+                lambda rec: rec.print_()
+            )
+            Log._handlers = [console_handler]
+            Log._handlers_initialized = True
 
     def __init__(self, name, register=True):
         """Create a new log. If register=True, adds to global registry."""
@@ -165,6 +182,7 @@ class Log(Obj):
     @staticmethod
     def handlers():
         """Get global log handlers"""
+        Log._init_handlers()
         from fan.sys.List import List
         return List.from_literal(list(Log._handlers), "|sys::LogRec->sys::Void|")
 
