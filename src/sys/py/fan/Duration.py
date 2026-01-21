@@ -9,6 +9,9 @@ from .Obj import Obj
 class Duration(Obj):
     """Duration type - represents a span of time in nanoseconds"""
 
+    # Value type semantics - two durations with same ticks are === equal
+    _same_uses_equals = True
+
     # Cached singleton instances for common values
     _defVal = None
     _cache = {}  # Cache for common durations
