@@ -300,11 +300,22 @@ class ObjUtil:
         if qname == "sys::Obj":
             return True
         if qname == "sys::Num":
-            return isinstance(obj, (int, float)) and not isinstance(obj, bool)
+            # Check Python primitives or Fantom Num wrapper classes (Decimal, etc.)
+            if isinstance(obj, (int, float)) and not isinstance(obj, bool):
+                return True
+            from .Num import Num
+            return isinstance(obj, Num)
         if qname == "sys::Int":
             return isinstance(obj, int) and not isinstance(obj, bool)
         if qname == "sys::Float":
-            return isinstance(obj, float)
+            # Check Python float or Fantom Decimal (which is also a Float-compatible Num)
+            if isinstance(obj, float):
+                return True
+            from .Decimal import Decimal
+            return isinstance(obj, Decimal)
+        if qname == "sys::Decimal":
+            from .Decimal import Decimal
+            return isinstance(obj, Decimal)
         if qname == "sys::Bool":
             return isinstance(obj, bool)
         if qname == "sys::Str":
@@ -453,6 +464,10 @@ class ObjUtil:
                 return obj
         elif base_qname == "sys::Float":
             if isinstance(obj, float):
+                return obj
+            # Decimal is compatible with Float for JSON serialization
+            from .Decimal import Decimal
+            if isinstance(obj, Decimal):
                 return obj
         elif base_qname == "sys::Bool":
             if isinstance(obj, bool):
