@@ -1293,18 +1293,20 @@ class ImmutableList(List):
 #################################################################
 
 class ReadOnlyList(List):
-    """Read-only view of a list - blocks mutation but references source"""
+    """Read-only list - blocks mutation, is a snapshot of values"""
 
     def __init__(self, source):
-        """Create read-only view of source list"""
+        """Create read-only copy of source list values.
+
+        Makes a copy of the values (like JS does with .slice(0)).
+        """
         if isinstance(source, List):
-            super().__init__(source._elementType, source._values)
-            self._source = source
+            # Make a copy of the values (snapshot)
+            super().__init__(source._elementType, list(source._values))
             self._listType = source._listType
             self._of = source._of
         else:
-            super().__init__(None, source)
-            self._source = source
+            super().__init__(None, list(source) if source else [])
 
     def _check_readonly(self):
         """Throw ReadonlyErr on any mutation attempt"""
@@ -1325,8 +1327,16 @@ class ReadOnlyList(List):
         return self
 
     def rw(self):
-        """Return the original mutable source"""
-        return self._source
+        """Return a mutable copy with this RO list cached.
+
+        Creates a new RW list that caches this RO list,
+        so calling rw.ro() returns this (until rw is modified).
+        """
+        result = List(self._elementType, list(self._values))
+        result._listType = self._listType
+        result._of = self._of
+        result._roView = self  # Cache so result.ro() returns self
+        return result
 
     def to_immutable(self):
         """Convert to fully immutable list"""
