@@ -1081,7 +1081,7 @@ class Type(Obj):
         """Create a Method object from a Python function.
 
         Args:
-            name: Method name
+            name: Method name (Python snake_case)
             func: Python function/method
             is_static: Whether this is a static method (Python @staticmethod)
 
@@ -1092,10 +1092,17 @@ class Type(Obj):
         parameter (because we can't add methods to native Python types like str).
         From Fantom's perspective, these are INSTANCE methods, not static methods.
         We detect this pattern and treat them as instance methods in Fantom.
+
+        The Method is created with the Fantom camelCase name (for reflection API)
+        but the actual Python func is preserved for invocation.
         """
         from .Method import Method
         from .Param import Param
         import inspect
+
+        # Convert Python snake_case name to Fantom camelCase for the reflection API
+        # The actual Python function is preserved in _func for invocation
+        fantom_name = _snake_to_camel(name)
 
         try:
             sig = inspect.signature(func)
@@ -1105,7 +1112,7 @@ class Type(Obj):
             flags = FConst.Public
             if is_static:
                 flags |= FConst.Static
-            return Method(self, name, flags, Type.find("sys::Obj"), [], {}, func)
+            return Method(self, fantom_name, flags, Type.find("sys::Obj"), [], {}, func)
 
         # Check if first param is 'self' - if so, this is an instance method
         # in Fantom terms, even though it's a Python staticmethod
@@ -1129,8 +1136,8 @@ class Type(Obj):
 
             params.append(Param(param_name, param_type, has_default))
 
-        # Infer return type from method name
-        returns_type = self._infer_return_type(name)
+        # Infer return type from method name (use Fantom camelCase name for inference)
+        returns_type = self._infer_return_type(fantom_name)
 
         # Build flags
         from .Slot import FConst
@@ -1138,7 +1145,7 @@ class Type(Obj):
         if fantom_is_static:
             flags |= FConst.Static
 
-        return Method(self, name, flags, returns_type, params, {}, func)
+        return Method(self, fantom_name, flags, returns_type, params, {}, func)
 
     def _infer_param_type(self, param_name, param, method_name):
         """Infer Fantom type for a parameter based on naming and context.
@@ -1237,11 +1244,11 @@ class Type(Obj):
 
         # Float return patterns
         if name == 'tofloat':
-            return Type.find("sys::Float")
+            return Type.find("sys::Float?")
 
         # Int return patterns
         if name == 'toint':
-            return Type.find("sys::Int")
+            return Type.find("sys::Int?")
 
         # Duration return patterns
         if name == 'toduration':
@@ -1821,6 +1828,17 @@ class Type(Obj):
         elif name.endswith('_') and name[:-1] in _PYTHON_BUILTINS:
             # Python name -> Fantom name (hash_ -> hash)
             slot = self._slots_by_name.get(name[:-1])
+            if slot is not None:
+                return slot
+
+        # Fourth pass: try snake_case -> camelCase conversion
+        # This handles the case where name is a Python name (e.g., "from_str")
+        # but the slot is registered with Fantom name (e.g., "fromStr")
+        # This is the reverse of pass 2 - needed after we started storing
+        # dynamically discovered methods with Fantom names
+        camel_name = _snake_to_camel(name)
+        if camel_name != name:
+            slot = self._slots_by_name.get(camel_name)
             if slot is not None:
                 return slot
 

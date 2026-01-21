@@ -31,6 +31,7 @@ class Method(Slot):
         self._params = params if params is not None else []  # Parameter list
         self._facets = facets if facets is not None else {}  # Facet metadata
         self._facets_list = None  # Cached list for facets() - for identity comparison
+        self._params_list = None  # Cached list for params() - for identity comparison
         self._func = func  # Optional direct callable
         self._method_func = None  # Cached MethodFunc wrapper for identity
 
@@ -50,7 +51,10 @@ class Method(Slot):
         return self._returns
 
     def params(self):
-        """Get parameter list as Fantom List of Param objects"""
+        """Get parameter list as Fantom List of Param objects (read-only, cached for identity)"""
+        if self._params_list is not None:
+            return self._params_list
+
         from .List import List as FanList
         from .Param import Param
         from .Type import Type
@@ -65,7 +69,8 @@ class Method(Slot):
                 normalized.append(p)
             else:
                 normalized.append(p)
-        return FanList.from_list(normalized, "sys::Param")
+        self._params_list = FanList.from_list(normalized, "sys::Param").to_immutable()
+        return self._params_list
 
     def func(self):
         """Get the Func wrapper for this method.
@@ -378,7 +383,7 @@ class MethodFunc:
         self._method = method
 
     def params(self):
-        """Get parameters including 'this' for instance methods."""
+        """Get parameters including 'this' for instance methods (read-only)."""
         from .List import List as FanList
         method_params = self._method.params()
 
@@ -387,7 +392,7 @@ class MethodFunc:
             from .Param import Param
             this_param = Param("this", self._method.parent(), False)
             all_params = [this_param] + list(method_params)
-            return FanList.from_list(all_params, "sys::Param")
+            return FanList.from_list(all_params, "sys::Param").to_immutable()
 
         return method_params
 
