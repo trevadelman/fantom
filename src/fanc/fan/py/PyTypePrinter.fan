@@ -2272,11 +2272,11 @@ class PyTypePrinter : PyPrinter
       typeFind := (t.pod.name == "sys") ? "Type.find" : "sys.Type.find"
       if (m.params.isEmpty)
       {
-        w("_t.am_('${escapeName(m.name)}', ${flags}, '${retSig}', [], ${methodFacets})").nl
+        w("_t.am_('${m.name}', ${flags}, '${retSig}', [], ${methodFacets})").nl
       }
       else
       {
-        w("_t.am_('${escapeName(m.name)}', ${flags}, '${retSig}', [")
+        w("_t.am_('${m.name}', ${flags}, '${retSig}', [")
         m.params.each |p, i|
         {
           if (i > 0) w(", ")

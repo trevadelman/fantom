@@ -34,6 +34,7 @@ class Method(Slot):
         self._params_list = None  # Cached list for params() - for identity comparison
         self._func = func  # Optional direct callable
         self._method_func = None  # Cached MethodFunc wrapper for identity
+        self._resolved_py_name = None  # Cached Python method name for efficient lookup
 
     def is_method(self):
         return True
@@ -244,38 +245,69 @@ class Method(Slot):
         # Get the Python class for this type
         py_cls = self._get_python_class(parent_type)
 
-        # Convert Fantom name to snake_case for Python lookup
-        from .Type import _camel_to_snake
+        # Fast path: use cached Python method name if available
+        if self._resolved_py_name is not None:
+            if py_cls is not None and hasattr(py_cls, self._resolved_py_name):
+                method_attr = getattr(py_cls, self._resolved_py_name)
+                if is_static or is_ctor:
+                    return method_attr(*method_args)
+                else:
+                    bound_method = getattr(actual_target, self._resolved_py_name, None)
+                    if bound_method is not None and callable(bound_method):
+                        return bound_method(*method_args)
+                    return method_attr(actual_target, *method_args)
+            elif actual_target is not None and hasattr(actual_target, self._resolved_py_name):
+                method = getattr(actual_target, self._resolved_py_name)
+                if callable(method):
+                    return method(*method_args)
+
+        # Slow path: resolve Python method name (first call or cache miss)
+        from .Type import _camel_to_snake, _PYTHON_BUILTINS
         snake_name = _camel_to_snake(self._name)
+
+        # Also try escaped name for Python builtins (map -> map_, hash -> hash_)
+        escaped_name = self._name + '_' if self._name in _PYTHON_BUILTINS else None
+        snake_escaped = snake_name + '_' if snake_name in _PYTHON_BUILTINS else None
+
+        # Build list of names to try (most specific to least)
+        names_to_try = [self._name]
+        if snake_name != self._name:
+            names_to_try.append(snake_name)
+        if escaped_name:
+            names_to_try.append(escaped_name)
+        if snake_escaped and snake_escaped not in names_to_try:
+            names_to_try.append(snake_escaped)
 
         if py_cls is None:
             # Fallback: try to call on target directly
             if actual_target is not None:
-                # Try camelCase first, then snake_case
-                for method_name in [self._name, snake_name]:
+                for method_name in names_to_try:
                     if hasattr(actual_target, method_name):
                         method = getattr(actual_target, method_name)
                         if callable(method):
+                            self._resolved_py_name = method_name  # Cache for next call
                             return method(*method_args)
             from .Err import Err
             raise Err.make(f"Cannot find implementation for {self.qname()}")
 
-        # Check if method exists on the class - try camelCase first, then snake_case
+        # Check if method exists on the class
         method_attr = None
         actual_method_name = None
-        for method_name in [self._name, snake_name]:
+        for method_name in names_to_try:
             if hasattr(py_cls, method_name):
                 method_attr = getattr(py_cls, method_name)
                 actual_method_name = method_name
+                self._resolved_py_name = method_name  # Cache for next call
                 break
 
         if method_attr is None:
             # Try to call on target directly
             if actual_target is not None:
-                for method_name in [self._name, snake_name]:
+                for method_name in names_to_try:
                     if hasattr(actual_target, method_name):
                         method = getattr(actual_target, method_name)
                         if callable(method):
+                            self._resolved_py_name = method_name  # Cache for next call
                             return method(*method_args)
             from .Err import Err
             raise Err.make(f"Method {self._name} not found on {parent_type.qname()}")

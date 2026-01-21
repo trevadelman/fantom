@@ -1766,8 +1766,9 @@ class PyExprPrinter : PyPrinter
   private Void slotLiteral(SlotLiteralExpr e)
   {
     // Slot literal like Int#plus - create Method.find() or Field.find()
+    // Use original Fantom name (not snake_case) - Type.slot() handles the conversion
     parentSig := e.parent.signature
-    slotName := escapeName(e.name)  // Convert to snake_case for Python lookup
+    slotName := e.name  // Keep original Fantom camelCase name
 
     curPod := m.curType?.pod?.name
     prefix := curPod != "sys" ? "sys." : ""

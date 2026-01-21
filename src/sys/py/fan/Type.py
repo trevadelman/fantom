@@ -1757,20 +1757,37 @@ class Type(Obj):
         return self
 
     def _merge_slot(self, slot, slots, slots_by_name, name_to_index):
-        """Merge a slot into the slot lists, handling overrides."""
+        """Merge a slot into the slot lists, handling overrides.
+
+        Registers slot under both Fantom name (camelCase) and Python name (snake_case)
+        to support both reflection (which uses Fantom names) and Python dispatch
+        (which uses snake_case names).
+        """
         name = slot.name()
+
+        # Convert Fantom name to snake_case for Python dispatch
+        snake_name = _camel_to_snake(name)
+
         existing_idx = name_to_index.get(name)
+        if existing_idx is None and snake_name != name:
+            existing_idx = name_to_index.get(snake_name)
 
         if existing_idx is not None:
             # Slot with this name already exists - this is an override
             # Replace the existing slot with the new one
             slots_by_name[name] = slot
+            if snake_name != name:
+                slots_by_name[snake_name] = slot
             slots[existing_idx] = slot
         else:
-            # New slot - add it
+            # New slot - add it under both names
             slots_by_name[name] = slot
+            if snake_name != name:
+                slots_by_name[snake_name] = slot
             slots.append(slot)
             name_to_index[name] = len(slots) - 1
+            if snake_name != name:
+                name_to_index[snake_name] = len(slots) - 1
 
     #########################################################################
     # Slot Reflection - Lookup Methods
