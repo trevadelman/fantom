@@ -72,8 +72,8 @@ class Uuid(Obj):
         return self._uuid == other._uuid
 
     def hash_(self):
-        """Hash code"""
-        return hash(self._uuid)
+        """Hash code - bitsHi XOR bitsLo (matches Fantom/Java)"""
+        return self.bits_hi() ^ self.bits_lo()
 
     def compare(self, other):
         """Compare to another UUID"""

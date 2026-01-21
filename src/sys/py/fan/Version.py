@@ -94,13 +94,8 @@ class Version(Obj):
         return self._segments == other._segments
 
     def hash_(self):
-        """Hash code - matches Fantom's algorithm"""
-        # Fantom's hash: combine segment hashes
-        h = 0
-        for seg in self._segments:
-            h = (h * 31) ^ seg
-        # Ensure fits in signed 32-bit range like Java/Fantom
-        return h & 0x7FFFFFFF
+        """Hash code - matches string hash (like JS)"""
+        return hash(self.to_str())
 
     def compare(self, other):
         """Compare to another version"""
