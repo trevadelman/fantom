@@ -431,6 +431,9 @@ class Type(Obj):
 
     def base(self):
         """Return base type"""
+        # sys::Obj is the root - it has no base
+        if self._qname == "sys::Obj":
+            return None
         # First check transpiler-provided base type
         if self._base_qname is not None:
             return Type.find(self._base_qname)
