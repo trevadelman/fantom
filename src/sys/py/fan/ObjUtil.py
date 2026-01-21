@@ -828,8 +828,12 @@ class ObjUtil:
         # For Map, route to Map
         from .Map import Map
         if isinstance(obj, Map):
-            # Try snake_case first, then original camelCase
+            # Try snake_case first, then original camelCase, then Python-escaped name
             method = getattr(obj, py_name, None) or getattr(obj, name, None)
+            if method is None:
+                # Try Python-escaped name (e.g., 'set' -> 'set_' for builtins)
+                escaped_name = f"{py_name}_"
+                method = getattr(obj, escaped_name, None)
             if method:
                 return method(*call_args) if callable(method) else method
             raise AttributeError(f"Map.{name}")

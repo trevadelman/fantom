@@ -397,6 +397,13 @@ class Field(Slot):
     def find(qname, checked=True):
         """Find field by qualified name like 'sys::Str.size'.
 
+        Handles Python builtin escaping: when looking for 'Type.id', if that
+        resolves to an inherited Method but there's a Field 'Type.id_' that
+        overrides it, we return the Field instead.
+
+        This is needed because Python reserves names like 'id', so const fields
+        named 'id' are transpiled as 'id_', but Fantom code uses 'Type#id'.
+
         Args:
             qname: Qualified name like 'pod::Type.field'
             checked: If True, raise error if not found
@@ -405,11 +412,27 @@ class Field(Slot):
             Field instance or None
         """
         from .Slot import Slot
+        from .Type import _PYTHON_BUILTINS
         slot = Slot.find(qname, checked)
         if slot is None:
             return None
         if isinstance(slot, Field):
             return slot
+
+        # Handle Python builtin field override:
+        # If we found a Method (likely inherited abstract getter) but the slot name
+        # is a Python builtin, check if there's an overriding Field with escaped name
+        # e.g., MCompSpi#id -> finds inherited CompSpi.id (Method), but we want MCompSpi.id_ (Field)
+        dot_idx = qname.rfind('.')
+        if dot_idx >= 0:
+            slot_name = qname[dot_idx + 1:]
+            if slot_name in _PYTHON_BUILTINS:
+                # Try finding the escaped field name (e.g., 'id' -> 'id_')
+                escaped_qname = qname[:dot_idx + 1] + slot_name + '_'
+                escaped_slot = Slot.find(escaped_qname, False)
+                if escaped_slot is not None and isinstance(escaped_slot, Field):
+                    return escaped_slot
+
         if checked:
             from .Err import CastErr
             raise CastErr.make(f"{qname} is not a field")
