@@ -2063,7 +2063,19 @@ class PyTypePrinter : PyPrinter
       indent
       // Even empty methods need default parameter handling
       // Count how many default checks will actually be emitted
-      checksEmitted := m.params.any |p| { p.hasDefault }
+      // Must match the logic in emitDefaultParamChecks
+      paramNames := Str[,]
+      m.params.each |p| { paramNames.add(p.name) }
+      checksEmitted := m.params.any |p|
+      {
+        if (!p.hasDefault) return false
+        defExpr := p->def as Expr
+        isNullDefault := defExpr != null && defExpr.id == ExprId.nullLiteral
+        // Skip nullable params with non-null defaults unless they reference other params
+        if (p.type.isNullable && !isNullDefault && !exprReferencesParams(defExpr, paramNames))
+          return false
+        return true
+      }
       emitDefaultParamChecks(m)
       if (!checksEmitted)
         pass
@@ -2109,14 +2121,31 @@ class PyTypePrinter : PyPrinter
   ** Follows JS transpiler pattern: if (param === undefined) param = defaultExpr;
   ** For Python: if param is None: param = defaultExpr
   **
-  ** NOTE: Unlike JavaScript which can distinguish "undefined" from "null", Python cannot
-  ** distinguish "param omitted" from "param is None". So we always emit default checks
-  ** for ALL params with defaults, matching the JavaScript transpiler pattern.
+  ** IMPORTANT: For nullable params (Type?) with non-null defaults, we ONLY emit the check
+  ** if the default expression references another parameter (like `val.typeof`).
+  ** This preserves the "passing null" semantic for methods that use null to mean "no value"
+  ** (e.g., Duration? timeout := 30sec where null means no timeout).
   private Void emitDefaultParamChecks(MethodDef m)
   {
+    // Collect param names for reference checking
+    paramNames := Str[,]
+    m.params.each |p| { paramNames.add(p.name) }
+
     m.params.each |p|
     {
       if (!p.hasDefault) return
+
+      defExpr := p->def as Expr
+      isNullDefault := defExpr != null && defExpr.id == ExprId.nullLiteral
+
+      // For nullable params with non-null defaults, only emit check if default
+      // references another param (like val.typeof). Otherwise, skip to preserve
+      // the "passing null means null" semantic.
+      if (p.type.isNullable && !isNullDefault)
+      {
+        if (!exprReferencesParams(defExpr, paramNames))
+          return  // Skip - let body code handle null
+      }
 
       name := escapeName(p.name)
 
@@ -2129,6 +2158,70 @@ class PyTypePrinter : PyPrinter
       eos
       unindent
     }
+  }
+
+  ** Check if an expression references any of the given parameter names
+  ** Used to detect defaults like `val.typeof` that depend on other params
+  private Bool exprReferencesParams(Expr? e, Str[] paramNames)
+  {
+    if (e == null) return false
+
+    // Check if this is a local variable reference to a param
+    if (e.id == ExprId.localVar)
+    {
+      localVar := e as LocalVarExpr
+      return paramNames.contains(localVar.var.name)
+    }
+
+    // Check call target and args
+    if (e.id == ExprId.call)
+    {
+      call := e as CallExpr
+      if (call.target != null && exprReferencesParams(call.target, paramNames))
+        return true
+      return call.args.any |arg| { exprReferencesParams(arg, paramNames) }
+    }
+
+    // Check binary expr operands
+    if (e is BinaryExpr)
+    {
+      bin := e as BinaryExpr
+      return exprReferencesParams(bin.lhs, paramNames) || exprReferencesParams(bin.rhs, paramNames)
+    }
+
+    // Check unary expr
+    if (e is UnaryExpr)
+    {
+      unary := e as UnaryExpr
+      return exprReferencesParams(unary.operand, paramNames)
+    }
+
+    // Check ternary
+    if (e is TernaryExpr)
+    {
+      ternary := e as TernaryExpr
+      return exprReferencesParams(ternary.condition, paramNames) ||
+             exprReferencesParams(ternary.trueExpr, paramNames) ||
+             exprReferencesParams(ternary.falseExpr, paramNames)
+    }
+
+    // Check shortcut expr
+    if (e is ShortcutExpr)
+    {
+      shortcut := e as ShortcutExpr
+      if (exprReferencesParams(shortcut.target, paramNames))
+        return true
+      return shortcut.args.any |arg| { exprReferencesParams(arg, paramNames) }
+    }
+
+    // Check coerce/type check
+    if (e.id == ExprId.coerce || e.id == ExprId.isExpr || e.id == ExprId.asExpr)
+    {
+      typeCheck := e as TypeCheckExpr
+      return exprReferencesParams(typeCheck.target, paramNames)
+    }
+
+    return false
   }
 
   ** Check if this is a main(Str[] args) method
