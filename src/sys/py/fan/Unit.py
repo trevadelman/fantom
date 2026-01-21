@@ -251,15 +251,23 @@ class Unit(Obj):
     def list_():
         """List all defined units."""
         from fan.sys.List import List
+        from fan.sys.Type import Type
         Unit._ensure_initialized()
-        return List.from_list(Unit._units_list[:]).to_immutable()
+        result = List.from_list(Unit._units_list[:])
+        result._listType = Type.find("sys::Unit[]")
+        result._of = Type.find("sys::Unit")
+        return result.to_immutable()
 
     @staticmethod
     def quantities():
         """List all quantity type names."""
         from fan.sys.List import List
+        from fan.sys.Type import Type
         Unit._ensure_initialized()
-        return List.from_list(Unit._quantity_names[:]).to_immutable()
+        result = List.from_list(Unit._quantity_names[:])
+        result._listType = Type.find("sys::Str[]")
+        result._of = Type.find("sys::Str")
+        return result.to_immutable()
 
     @staticmethod
     def quantity(name):
@@ -269,6 +277,7 @@ class Unit(Obj):
         Unit._ensure_initialized()
         units = Unit._quantities.get(name, [])
         result = List.from_list(units[:])
+        result._listType = Type.find("sys::Unit[]")
         result._of = Type.find("sys::Unit")
         return result.to_immutable()
 

@@ -68,7 +68,16 @@ class Obj:
         return self.compare(other) >= 0
 
     def to_str(self):
-        return f"{type(self).__name__}@{self._hash}"
+        # For Python primitives (int, str, float, bool), use str() directly
+        # This handles cases where Obj.to_str is called on primitives via reflection
+        if isinstance(self, (int, float, bool, str)):
+            return str(self)
+        # For Fantom objects, use identity-based representation
+        # Use _hash if available, otherwise fall back to id()
+        h = getattr(self, '_hash', None)
+        if h is None:
+            h = id(self)
+        return f"{type(self).__name__}@{h}"
 
     def typeof(self):
         """Return Fantom Type for this object"""
