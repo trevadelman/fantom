@@ -130,7 +130,10 @@ class PyStmtPrinter : PyPrinter
       if (isMultiStatementClosure(ce))
       {
         // Only register closures at method level (depth == 0)
-        // Nested closures (depth > 0) will be emitted inline in parent closure
+        // Nested closures (depth > 0) will be emitted inside their parent closure.
+        // If a closure has nested multi-statement closures, isMultiStatementClosure
+        // returns true, so the parent will be extracted and nested defs can be
+        // properly emitted inside it.
         if (m.closureDepth == 0)
         {
           // Find existing or register new closure
@@ -405,6 +408,168 @@ class PyStmtPrinter : PyPrinter
     if (hasControlFlow) return true
 
     // Count real statements (excluding synthetic returns)
+    realStmtCount := 0
+    stmts.each |s|
+    {
+      if (s.id == StmtId.returnStmt)
+      {
+        ret := s as ReturnStmt
+        if (ret.expr != null) realStmtCount++
+      }
+      else if (s.id != StmtId.nop)
+      {
+        realStmtCount++
+      }
+    }
+
+    if (realStmtCount > 1) return true
+
+    // Check if this closure contains any nested multi-statement closures.
+    // If so, this closure must ALSO be extracted as a def so that the nested
+    // closure can be properly emitted inside it (and capture variables from
+    // this closure's scope). This is recursive - the containsNestedMultiStatement
+    // check will propagate up the entire closure tree.
+    if (containsNestedMultiStatementClosure(codeBlock)) return true
+
+    return false
+  }
+
+  ** Recursively check if a code block contains any nested multi-statement closures
+  private Bool containsNestedMultiStatementClosure(Block b)
+  {
+    return b.stmts.any |s| { stmtContainsNestedMultiStatementClosure(s) }
+  }
+
+  ** Check if a statement contains a nested multi-statement closure
+  private Bool stmtContainsNestedMultiStatementClosure(Stmt s)
+  {
+    switch (s.id)
+    {
+      case StmtId.expr:
+        exprStmt := s as ExprStmt
+        return exprContainsNestedMultiStatementClosure(exprStmt.expr)
+      case StmtId.localDef:
+        localDef := s as LocalDefStmt
+        if (localDef.init != null)
+          return exprContainsNestedMultiStatementClosure(localDef.init)
+        return false
+      case StmtId.returnStmt:
+        ret := s as ReturnStmt
+        if (ret.expr != null)
+          return exprContainsNestedMultiStatementClosure(ret.expr)
+        return false
+      default:
+        return false
+    }
+  }
+
+  ** Check if an expression contains or IS a nested multi-statement closure
+  private Bool exprContainsNestedMultiStatementClosure(Expr e)
+  {
+    // Check if this IS a multi-statement closure
+    if (e.id == ExprId.closure)
+    {
+      ce := e as ClosureExpr
+      // NOTE: Use a non-recursive check here to avoid infinite recursion.
+      // We only need to check if THIS closure is multi-statement (local vars, etc.)
+      // The recursive call from isMultiStatementClosure will handle deeper nesting.
+      if (closureNeedsExtractionDirect(ce)) return true
+    }
+
+    // Check children
+    switch (e.id)
+    {
+      case ExprId.call:
+        ce := e as CallExpr
+        if (ce.target != null && exprContainsNestedMultiStatementClosure(ce.target)) return true
+        return ce.args.any |arg| { exprContainsNestedMultiStatementClosure(arg) }
+      case ExprId.construction:
+        ce := e as CallExpr
+        return ce.args.any |arg| { exprContainsNestedMultiStatementClosure(arg) }
+      case ExprId.shortcut:
+        se := e as ShortcutExpr
+        if (se.target != null && exprContainsNestedMultiStatementClosure(se.target)) return true
+        return se.args.any |arg| { exprContainsNestedMultiStatementClosure(arg) }
+      case ExprId.coerce:
+        tc := e as TypeCheckExpr
+        return exprContainsNestedMultiStatementClosure(tc.target)
+      case ExprId.ternary:
+        te := e as TernaryExpr
+        return exprContainsNestedMultiStatementClosure(te.condition) ||
+               exprContainsNestedMultiStatementClosure(te.trueExpr) ||
+               exprContainsNestedMultiStatementClosure(te.falseExpr)
+      case ExprId.boolOr:
+        co := e as CondExpr
+        return co.operands.any |op| { exprContainsNestedMultiStatementClosure(op) }
+      case ExprId.boolAnd:
+        ca := e as CondExpr
+        return ca.operands.any |op| { exprContainsNestedMultiStatementClosure(op) }
+      case ExprId.closure:
+        // Already checked above, but need to check INSIDE for deeply nested
+        cl := e as ClosureExpr
+        Block? codeBlock := null
+        if (cl.doCall != null && cl.doCall.code != null)
+          codeBlock = cl.doCall.code
+        else if (cl.call != null && cl.call.code != null)
+          codeBlock = cl.call.code
+        else if (cl.code != null)
+          codeBlock = cl.code
+        if (codeBlock != null)
+          return containsNestedMultiStatementClosure(codeBlock)
+        return false
+      default:
+        return false
+    }
+  }
+
+  ** Check if a closure needs extraction WITHOUT the recursive nested check.
+  ** This prevents infinite recursion when checking for nested multi-statement closures.
+  private Bool closureNeedsExtractionDirect(ClosureExpr ce)
+  {
+    Block? codeBlock := null
+    if (ce.doCall != null && ce.doCall.code != null)
+      codeBlock = ce.doCall.code
+    else if (ce.call != null && ce.call.code != null)
+      codeBlock = ce.call.code
+    else if (ce.code != null)
+      codeBlock = ce.code
+
+    if (codeBlock == null) return false
+
+    stmts := codeBlock.stmts
+
+    // Check if closure has local variable declarations
+    if (stmts.any |s| { s.id == StmtId.localDef }) return true
+
+    // Check if closure has assignments
+    hasAssign := stmts.any |s|
+    {
+      if (s.id == StmtId.expr)
+      {
+        es := s as ExprStmt
+        return isAssignmentExpr(es.expr)
+      }
+      if (s.id == StmtId.returnStmt)
+      {
+        ret := s as ReturnStmt
+        if (ret.expr != null)
+          return isAssignmentExpr(ret.expr)
+      }
+      return false
+    }
+    if (hasAssign) return true
+
+    // Check for control flow
+    if (stmts.any |s|
+    {
+      s.id == StmtId.ifStmt ||
+      s.id == StmtId.switchStmt ||
+      s.id == StmtId.forStmt ||
+      s.id == StmtId.whileStmt ||
+      s.id == StmtId.tryStmt
+    }) return true
+
+    // Count real statements
     realStmtCount := 0
     stmts.each |s|
     {
