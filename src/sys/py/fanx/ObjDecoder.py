@@ -455,22 +455,47 @@ class ObjDecoder:
         from fan.sys.Type import Type
         if not items:
             return Type.find("sys::Obj").to_nullable()
-        # Simple: use first item's type
-        first = items[0]
-        if first is None:
+
+        # Get type of each item, tracking if any nulls present
+        types = []
+        has_null = False
+        for item in items:
+            if item is None:
+                has_null = True
+            elif hasattr(item, 'typeof'):
+                types.append(item.typeof())
+            elif isinstance(item, bool):
+                types.append(Type.find("sys::Bool"))
+            elif isinstance(item, int):
+                types.append(Type.find("sys::Int"))
+            elif isinstance(item, float):
+                types.append(Type.find("sys::Float"))
+            elif isinstance(item, str):
+                types.append(Type.find("sys::Str"))
+            else:
+                types.append(Type.find("sys::Obj"))
+
+        # If only nulls, return Obj?
+        if not types:
             return Type.find("sys::Obj").to_nullable()
-        if hasattr(first, 'typeof'):
-            return first.typeof()
-        # Python primitives
-        if isinstance(first, bool):
-            return Type.find("sys::Bool")
-        if isinstance(first, int):
-            return Type.find("sys::Int")
-        if isinstance(first, float):
-            return Type.find("sys::Float")
-        if isinstance(first, str):
-            return Type.find("sys::Str")
-        return Type.find("sys::Obj")
+
+        # Get unique non-nullable signatures
+        sigs = set(t.to_non_nullable().signature() if hasattr(t, 'to_non_nullable') else t.signature() for t in types)
+
+        # If all types are the same
+        if len(sigs) == 1:
+            base_type = types[0]
+            if hasattr(base_type, 'to_non_nullable'):
+                base_type = base_type.to_non_nullable()
+            return base_type.to_nullable() if has_null else base_type
+
+        # Find common base type for numeric types (Int/Float -> Num)
+        if sigs <= {"sys::Int", "sys::Float"}:
+            return Type.find("sys::Num").to_nullable() if has_null else Type.find("sys::Num")
+
+        # Check if all types have a common non-Obj base (e.g., subclasses)
+        # For now, fall back to Obj? for mixed non-numeric types
+        return Type.find("sys::Obj").to_nullable()
 
     def _infer_map_type(self, items):
         """Infer map type from key/value items."""
