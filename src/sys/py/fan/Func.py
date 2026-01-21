@@ -136,34 +136,25 @@ class Func(Obj):
         """
         from .Param import Param
         from .Type import Type, FuncType, NullableType
+        from .Err import ArgErr
 
         # Unwrap nullable types - |Int->Str|? is a nullable FuncType
         inner_type = t
         if isinstance(t, NullableType):
             inner_type = t.to_non_nullable()
 
+        # Must be a FuncType - throw ArgErr if not (matches JS behavior)
+        if not isinstance(inner_type, FuncType):
+            raise ArgErr.make(f"Not a Func type: {t}")
+
         # Get returns and params from the target type
-        new_returns = None
+        new_returns = inner_type.returns()
         new_params = []
 
-        if hasattr(inner_type, 'returns'):
-            ret = inner_type.returns()
-            # Keep as Type object, not string
-            new_returns = ret
-
         # For FuncType, _params is a list of Type objects (parameter types)
-        # Access via _params property since Type.params() returns generic params map
-        if isinstance(inner_type, FuncType):
-            for i, p in enumerate(inner_type._params):
-                # Each p is a Type - create Param from it
-                new_params.append(Param(f'_p{i}', p))
-        elif hasattr(inner_type, 'params') and callable(inner_type.params):
-            # t.params() may return Type objects or Param objects
-            for i, p in enumerate(inner_type.params()):
-                if hasattr(p, 'type'):  # It's a Param
-                    new_params.append(p)
-                else:  # It's a Type - create Param from it
-                    new_params.append(Param(f'_p{i}', p))
+        for i, p in enumerate(inner_type._params):
+            # Each p is a Type - create Param from it
+            new_params.append(Param(f'_p{i}', p))
 
         return Func(self._func, new_returns, new_params)
 

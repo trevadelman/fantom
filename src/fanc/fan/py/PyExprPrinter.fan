@@ -329,10 +329,9 @@ class PyExprPrinter : PyPrinter
     {
       arg := e.args.first
       parentType := e.method.parent
-      // Only treat as cvar if:
-      // 1. Argument is NOT a closure (closures are it-blocks)
-      // 2. Parent type is a synthetic wrapper class (Wrap$*)
-      if (arg.id != ExprId.closure && parentType.isSynthetic && parentType.name.startsWith("Wrap\$"))
+      // Treat as cvar if parent type is a synthetic wrapper class (Wrap$*)
+      // Any value can be wrapped, including closures (which may be reassigned)
+      if (parentType.isSynthetic && parentType.name.startsWith("Wrap\$"))
       {
         // This is a cvar wrapper - use ObjUtil.cvar() instead of self.make()
         w("ObjUtil.cvar(")
