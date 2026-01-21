@@ -162,8 +162,11 @@ class ObjUtil:
 
     @staticmethod
     def to_str(obj):
+        # In Fantom, null.toStr throws NullErr (not returns "null")
+        # This matches JS behavior where null.toString() throws TypeError
         if obj is None:
-            return "null"
+            from .Err import NullErr
+            raise NullErr.make("Cannot call toStr on null")
         if isinstance(obj, bool):
             return "true" if obj else "false"
         if isinstance(obj, str):

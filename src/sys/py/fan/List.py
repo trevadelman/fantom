@@ -968,10 +968,14 @@ class List(Obj, MutableSequence):
     def join(self, sep="", converter=None):
         """Join elements into string"""
         from .ObjUtil import ObjUtil
+        def item_to_str(x):
+            if x is None:
+                return "null"
+            return ObjUtil.to_str(x)
         if converter is not None:
             # Call converter with original item, then convert result to string
-            return sep.join(ObjUtil.to_str(converter(x)) for x in self._values)
-        return sep.join(ObjUtil.to_str(x) for x in self._values)
+            return sep.join(item_to_str(converter(x)) for x in self._values)
+        return sep.join(item_to_str(x) for x in self._values)
 
     #################################################################
     # Sort/Order Methods
@@ -1168,7 +1172,9 @@ class List(Obj, MutableSequence):
         from .ObjUtil import ObjUtil
         if len(self._values) == 0:
             return "[,]"
-        items = [ObjUtil.to_str(x) for x in self._values]
+        # Handle null items specially - ObjUtil.to_str(None) throws NullErr
+        # but List.toStr should display nulls as "null"
+        items = ["null" if x is None else ObjUtil.to_str(x) for x in self._values]
         return "[" + ", ".join(items) + "]"
 
     def to_code(self):

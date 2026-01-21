@@ -1244,12 +1244,21 @@ class PyStmtPrinter : PyPrinter
       if (c.errType != null)
       {
         w(" ")
-        // For sys pod exception types, add sys. prefix when in non-sys pods
-        curPod := m.curType?.pod?.name
-        errPod := c.errType.pod.name
-        if (errPod == "sys" && curPod != "sys")
-          w("sys.")
-        w(c.errType.name)
+        // For sys::Err (base class), catch all Python exceptions
+        // This ensures Python native exceptions (KeyError, etc.) are also caught
+        if (c.errType.qname == "sys::Err")
+        {
+          w("Exception")
+        }
+        else
+        {
+          // For specific error types, use the Fantom type
+          curPod := m.curType?.pod?.name
+          errPod := c.errType.pod.name
+          if (errPod == "sys" && curPod != "sys")
+            w("sys.")
+          w(c.errType.name)
+        }
       }
       else
       {
