@@ -223,11 +223,9 @@ class Obj:
         raise UnknownSlotErr(f"{Type.of(self)}.{name}")
 
     def with_(self, f):
-        # Const objects cannot be modified after construction
-        # Calling with {} on an immutable object throws ConstErr
-        if self.is_immutable():
-            from .Err import ConstErr
-            raise ConstErr.make(f"Cannot call with {{}} on const {type(self).__name__}")
+        # Matches JS implementation: just call f(this) and return this
+        # The with() method itself never mutates the object - if the closure
+        # tries to mutate a const field, THAT will throw an error
         f(self)
         return self
 

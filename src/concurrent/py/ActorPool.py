@@ -6,7 +6,7 @@
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from fan.sys.Obj import Obj
-from fan.sys.Err import Err, ArgErr, TimeoutErr
+from fan.sys.Err import Err, ArgErr, TimeoutErr, ConstErr
 
 
 class ActorPool(Obj):
@@ -22,6 +22,9 @@ class ActorPool(Obj):
 
     def __init__(self, it_block=None):
         super().__init__()
+        # Track construction phase - const fields are only settable during construction
+        self._constructed = False
+
         # Default values matching Java
         self._name = "ActorPool"
         self._max_threads = 100
@@ -56,33 +59,61 @@ class ActorPool(Obj):
         from fan.concurrent.Scheduler import Scheduler
         self._scheduler = Scheduler(self._name)
 
+        # Mark construction complete - no more field modifications allowed
+        self._constructed = True
+
+    def __setattr__(self, name, value):
+        """Intercept attribute sets to enforce const field protection after construction."""
+        # Allow all sets during construction (before _constructed is set)
+        if not hasattr(self, '_constructed') or not self._constructed:
+            super().__setattr__(name, value)
+            return
+
+        # After construction, block sets to const fields
+        const_fields = {'_name', '_max_threads', '_max_queue', '_max_time_before_yield'}
+        if name in const_fields:
+            raise ConstErr.make(f"Cannot set const field on ActorPool")
+
+        # Allow other attribute sets (e.g., internal state like _state, _pending_count)
+        super().__setattr__(name, value)
+
     @staticmethod
     def make(it_block=None):
         """Factory method with optional it-block for configuration"""
         return ActorPool(it_block)
 
     # Property accessors matching Fantom API (getter/setter pattern)
+    # Setters throw ConstErr if called after construction (ActorPool is const)
+
+    def _check_const(self, field_name):
+        """Throw ConstErr if trying to modify a field after construction"""
+        if self._constructed:
+            raise ConstErr.make(f"Cannot set const field {field_name} on ActorPool")
 
     def name(self, val=None):
         if val is None:
             return self._name
         else:
+            self._check_const("name")
             self._name = val
 
     def max_threads(self, val=None):
         if val is None:
             return self._max_threads
         else:
+            self._check_const("maxThreads")
             self._max_threads = val
 
     def max_queue(self, val=None):
         if val is None:
             return self._max_queue
         else:
+            self._check_const("maxQueue")
             self._max_queue = val
 
     def max_time_before_yield(self, val=None):
         if val is not None:
+            self._check_const("maxTimeBeforeYield")
             self._max_time_before_yield = val
             return
         if self._max_time_before_yield is None:
