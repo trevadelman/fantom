@@ -2240,12 +2240,17 @@ class PyTypePrinter : PyPrinter
         // Enum values are public static const using canonical FConst values
         enumFlags := FConst.Public.or(FConst.Static).or(FConst.Const).or(FConst.Enum)
         fieldFacets = facetDict(f.enumDef.facets)
-        w("_t.af_('${escapeName(f.name)}', ${enumFlags}, '${typeSig}', ${fieldFacets})").nl
+        // Use original Fantom name (f.name) for enum fields - NOT escapeName()
+        // Enum field names like "A", "B", "C" must stay uppercase for reflection
+        // Field.name() should return "A" not "a"
+        w("_t.af_('${f.name}', ${enumFlags}, '${typeSig}', ${fieldFacets})").nl
       }
       else
       {
         fieldFacets = facetDict(f.facets)
         setterFlags := setterFlags(f)
+        // Use escapeName() for regular fields - converts to snake_case to match Python storage
+        // The Python code stores fields as _const_x not _constX
         // Only emit setter flags if they differ from field flags
         if (setterFlags != flags)
           w("_t.af_('${escapeName(f.name)}', ${flags}, '${typeSig}', ${fieldFacets}, ${setterFlags})").nl
