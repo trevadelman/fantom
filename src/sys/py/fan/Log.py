@@ -155,6 +155,8 @@ class Log(Obj):
 
     def log(self, rec):
         """Log a record - can be overridden by subclasses"""
+        # Ensure handlers are initialized
+        Log._init_handlers()
         # Call global handlers
         for handler in Log._handlers:
             try:

@@ -797,15 +797,24 @@ class Type(Obj):
     def is_const(self):
         """Check if this type is a const class (immutable).
 
-        Const classes are always immutable. This checks:
-        1. Transpiler-provided flag (FConst.Const)
+        Const classes are always immutable. In Fantom, if a base class is const,
+        all subclasses are also const. This checks:
+        1. Transpiler-provided flag (FConst.Const) on this type
         2. Known const types in sys (for hand-written runtime classes)
+        3. Whether any base class is const (constness is inherited)
         """
         from .Slot import FConst
         if self._type_flags & FConst.Const:
             return True
         # For hand-written sys types, check known const types
-        return self._qname in Type._CONST_TYPES
+        if self._qname in Type._CONST_TYPES:
+            return True
+        # Check if base class is const (constness is inherited in Fantom)
+        base = self.base()
+        if base is not None and base._qname != self._qname and base._qname != "sys::Obj":
+            if base.is_const():
+                return True
+        return False
 
     def is_public(self):
         """Check if this type is public."""
