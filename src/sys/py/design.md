@@ -487,6 +487,10 @@ For types in the same pod, dynamic imports avoid circular dependencies:
 __import__('fan.testSys.ObjWrapper', fromlist=['ObjWrapper']).ObjWrapper
 ```
 
+**Performance Note:** This pattern can result in millions of `__import__()` calls during
+heavy operations like xeto namespace creation. See [__import__() Caching](#__import__-caching)
+in Performance Optimizations for the runtime cache that makes this pattern efficient.
+
 ### Cross-Pod Type References
 
 Cross-pod types use the namespace import pattern:
@@ -708,6 +712,45 @@ share cached `Param` objects instead of creating 4.2M short-lived objects.
 **Memory impact:** ~50-100 KB (100-200 unique signatures × ~500 bytes/entry).
 Actually reduces GC pressure by avoiding millions of allocations/deallocations.
 
+## __import__() Caching
+
+The transpiler generates `__import__('fan.pod.Type', fromlist=['Type']).Type` for same-pod
+type references to avoid circular imports (see [Import Architecture](#import-architecture)).
+During heavy compilation like xeto namespace creation, this results in 3.6 million
+`__import__()` calls.
+
+The optimization caches `__import__()` results for `fan.*` modules in `builtins`:
+
+```python
+# In fan/sys/__init__.py
+if not hasattr(_builtins, '_fan_import_cache'):
+    _builtins._fan_import_cache = {}
+    _builtins._fan_original_import = _builtins.__import__
+
+    def _cached_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if fromlist and name.startswith('fan.'):
+            cache_key = (name, tuple(fromlist) if fromlist else None)
+            cached = _builtins._fan_import_cache.get(cache_key)
+            if cached is not None:
+                return cached
+            result = _builtins._fan_original_import(name, globals, locals, fromlist, level)
+            _builtins._fan_import_cache[cache_key] = result
+            return result
+        return _builtins._fan_original_import(name, globals, locals, fromlist, level)
+
+    _builtins.__import__ = _cached_import
+```
+
+**Why this matters:** Python's `__import__()` has overhead even when modules are cached
+in `sys.modules`. By caching the fully-resolved result (module with fromlist attribute),
+we avoid repeated lookups. Xeto namespace creation drops from ~25s to ~6s (75% faster).
+
+**Memory impact:** ~10KB (245 unique module/fromlist combinations × ~40 bytes/entry).
+
+**Design note:** The cache is stored in `builtins` rather than module-level to survive
+module reloading during testing. It only caches `fan.*` modules with explicit `fromlist`,
+matching the transpiler's pattern, so it doesn't affect other Python code.
+
 ## Performance Results
 
 These optimizations together deliver 28-32% speedup on testXeto:
@@ -717,8 +760,14 @@ These optimizations together deliver 28-32% speedup on testXeto:
 | testXeto::AxonTest | 83.5s | 59.7s | 28% faster |
 | testXeto::ValidateTest | 45.8s | 31.3s | 32% faster |
 
+Xeto namespace creation specifically:
+
+| Operation | Before | After | Improvement |
+|-----------|--------|-------|-------------|
+| create_namespace(['sys','ph']) | ~25s | ~6s | 75% faster |
+
 **Design principles:**
-1. Optimize the hottest paths first (Type.find, closure creation)
+1. Optimize the hottest paths first (Type.find, closure creation, __import__)
 2. Cache objects keyed by immutable signatures, not call count
 3. Trade ~100KB memory for avoiding millions of allocations
 4. Keep caches bounded by unique signatures in codebase

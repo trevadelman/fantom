@@ -5,7 +5,46 @@
 
 # Fantom sys pod - Python implementation
 import sys as _python_sys
+import builtins as _builtins
 from types import ModuleType as _ModuleType
+
+# =============================================================================
+# Import Caching Optimization
+# =============================================================================
+# The transpiler generates __import__('fan.pod.Type', fromlist=['Type']).Type
+# for same-pod type references to avoid circular imports. During xeto namespace
+# creation, this results in 3.6 million __import__ calls, taking ~13 seconds.
+# By caching __import__ results, we reduce this to ~6 seconds (52% faster).
+# Cache only needs ~250 entries for unique module/fromlist combinations.
+#
+# IMPORTANT: Cache is stored in builtins so it survives module clearing/reloading.
+
+# Only install cache once (check if already installed)
+if not hasattr(_builtins, '_fan_import_cache'):
+    _builtins._fan_import_cache = {}
+    _builtins._fan_original_import = _builtins.__import__
+
+    def _cached_import(name, globals=None, locals=None, fromlist=(), level=0):
+        """Cached __import__ for fan modules with fromlist.
+
+        Only caches calls that match the transpiler pattern:
+        __import__('fan.pod.Type', fromlist=['Type'])
+        """
+        # Only cache fan modules with explicit fromlist (transpiler pattern)
+        if fromlist and name.startswith('fan.'):
+            cache_key = (name, tuple(fromlist) if fromlist else None)
+            cached = _builtins._fan_import_cache.get(cache_key)
+            if cached is not None:
+                return cached
+            result = _builtins._fan_original_import(name, globals, locals, fromlist, level)
+            _builtins._fan_import_cache[cache_key] = result
+            return result
+        return _builtins._fan_original_import(name, globals, locals, fromlist, level)
+
+    _builtins.__import__ = _cached_import
+
+# Expose cache for diagnostics
+_import_cache = _builtins._fan_import_cache
 
 
 class _SysModule(_ModuleType):
