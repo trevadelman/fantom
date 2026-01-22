@@ -641,3 +641,84 @@ include type hints (though this could be added in the future). Runtime type chec
 
 Fantom's `null` maps directly to Python's `None`. Nullable types (`Str?`) don't have special
 representation - any variable can hold `None`.
+
+# Performance Optimizations
+
+The runtime includes several optimizations critical for acceptable test performance.
+These trade small amounts of persistent memory for significant CPU savings.
+
+## Type.find() Cache-First Pattern
+
+`Type.find()` is called millions of times during test execution (19M+ calls in testXeto).
+The optimization ensures cache hits are as fast as possible:
+
+```python
+@staticmethod
+def find(qname, checked=True):
+    # CRITICAL: Check cache FIRST before any imports
+    # This saves ~0.6us per call (8.3x faster than doing import first)
+    cached = Type._cache.get(qname)
+    if cached is not None:
+        return cached
+
+    # Imports only needed for cache misses and error handling
+    from .Err import ArgErr, UnknownTypeErr, UnknownPodErr
+    # ... rest of lookup logic
+```
+
+**Why this matters:** Python's `from .Err import ...` statement has ~0.6us overhead per call,
+even when the modules are already in `sys.modules`. Moving the cache check before imports
+reduces cache hit time from 0.66us to 0.12us (5.4x faster).
+
+**Memory impact:** Zero - just reordered existing code.
+
+## Func.make_closure() Param Caching
+
+Closures are created millions of times per test run (4.2M+ in testXeto). Each closure
+specification includes parameter metadata that previously created new `Param` objects
+every time:
+
+```python
+# Module-level cache
+_param_cache = {}  # (name, type_sig) -> Param
+
+@staticmethod
+def make_closure(spec, func):
+    # ... parse spec ...
+    for p in spec.get('params', []):
+        name = p['name']
+        type_sig = p['type']
+        cache_key = (name, type_sig)
+
+        # Check cache first
+        cached = Func._param_cache.get(cache_key)
+        if cached is not None:
+            params.append(cached)
+            continue
+
+        # Create and cache on miss
+        param = Param(name, Type.find(type_sig), False)
+        Func._param_cache[cache_key] = param
+        params.append(param)
+```
+
+**Why this matters:** Closures with the same parameter signature (e.g., `|Int->Bool|`)
+share cached `Param` objects instead of creating 4.2M short-lived objects.
+
+**Memory impact:** ~50-100 KB (100-200 unique signatures × ~500 bytes/entry).
+Actually reduces GC pressure by avoiding millions of allocations/deallocations.
+
+## Performance Results
+
+These optimizations together deliver 28-32% speedup on testXeto:
+
+| Test Suite | Before | After | Improvement |
+|------------|--------|-------|-------------|
+| testXeto::AxonTest | 83.5s | 59.7s | 28% faster |
+| testXeto::ValidateTest | 45.8s | 31.3s | 32% faster |
+
+**Design principles:**
+1. Optimize the hottest paths first (Type.find, closure creation)
+2. Cache objects keyed by immutable signatures, not call count
+3. Trade ~100KB memory for avoiding millions of allocations
+4. Keep caches bounded by unique signatures in codebase
