@@ -238,10 +238,19 @@ class DateTime(Obj):
 
     @staticmethod
     def _now_ticks_raw():
-        """Get current time as raw ticks (nanoseconds since Fantom epoch)"""
+        """Get current time as raw ticks (nanoseconds since Fantom epoch).
+
+        Note: We truncate to millisecond precision to match Fantom/JS behavior.
+        JavaScript's Date.getTime() only provides millisecond precision, so
+        Fantom semantics are defined at that level. This ensures round-trip
+        through binary I/O (which stores milliseconds) produces equal values.
+        """
         import time
         # Get current time in nanoseconds since Unix epoch (1970)
         unix_ns = time.time_ns()
+        # Truncate to millisecond precision to match JS/Fantom behavior
+        # (JS: new Date().getTime() * nsPerMilli)
+        unix_ns = (unix_ns // 1000000) * 1000000
         # Convert to Fantom epoch (2000)
         return unix_ns - DateTime._EPOCH_DIFF_NS
 
