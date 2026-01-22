@@ -493,3 +493,45 @@ class Duration(Obj):
         """Return Fantom Type for Duration"""
         from .Type import Type
         return Type.find("sys::Duration")
+
+    #################################################################
+    # Python Interop (to_py / from_py)
+    #################################################################
+
+    def to_py(self):
+        """Convert to native Python datetime.timedelta.
+
+        Returns:
+            A datetime.timedelta object.
+
+        Note: Python timedelta only has microsecond precision, so
+              nanoseconds are truncated to microseconds.
+
+        Example:
+            >>> Duration.from_str("5sec").to_py()
+            datetime.timedelta(seconds=5)
+        """
+        from datetime import timedelta
+        # Convert nanoseconds to microseconds (Python's finest resolution)
+        microseconds = self._ticks // 1000
+        return timedelta(microseconds=microseconds)
+
+    @staticmethod
+    def from_py(td):
+        """Create Duration from native Python datetime.timedelta.
+
+        Args:
+            td: Python datetime.timedelta object
+
+        Returns:
+            Fantom Duration
+
+        Example:
+            >>> from datetime import timedelta
+            >>> Duration.from_py(timedelta(seconds=30))
+            Duration("30sec")
+        """
+        # Convert timedelta to nanoseconds
+        # timedelta.total_seconds() gives seconds as float
+        total_ns = int(td.total_seconds() * 1_000_000_000)
+        return Duration.make(total_ns)

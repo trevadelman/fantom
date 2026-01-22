@@ -1388,6 +1388,38 @@ class Uri(Obj):
             frag=self._frag if tail else None
         )
 
+    #################################################################
+    # Python Interop (to_py / from_py)
+    #################################################################
+
+    def to_py(self):
+        """Convert to native Python string.
+
+        Returns:
+            The URI as a string.
+
+        Example:
+            >>> Uri.from_str("http://example.com/path").to_py()
+            'http://example.com/path'
+        """
+        return self.to_str()
+
+    @staticmethod
+    def from_py(s):
+        """Create Uri from native Python string.
+
+        Args:
+            s: Python string representing the URI
+
+        Returns:
+            Fantom Uri
+
+        Example:
+            >>> Uri.from_py("http://example.com")
+            Uri("http://example.com")
+        """
+        return Uri.from_str(s)
+
 
 class UriScheme(Obj):
     """

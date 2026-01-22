@@ -1247,6 +1247,35 @@ class List(Obj, MutableSequence):
     # Static methods like ro(lst), rw(lst), get(lst, index) were
     # overwriting the instance methods and causing failures.
 
+    #################################################################
+    # Python Interop (to_py / from_py)
+    #################################################################
+
+    def to_py(self, deep=False):
+        """Convert to native Python list.
+
+        Args:
+            deep: If True, recursively convert nested Fantom types (List, Map,
+                  DateTime, Duration, Date, Time) to their Python equivalents.
+                  If False (default), return a list with Fantom values.
+
+        Returns:
+            A Python list containing the list's elements.
+
+        Example:
+            >>> fantom_list.to_py()
+            [1, 2, 3]
+
+            >>> fantom_list.to_py(deep=True)  # Converts nested Lists/Maps too
+            [[1, 2], {'key': 'value'}]
+        """
+        if not deep:
+            return list(self._values)
+
+        # Deep conversion - recursively convert Fantom types
+        from .Map import _to_py_deep
+        return [_to_py_deep(v) for v in self._values]
+
 
 
 #################################################################

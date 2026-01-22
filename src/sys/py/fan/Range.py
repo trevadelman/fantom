@@ -264,3 +264,66 @@ class Range(Obj):
             from .Err import IndexErr
             raise IndexErr.make(str(self))
         return x
+
+    #################################################################
+    # Python Interop (to_py / from_py)
+    #################################################################
+
+    def to_py(self):
+        """Convert to native Python range.
+
+        Returns:
+            A Python range object.
+
+        Note: Python range is always exclusive at the end, and only supports
+              positive step (ascending). For descending ranges, returns a list.
+
+        Example:
+            >>> Range.make(0, 5).to_py()
+            range(0, 6)
+            >>> Range.make(5, 0).to_py()  # Descending - returns list
+            [5, 4, 3, 2, 1, 0]
+        """
+        # Determine step and bounds
+        if self._start <= self._end:
+            # Ascending range
+            if self._exclusive:
+                return range(self._start, self._end)
+            else:
+                return range(self._start, self._end + 1)
+        else:
+            # Descending range - Python range doesn't support descending well
+            # Return as a list instead
+            result = []
+            self.each(lambda i: result.append(i))
+            return result
+
+    @staticmethod
+    def from_py(r):
+        """Create Range from native Python range.
+
+        Args:
+            r: Python range object
+
+        Returns:
+            Fantom Range
+
+        Note: Only works for Python ranges with step=1 or step=-1.
+
+        Example:
+            >>> Range.from_py(range(0, 5))
+            Range("0..<5")
+        """
+        if not isinstance(r, range):
+            from .Err import ArgErr
+            raise ArgErr.make("Expected Python range object")
+
+        if r.step == 1:
+            # Ascending range (Python range is always exclusive)
+            return Range(r.start, r.stop, exclusive=True)
+        elif r.step == -1:
+            # Descending range
+            return Range(r.start, r.stop, exclusive=True)
+        else:
+            from .Err import ArgErr
+            raise ArgErr.make(f"Cannot convert range with step={r.step} to Fantom Range")

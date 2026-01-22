@@ -846,6 +846,37 @@ class Map(Obj, MutableMapping):
         """Encode for serialization"""
         out.write_map(self)
 
+    #################################################################
+    # Python Interop (to_py / from_py)
+    #################################################################
+
+    def to_py(self, deep=False):
+        """Convert to native Python dict.
+
+        Args:
+            deep: If True, recursively convert nested Fantom types (List, Map,
+                  DateTime, Duration, Date, Time) to their Python equivalents.
+                  If False (default), return a dict with Fantom values.
+
+        Returns:
+            A Python dict containing the map's key-value pairs.
+
+        Example:
+            >>> fantom_map.to_py()
+            {'name': 'test', 'count': 42}
+
+            >>> fantom_map.to_py(deep=True)  # Converts nested Lists/Maps too
+            {'items': [1, 2, 3], 'meta': {'key': 'value'}}
+        """
+        if not deep:
+            return dict(self._map)
+
+        # Deep conversion - recursively convert Fantom types
+        result = {}
+        for k, v in self._map.items():
+            result[k] = _to_py_deep(v)
+        return result
+
 
 #################################################################
 # ReadOnlyMap - Read-only view of a Map
@@ -892,3 +923,49 @@ class ReadOnlyMap(Map):
         result._def = self._def
         result._ro = False
         return result
+
+
+#################################################################
+# Helper: Deep Python conversion
+#################################################################
+
+def _to_py_deep(val):
+    """Recursively convert a Fantom value to its Python equivalent.
+
+    Handles: Map, List, DateTime, Duration, Date, Time.
+    Other values are returned as-is.
+    """
+    if val is None:
+        return None
+
+    # Map -> dict
+    if isinstance(val, Map):
+        return val.to_py(deep=True)
+
+    # List -> list (import here to avoid circular)
+    from .List import List
+    if isinstance(val, List):
+        return val.to_py(deep=True)
+
+    # DateTime -> datetime.datetime
+    from .DateTime import DateTime
+    if isinstance(val, DateTime):
+        return val.to_py()
+
+    # Duration -> datetime.timedelta
+    from .Duration import Duration
+    if isinstance(val, Duration):
+        return val.to_py()
+
+    # Date -> datetime.date
+    from .Date import Date
+    if isinstance(val, Date):
+        return val.to_py()
+
+    # Time -> datetime.time
+    from .Time import Time
+    if isinstance(val, Time):
+        return val.to_py()
+
+    # Other values (str, int, float, bool, etc.) - return as-is
+    return val

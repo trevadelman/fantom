@@ -1088,6 +1088,42 @@ class Buf(Obj):
         return seed & 0xFFFF
 
     #################################################################
+    # Python Interop (to_py / from_py)
+    #################################################################
+
+    def to_py(self):
+        """Convert to native Python bytes.
+
+        Returns:
+            The buffer content as Python bytes (from position 0 to size).
+
+        Example:
+            >>> buf = Buf.make()
+            >>> buf.write(65).write(66).write(67)
+            >>> buf.to_py()
+            b'ABC'
+        """
+        return self._get_data()
+
+    @staticmethod
+    def from_py(data):
+        """Create Buf from native Python bytes or bytearray.
+
+        Args:
+            data: Python bytes or bytearray
+
+        Returns:
+            Fantom Buf
+
+        Example:
+            >>> Buf.from_py(b'hello')
+            Buf(pos=0 size=5)
+        """
+        if isinstance(data, bytearray):
+            data = bytes(data)
+        return Buf(data)
+
+    #################################################################
     # Internal
     #################################################################
 

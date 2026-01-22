@@ -1566,6 +1566,97 @@ class DateTime(Obj):
         encoder.w_str_literal(self.to_str(), '"')
         encoder.w(')')
 
+    #################################################################
+    # Python Interop (to_py / from_py)
+    #################################################################
+
+    def to_py(self):
+        """Convert to native Python datetime.datetime.
+
+        Returns:
+            A timezone-aware datetime.datetime object.
+
+        Example:
+            >>> fantom_dt.to_py()
+            datetime.datetime(2025, 1, 21, 17, 20, 0, tzinfo=...)
+        """
+        from datetime import datetime as py_dt, timezone as py_tz, timedelta
+
+        # Get offset for this datetime
+        offset_secs = 0
+        rule = self._tz._get_rule(self._year) if hasattr(self._tz, '_get_rule') else None
+        if rule is not None:
+            offset_secs = rule.offset
+            if self.dst():
+                offset_secs += rule.dstOffset
+        else:
+            offset_dur = self._tz.offset(self._year)
+            offset_secs = offset_dur.to_sec() if hasattr(offset_dur, 'to_sec') else offset_dur
+            if self.dst():
+                dst_off = self._tz.dst_offset(self._year)
+                if dst_off:
+                    dst_secs = dst_off.to_sec() if hasattr(dst_off, 'to_sec') else dst_off
+                    offset_secs += dst_secs
+
+        # Create timezone from offset
+        tz_info = py_tz(timedelta(seconds=offset_secs))
+
+        # Get month number (1-12)
+        month_num = self._month.ordinal() + 1
+
+        # Create datetime with microseconds (Python datetime precision limit)
+        microseconds = self._ns // 1000
+        return py_dt(self._year, month_num, self._day,
+                    self._hour, self._min, self._sec, microseconds,
+                    tzinfo=tz_info)
+
+    @staticmethod
+    def from_py(dt, tz=None):
+        """Create DateTime from native Python datetime.datetime.
+
+        Args:
+            dt: Python datetime.datetime object
+            tz: Optional Fantom TimeZone. If None, uses the datetime's tzinfo
+                or falls back to current timezone.
+
+        Returns:
+            Fantom DateTime
+
+        Example:
+            >>> from datetime import datetime
+            >>> DateTime.from_py(datetime.now())
+            DateTime("2025-01-21T17:20:00-08:00 Los_Angeles")
+        """
+        from .TimeZone import TimeZone
+
+        if tz is None:
+            if dt.tzinfo is not None:
+                # Try to get timezone name from Python tzinfo
+                tz_name = getattr(dt.tzinfo, 'key', None) or getattr(dt.tzinfo, 'zone', None)
+                if tz_name:
+                    try:
+                        tz = TimeZone.from_str(tz_name)
+                    except:
+                        pass
+            if tz is None:
+                tz = TimeZone.cur()
+
+        # Get offset in seconds from Python datetime
+        offset_secs = 0
+        if dt.tzinfo is not None:
+            utc_offset = dt.utcoffset()
+            if utc_offset is not None:
+                offset_secs = int(utc_offset.total_seconds())
+
+        # Convert microseconds to nanoseconds
+        ns = dt.microsecond * 1000
+
+        return DateTime._make_with_offset(
+            dt.year, dt.month, dt.day,
+            dt.hour, dt.minute, dt.second, ns,
+            offset_secs, tz
+        )
+
 
 class Date(Obj):
     """Date represents a day in time without time-of-day or timezone."""
@@ -2143,6 +2234,41 @@ class Date(Obj):
                 raise ParseErr.make(f"Date: {s}")
             return None
 
+    #################################################################
+    # Python Interop (to_py / from_py)
+    #################################################################
+
+    def to_py(self):
+        """Convert to native Python datetime.date.
+
+        Returns:
+            A datetime.date object.
+
+        Example:
+            >>> fantom_date.to_py()
+            datetime.date(2025, 1, 21)
+        """
+        from datetime import date as py_date
+        month_num = self._month.ordinal() + 1
+        return py_date(self._year, month_num, self._day)
+
+    @staticmethod
+    def from_py(d):
+        """Create Date from native Python datetime.date.
+
+        Args:
+            d: Python datetime.date object
+
+        Returns:
+            Fantom Date
+
+        Example:
+            >>> from datetime import date
+            >>> Date.from_py(date.today())
+            Date("2025-01-21")
+        """
+        return Date(d.year, Month._get(d.month - 1), d.day)
+
 
 class Time(Obj):
     """Time represents a time of day to nanosecond precision."""
@@ -2565,6 +2691,45 @@ class Time(Obj):
             tz = TimeZone.cur()
         return DateTime(date.year(), date.month(), date.day(),
                        self._hour, self._min, self._sec, self._ns, tz)
+
+    #################################################################
+    # Python Interop (to_py / from_py)
+    #################################################################
+
+    def to_py(self):
+        """Convert to native Python datetime.time.
+
+        Returns:
+            A datetime.time object.
+
+        Note: Python datetime.time only has microsecond precision, so
+              nanoseconds are truncated to microseconds.
+
+        Example:
+            >>> fantom_time.to_py()
+            datetime.time(14, 30, 45, 123456)
+        """
+        from datetime import time as py_time
+        microseconds = self._ns // 1000
+        return py_time(self._hour, self._min, self._sec, microseconds)
+
+    @staticmethod
+    def from_py(t):
+        """Create Time from native Python datetime.time.
+
+        Args:
+            t: Python datetime.time object
+
+        Returns:
+            Fantom Time
+
+        Example:
+            >>> from datetime import time
+            >>> Time.from_py(time(14, 30, 45))
+            Time("14:30:45")
+        """
+        ns = t.microsecond * 1000
+        return Time(t.hour, t.minute, t.second, ns)
 
 
 # Static initialization - capture boot time when module loads
