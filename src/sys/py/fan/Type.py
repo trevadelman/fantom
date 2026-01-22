@@ -1892,16 +1892,10 @@ class Type(Obj):
             if slot is not None:
                 return slot
 
-        # Fourth pass: try snake_case -> camelCase conversion
-        # This handles the case where name is a Python name (e.g., "from_str")
-        # but the slot is registered with Fantom name (e.g., "fromStr")
-        # This is the reverse of pass 2 - needed after we started storing
-        # dynamically discovered methods with Fantom names
-        camel_name = _snake_to_camel(name)
-        if camel_name != name:
-            slot = self._slots_by_name.get(camel_name)
-            if slot is not None:
-                return slot
+        # NOTE: Pass 4 (snake_case -> camelCase) was removed after instrumentation
+        # confirmed it never triggers. This is because _merge_slot() stores slots
+        # under BOTH camelCase and snake_case names, so Pass 1 or Pass 2 always
+        # finds the slot. See commit history for original code if needed.
 
         if checked:
             from .Err import UnknownSlotErr
