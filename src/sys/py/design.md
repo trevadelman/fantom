@@ -648,8 +648,13 @@ representation - any variable can hold `None`.
 
 # Performance Optimizations
 
-The runtime includes several optimizations critical for acceptable test performance.
-These trade small amounts of persistent memory for significant CPU savings.
+Unlike JavaScript where the V8 JIT compiler handles most performance concerns, Python's
+interpreted nature requires explicit runtime optimizations. These were identified through
+profiling (`cProfile`) of the test suites and xeto namespace creation.
+
+The optimizations follow a consistent pattern: identify hot paths through profiling,
+cache computed results keyed by immutable signatures, and trade small amounts of
+persistent memory (~100KB total) for significant CPU savings.
 
 ## Type.find() Cache-First Pattern
 
@@ -716,40 +721,33 @@ Actually reduces GC pressure by avoiding millions of allocations/deallocations.
 
 The transpiler generates `__import__('fan.pod.Type', fromlist=['Type']).Type` for same-pod
 type references to avoid circular imports (see [Import Architecture](#import-architecture)).
-During heavy compilation like xeto namespace creation, this results in 3.6 million
+During heavy operations like xeto namespace creation, this results in 3.6 million
 `__import__()` calls.
 
-The optimization caches `__import__()` results for `fan.*` modules in `builtins`:
+**Implementation:** `src/sys/py/fan/__init__.py`
+
+The optimization intercepts `__import__()` for `fan.*` modules:
 
 ```python
-# In fan/sys/__init__.py
-if not hasattr(_builtins, '_fan_import_cache'):
-    _builtins._fan_import_cache = {}
-    _builtins._fan_original_import = _builtins.__import__
-
-    def _cached_import(name, globals=None, locals=None, fromlist=(), level=0):
-        if fromlist and name.startswith('fan.'):
-            cache_key = (name, tuple(fromlist) if fromlist else None)
-            cached = _builtins._fan_import_cache.get(cache_key)
-            if cached is not None:
-                return cached
-            result = _builtins._fan_original_import(name, globals, locals, fromlist, level)
-            _builtins._fan_import_cache[cache_key] = result
-            return result
-        return _builtins._fan_original_import(name, globals, locals, fromlist, level)
-
-    _builtins.__import__ = _cached_import
+# Pseudocode - see __init__.py for full implementation
+cache_key = (module_name, tuple(fromlist))
+if cache_key in _fan_import_cache:
+    return _fan_import_cache[cache_key]
+result = original_import(...)
+_fan_import_cache[cache_key] = result
+return result
 ```
 
-**Why this matters:** Python's `__import__()` has overhead even when modules are cached
-in `sys.modules`. By caching the fully-resolved result (module with fromlist attribute),
-we avoid repeated lookups. Xeto namespace creation drops from ~25s to ~6s (75% faster).
+**Why this matters:** Python's `__import__()` has overhead even for cached modules.
+Caching the fully-resolved result (module + fromlist attribute) eliminates repeated
+lookups. Xeto namespace creation drops from ~25s to ~6s (75% faster).
 
-**Memory impact:** ~10KB (245 unique module/fromlist combinations × ~40 bytes/entry).
+**Memory impact:** ~10KB (245 unique module/fromlist combinations).
 
-**Design note:** The cache is stored in `builtins` rather than module-level to survive
-module reloading during testing. It only caches `fan.*` modules with explicit `fromlist`,
-matching the transpiler's pattern, so it doesn't affect other Python code.
+**Design notes:**
+- Cache stored in `builtins` to survive module reloading during test runs
+- Only caches `fan.*` modules with explicit `fromlist` (transpiler pattern)
+- Triggered early via `import fan.sys` in `haystack/__init__.py`
 
 ## Performance Results
 
