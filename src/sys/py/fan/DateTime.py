@@ -742,9 +742,12 @@ class DateTime(Obj):
 
     @staticmethod
     def boot():
-        """Get boot time (when process started)"""
-        if not hasattr(DateTime, '_boot') or DateTime._boot is None:
-            DateTime._boot = DateTime.now()
+        """Get boot time (when process started).
+
+        Note: _boot is initialized at class definition time (see end of file)
+        to ensure it captures the actual module load time, not the first call time.
+        This matches JS behavior where staticInit.js sets DateTime.__boot = DateTime.now()
+        """
         return DateTime._boot
 
     @staticmethod
@@ -2562,3 +2565,13 @@ class Time(Obj):
             tz = TimeZone.cur()
         return DateTime(date.year(), date.month(), date.day(),
                        self._hour, self._min, self._sec, self._ns, tz)
+
+
+# Static initialization - capture boot time when module loads
+# This matches JS behavior: staticInit.js sets DateTime.__boot = DateTime.now()
+# Note: We import TimeZone here to ensure boot uses the same tz as TimeZone.cur()
+def _init_boot():
+    from .TimeZone import TimeZone
+    return DateTime.make_ticks(DateTime._now_ticks_raw(), TimeZone.cur())
+DateTime._boot = _init_boot()
+del _init_boot  # Clean up helper function

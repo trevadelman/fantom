@@ -379,6 +379,9 @@ def _is_dst_date(rule, x, year, mon, day):
 class TimeZone(Obj):
     """TimeZone represents a geographic timezone with historical daylight savings rules."""
 
+    # TimeZone is a value type - same name = same identity (like Duration, etc.)
+    _same_uses_equals = True
+
     _cache = {}
     _utc = None
     _cur = None
