@@ -23,7 +23,8 @@ fanc py testSys
 fanc py haystack
 ```
 
-Generated code is output to `<fan_home>/gen/py/fan/<podName>/`.
+Generated code is output to `<work_dir>/gen/py/fan/<podName>/` (where `work_dir` is
+typically `fan_home`, determined by `Env.cur.workDir`).
 
 ## Build Integration (pyDirs/pyFiles)
 
@@ -65,6 +66,7 @@ pyFiles := compiler?.input?.pyFiles
 | sys | `src/sys/py/fan/` | (special handling) |
 | concurrent | `src/concurrent/py/` | `pyDirs = [\`py/\`]` |
 | util | `src/util/py/` | `pyDirs = [\`py/\`]` |
+| crypto | `src/crypto/py/` | `pyDirs = [\`py/\`]` |
 
 The sys pod uses `py/fan/` to match its source structure. Other pods use `py/` directly.
 
@@ -115,7 +117,7 @@ Fantom:
 class Foo { }
 ```
 
-Python:
+Python (simplified):
 ```python
 from fan.sys.Obj import Obj
 
@@ -124,8 +126,11 @@ class Foo(Obj):
         super().__init__()
 ```
 
-See [Import Architecture](#import-architecture) below for details on how imports are
-structured to avoid circular dependencies while maintaining a clean API.
+**Note:** The example above is simplified for clarity. Actual generated files include
+additional imports (`sys_module`, `ObjUtil`, pod namespace), a static `make()` factory
+method, and type metadata registration at the end. See [Import Architecture](#import-architecture)
+below for details on how imports are structured to avoid circular dependencies while
+maintaining a clean API.
 
 ## Fields
 
@@ -237,6 +242,7 @@ class Color(Obj):
     @staticmethod
     def vals():
         if Color._vals is None:
+            # For non-sys pods, uses sys.List prefix
             Color._vals = List.to_immutable(List.from_list([
                 Color._make_enum(0, "red"),
                 Color._make_enum(1, "green"),
@@ -323,6 +329,12 @@ This ensures that when a closure is sent to an Actor:
 
 For closures using default parameter capture (`_outer=self` pattern), the same approach
 rebinds the `__defaults__` tuple with immutable copies.
+
+**Python version compatibility:** The `types.CellType` approach requires Python 3.8+. For
+older Python versions or closures without `__closure__`, the runtime falls back to rebinding
+`__defaults__` (for default parameter captures) or simply marking the closure as immutable
+if it has no captures. See `Func.to_immutable()` in `src/sys/py/fan/Func.py` for the full
+implementation.
 
 ## Primitives
 
