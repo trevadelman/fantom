@@ -331,15 +331,26 @@ class StrBufOutStream:
                    - xmlEscQuotes = 0x02
                    - xmlEscUnicode = 0x04
 
-        Note: Fantom only escapes < and & by default, not >
+        Escaping rules match Fantom/Java:
+        - < always escaped to &lt;
+        - & always escaped to &amp;
+        - > escaped to &gt; only when at start of string OR preceded by ]
+        - " and ' escaped when xmlEscQuotes flag is set
         """
         xml_esc_quotes = 0x02  # OutStream.xmlEscQuotes
+        s = str(s)
         result = []
-        for ch in str(s):
+        for i, ch in enumerate(s):
             if ch == '<':
                 result.append('&lt;')
             elif ch == '&':
                 result.append('&amp;')
+            elif ch == '>':
+                # Escape > only at start OR after ]
+                if i == 0 or s[i-1] == ']':
+                    result.append('&gt;')
+                else:
+                    result.append(ch)
             elif ch == '"' and (flags & xml_esc_quotes):
                 result.append('&quot;')
             elif ch == "'" and (flags & xml_esc_quotes):
