@@ -13,7 +13,6 @@ from fan.sys.Map import Map
 # Try to import requests, provide helpful error if not installed
 try:
     import requests
-    from requests.structures import CaseInsensitiveDict
 except ImportError:
     raise ImportError(
         "The 'requests' library is required for HTTP client functionality.\n"
@@ -46,22 +45,51 @@ class WebClient(Obj):
     @staticmethod
     def make(req_uri=None):
         """Create a new WebClient with optional request URI."""
+        # Validate URI is absolute if provided
+        if req_uri is not None:
+            WebClient._validate_uri(req_uri)
         return WebClient(req_uri)
+
+    @staticmethod
+    def _validate_uri(uri):
+        """Validate that URI is absolute."""
+        if uri is None:
+            return
+        # Check if URI is absolute
+        is_abs = False
+        if hasattr(uri, 'is_abs'):
+            is_abs = uri.is_abs()
+        elif hasattr(uri, 'to_str'):
+            uri_str = uri.to_str()
+            is_abs = uri_str.startswith('http://') or uri_str.startswith('https://')
+        else:
+            uri_str = str(uri)
+            is_abs = uri_str.startswith('http://') or uri_str.startswith('https://')
+
+        if not is_abs:
+            from fan.sys.Err import ArgErr
+            raise ArgErr.make(f"reqUri is not absolute: {uri}")
 
     def __init__(self, req_uri=None):
         super().__init__()
+        # Validate URI is absolute if provided
+        if req_uri is not None:
+            WebClient._validate_uri(req_uri)
 
-        # Request state
+        # Request state - use Fantom Map with case_insensitive=True
         self._req_uri = req_uri
         self._req_method = "GET"
-        self._req_headers = CaseInsensitiveDict()
+        self._req_headers = Map.from_literal([], [], "sys::Str", "sys::Str")
+        self._req_headers.case_insensitive = True
         self._req_headers["Accept-Encoding"] = "gzip"
         self._req_body = None  # Buffer for request body
 
-        # Response state
+        # Response state - use Fantom Map with case_insensitive=True
         self._res_code = 0
         self._res_phrase = ""
-        self._res_headers = CaseInsensitiveDict()
+        self._res_version = None  # HTTP version as Version object
+        self._res_headers = Map.from_literal([], [], "sys::Str", "sys::Str")
+        self._res_headers.case_insensitive = True
         self._response = None  # requests.Response object
 
         # Configuration
@@ -102,11 +130,36 @@ class WebClient(Obj):
         return self._req_headers_wrapper
 
     def cookies(self, val=None):
-        """Get or set cookies for the request."""
+        """Get or set cookies for the request.
+
+        When setting cookies, the Cookie header is automatically updated.
+        """
         if val is None:
             return self._cookies
-        self._cookies = val
+        self._cookies = val if val else []
+        # Update Cookie header when cookies are set
+        self._update_cookie_header()
         return self
+
+    def _update_cookie_header(self):
+        """Update the Cookie request header based on current cookies."""
+        if not self._cookies:
+            # Remove Cookie header if no cookies
+            if "Cookie" in self._req_headers:
+                del self._req_headers["Cookie"]
+            return
+        # Build cookie string
+        cookie_parts = []
+        for cookie in self._cookies:
+            if hasattr(cookie, 'to_name_val_str'):
+                cookie_parts.append(cookie.to_name_val_str())
+            elif hasattr(cookie, '_name') and hasattr(cookie, '_val'):
+                cookie_parts.append(f"{cookie._name}={cookie._val}")
+        if cookie_parts:
+            self._req_headers["Cookie"] = "; ".join(cookie_parts)
+        else:
+            if "Cookie" in self._req_headers:
+                del self._req_headers["Cookie"]
 
     def follow_redirects(self, val=None):
         """Get or set whether to follow redirects."""
@@ -189,7 +242,29 @@ class WebClient(Obj):
             # Store response info
             self._res_code = self._response.status_code
             self._res_phrase = self._response.reason or ""
-            self._res_headers = CaseInsensitiveDict(self._response.headers)
+
+            # Convert response headers to Fantom Map
+            self._res_headers = Map.from_literal([], [], "sys::Str", "sys::Str")
+            self._res_headers.case_insensitive = True
+            for key, value in self._response.headers.items():
+                self._res_headers[key] = value
+
+            # Update req_uri to final URL after redirects
+            if self._follow_redirects and self._response.url:
+                from fan.sys.Uri import Uri
+                self._req_uri = Uri.from_str(self._response.url)
+
+            # Set HTTP version from response
+            from fan.sys.Version import Version
+            raw_version = getattr(self._response.raw, 'version', None)
+            if raw_version == 10:
+                self._res_version = Version.from_str("1.0")
+            elif raw_version == 11:
+                self._res_version = Version.from_str("1.1")
+            elif raw_version == 20:
+                self._res_version = Version.from_str("2.0")
+            else:
+                self._res_version = Version.from_str("1.1")  # Default
 
             # Handle cookies from response
             self._update_cookies_from_response()
@@ -222,15 +297,17 @@ class WebClient(Obj):
         """Update cookies from Set-Cookie response headers."""
         if self._response is None:
             return
-        # Convert requests cookies to our Cookie objects
+        # Convert requests cookies to our Cookie objects using Cookie.make()
         from fan.web.Cookie import Cookie as FanCookie
         new_cookies = []
         for cookie in self._response.cookies:
-            c = FanCookie()
-            c._name = cookie.name
-            c._val = cookie.value
-            c._domain = cookie.domain
-            c._path = cookie.path
+            # Use Cookie.make() with it-block to set domain/path
+            def make_it_block(c, domain=cookie.domain, path=cookie.path):
+                if domain:
+                    c._domain = domain
+                if path:
+                    c._path = path
+            c = FanCookie.make(cookie.name, cookie.value, make_it_block)
             new_cookies.append(c)
         if new_cookies:
             self._cookies = new_cookies
@@ -246,6 +323,26 @@ class WebClient(Obj):
     def res_phrase(self):
         """Get the HTTP status reason phrase."""
         return self._res_phrase
+
+    def res_version(self):
+        """Get the HTTP response version as a Version object.
+
+        Returns:
+            Version representing the HTTP version (e.g., Version("1.1"))
+        """
+        from fan.sys.Version import Version
+        # requests library stores raw HTTP version
+        if self._response is not None:
+            # requests uses raw.version which is 10 for HTTP/1.0, 11 for HTTP/1.1
+            raw_version = getattr(self._response.raw, 'version', None)
+            if raw_version == 10:
+                return Version.from_str("1.0")
+            elif raw_version == 11:
+                return Version.from_str("1.1")
+            elif raw_version == 20:
+                return Version.from_str("2.0")
+        # Default to HTTP/1.1
+        return Version.from_str("1.1")
 
     def res_headers(self):
         """Get the response headers (case-insensitive dict)."""
@@ -420,3 +517,8 @@ class HeadersWrapper:
 
     def to_str(self):
         return str(dict(self._headers))
+
+    @property
+    def case_insensitive(self):
+        """For Fantom Map compatibility."""
+        return True
