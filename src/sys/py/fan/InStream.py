@@ -496,72 +496,62 @@ class InStream(Obj):
     def read_char(self):
         """Read a single character, return as Int (unicode code point) or None at end.
 
-        For wrapped binary streams, reads raw bytes and decodes using THIS stream's charset.
-        For wrapped character streams (StrInStream), delegates to read_char directly.
+        IMPORTANT: Uses self.read() not self._in.read() so that subclasses which
+        override read() (like ChunkInStream, FixedInStream) work correctly with
+        read_char(), read_all_str(), etc.
         """
-        if self._in is not None:
-            # Check if wrapped stream is a character stream (StrInStream)
-            # Character streams don't support binary read() - delegate to read_char
-            if isinstance(self._in, StrInStream):
-                return self._in.read_char()
+        # Check if wrapped stream is a character stream (StrInStream)
+        if self._in is not None and isinstance(self._in, StrInStream):
+            return self._in.read_char()
 
-            # For binary streams, read raw bytes and decode with this stream's charset
-            charset_name = self._get_python_encoding()
+        # For binary streams, use self.read() to get bytes (respects overrides)
+        charset_name = self._get_python_encoding()
 
-            if 'utf-16' in charset_name.lower():
-                # UTF-16 is 2 bytes per char
-                b1 = self._in.read()
-                if b1 is None:
-                    return None
-                b2 = self._in.read()
+        if 'utf-16' in charset_name.lower():
+            # UTF-16 is 2 bytes per char
+            b1 = self.read()
+            if b1 is None:
+                return None
+            b2 = self.read()
+            if b2 is None:
+                return None
+            data = bytes([b1, b2])
+            try:
+                ch = data.decode(charset_name)
+                return ord(ch[0]) if ch else None
+            except:
+                return None
+        else:
+            # UTF-8 and others: variable length
+            b = self.read()
+            if b is None:
+                return None
+            # For UTF-8, handle multi-byte chars
+            if b < 0x80:
+                return b
+            elif b < 0xE0:
+                b2 = self.read()
                 if b2 is None:
                     return None
-                data = bytes([b1, b2])
-                try:
-                    ch = data.decode(charset_name)
-                    return ord(ch[0]) if ch else None
-                except:
+                data = bytes([b, b2])
+            elif b < 0xF0:
+                b2 = self.read()
+                b3 = self.read()
+                if b2 is None or b3 is None:
                     return None
+                data = bytes([b, b2, b3])
             else:
-                # UTF-8 and others: variable length
-                b = self._in.read()
-                if b is None:
+                b2 = self.read()
+                b3 = self.read()
+                b4 = self.read()
+                if b2 is None or b3 is None or b4 is None:
                     return None
-                # For UTF-8, handle multi-byte chars
-                if b < 0x80:
-                    return b
-                elif b < 0xE0:
-                    b2 = self._in.read()
-                    if b2 is None:
-                        return None
-                    data = bytes([b, b2])
-                elif b < 0xF0:
-                    b2 = self._in.read()
-                    b3 = self._in.read()
-                    if b2 is None or b3 is None:
-                        return None
-                    data = bytes([b, b2, b3])
-                else:
-                    b2 = self._in.read()
-                    b3 = self._in.read()
-                    b4 = self._in.read()
-                    if b2 is None or b3 is None or b4 is None:
-                        return None
-                    data = bytes([b, b2, b3, b4])
-                try:
-                    ch = data.decode(charset_name)
-                    return ord(ch[0]) if ch else None
-                except:
-                    return None
-
-        if hasattr(self, '_stream'):
-            c = self._stream.read(1)
-            if not c:
+                data = bytes([b, b2, b3, b4])
+            try:
+                ch = data.decode(charset_name)
+                return ord(ch[0]) if ch else None
+            except:
                 return None
-            if isinstance(c, bytes):
-                c = c.decode('utf-8')
-            return ord(c) if c else None
-        return None
 
     def _get_python_encoding(self):
         """Get Python encoding name for this stream's charset."""
@@ -589,6 +579,111 @@ class InStream(Obj):
                 return ord(b)
             return b[0] if b else None
         return None
+
+    def read_buf(self, buf, n):
+        """Read up to n bytes into buf, return bytes read or None at end.
+
+        Uses self.read() to respect subclass overrides.
+        """
+        n = int(n)
+        if n <= 0:
+            return 0
+
+        bytes_read = 0
+        for _ in range(n):
+            b = self.read()
+            if b is None:
+                break
+            buf.write(b)
+            bytes_read += 1
+
+        return bytes_read if bytes_read > 0 else None
+
+    def read_buf_fully(self, buf, n):
+        """Read exactly n bytes into buf, then flip buf for reading.
+
+        Throws IOErr if fewer than n bytes available.
+        """
+        from .Err import IOErr
+        n = int(n)
+        if buf is None:
+            from .Buf import Buf
+            buf = Buf.make(n)
+
+        bytes_read = 0
+        for _ in range(n):
+            b = self.read()
+            if b is None:
+                raise IOErr.make("Unexpected end of stream")
+            buf.write(b)
+            bytes_read += 1
+
+        buf.flip()
+        return buf
+
+    def read_all_buf(self):
+        """Read all remaining bytes as a new Buf."""
+        from .Buf import Buf
+        buf = Buf.make()
+        while True:
+            b = self.read()
+            if b is None:
+                break
+            buf.write(b)
+        buf.flip()
+        return buf
+
+    def read_u1(self):
+        """Read unsigned 8-bit."""
+        b = self.read()
+        if b is None:
+            from .Err import IOErr
+            raise IOErr.make("Unexpected end of stream")
+        return b
+
+    def read_s1(self):
+        """Read signed 8-bit."""
+        b = self.read_u1()
+        return b if b < 128 else b - 256
+
+    def read_u2(self):
+        """Read unsigned 16-bit."""
+        import struct
+        b1 = self.read()
+        b2 = self.read()
+        if b1 is None or b2 is None:
+            from .Err import IOErr
+            raise IOErr.make("Unexpected end of stream")
+        # Big endian by default
+        return (b1 << 8) | b2
+
+    def read_s2(self):
+        """Read signed 16-bit."""
+        val = self.read_u2()
+        return val if val < 32768 else val - 65536
+
+    def read_u4(self):
+        """Read unsigned 32-bit."""
+        b1 = self.read()
+        b2 = self.read()
+        b3 = self.read()
+        b4 = self.read()
+        if b1 is None or b2 is None or b3 is None or b4 is None:
+            from .Err import IOErr
+            raise IOErr.make("Unexpected end of stream")
+        return (b1 << 24) | (b2 << 16) | (b3 << 8) | b4
+
+    def read_s4(self):
+        """Read signed 32-bit."""
+        val = self.read_u4()
+        return val if val < 0x80000000 else val - 0x100000000
+
+    def read_s8(self):
+        """Read signed 64-bit."""
+        b1 = self.read_u4()
+        b2 = self.read_u4()
+        val = (b1 << 32) | b2
+        return val if val < 0x8000000000000000 else val - 0x10000000000000000
 
     def unread(self, b):
         """Push back a byte"""
