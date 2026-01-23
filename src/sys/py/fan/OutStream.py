@@ -44,34 +44,71 @@ class OutStream(Obj):
         raise NotImplementedError("OutStream.writeBuf not implemented")
 
     def write_char(self, c):
-        """Write a single character using current charset. Returns this (for method chaining)."""
+        """Write a single character using current charset. Returns this (for method chaining).
+
+        Default implementation encodes the character using the current charset
+        and writes each byte using write(). This ensures subclass overrides of
+        write() are called (critical for FixedOutStream, ChunkOutStream, etc).
+        """
         if self._out is not None:
             self._out.write_char(c)
             return self
-        raise NotImplementedError("OutStream.writeChar not implemented")
+        # Encode character using current charset and write bytes via write()
+        ch = chr(int(c))
+        charset = self.charset()
+        charset_name = charset.name()
+        encoding_map = {
+            'UTF-8': 'utf-8',
+            'UTF-16BE': 'utf-16-be',
+            'UTF-16LE': 'utf-16-le',
+            'UTF-16': 'utf-16',
+            'US-ASCII': 'ascii',
+            'ISO-8859-1': 'iso-8859-1',
+        }
+        python_encoding = encoding_map.get(charset_name, charset_name.lower().replace('-', '_'))
+        data = ch.encode(python_encoding)
+        for b in data:
+            self.write(b)
+        return self
 
     def write_chars(self, s, off=0, length=None):
-        """Write characters from string. Returns this (for method chaining)."""
+        """Write characters from string. Returns this (for method chaining).
+
+        Default implementation calls writeChar() for each character,
+        which ensures proper byte counting in subclasses.
+        """
         if self._out is not None:
             self._out.write_chars(s, off, length)
             return self
-        raise NotImplementedError("OutStream.writeChars not implemented")
+        # Write each char via writeChar() to ensure write() gets called
+        s = str(s)
+        if length is None:
+            end = len(s)
+        else:
+            end = int(off) + int(length)
+        for i in range(int(off), end):
+            self.write_char(ord(s[i]))
+        return self
 
     def print_(self, obj):
-        """Print object as string. Returns this (for method chaining)."""
-        if self._out is not None:
-            self._out.print_(obj)
-            return self
-        raise NotImplementedError("OutStream.print not implemented")
+        """Print object as string. Returns this (for method chaining).
+
+        Default implementation calls writeChars() which calls writeChar()
+        which calls write(). This ensures subclass overrides work properly.
+        """
+        from .ObjUtil import ObjUtil
+        s = "null" if obj is None else ObjUtil.to_str(obj)
+        return self.write_chars(s, 0, len(s))
 
     print = print_
 
     def print_line(self, obj=None):
         """Print object followed by newline. Returns this (for method chaining)."""
-        if self._out is not None:
-            self._out.print_line(obj)
-            return self
-        raise NotImplementedError("OutStream.printLine not implemented")
+        from .ObjUtil import ObjUtil
+        if obj is not None:
+            s = ObjUtil.to_str(obj)
+            self.write_chars(s, 0, len(s))
+        return self.write_char(ord('\n'))
 
     def write_i2(self, x):
         """Write 16-bit integer. Returns this (for method chaining)."""

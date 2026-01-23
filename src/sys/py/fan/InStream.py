@@ -394,9 +394,19 @@ class StrInStream:
         return ObjDecoder(self, options).read_obj()
 
     def typeof(self):
-        """Return Type for InStream"""
+        """Return Type for this InStream (or subclass)"""
         from fan.sys.Type import Type
-        return Type.find("sys::InStream")
+        # Get the actual class name and map to Fantom type
+        cls = type(self)
+        module = cls.__module__
+        class_name = cls.__name__
+        # Extract pod name from module (e.g., 'fan.web.MultiPartInStream' -> 'web')
+        if module.startswith('fan.'):
+            parts = module.split('.')
+            if len(parts) >= 2:
+                pod_name = parts[1]  # 'web', 'sys', etc.
+                return Type.find(f"{pod_name}::{class_name}")
+        return Type.find(f"sys::{class_name}")
 
 
 class InStream(Obj):
@@ -477,21 +487,43 @@ class InStream(Obj):
         lines = content.splitlines()
         return lines if lines else []
 
-    def read_line(self, max=None):
-        """Read a single line from stream"""
-        if self._in is not None:
-            return self._in.read_line(max)
+    def read_line(self, max_chars=None):
+        """Read a single line from stream.
 
-        if hasattr(self, '_stream'):
-            line = self._stream.readline()
-            if isinstance(line, bytes):
-                line = line.decode('utf-8')
-            if line.endswith('\n'):
-                line = line[:-1]
-            if line.endswith('\r'):
-                line = line[:-1]
-            return line if line else None
-        return None
+        Uses self.read_char() to respect subclass overrides (e.g., ChunkInStream).
+        Handles both \n and \r\n line endings, stripping the terminator.
+        Returns None at end of stream.
+        """
+        max_len = int(max_chars) if max_chars is not None else 2147483647
+        if max_len <= 0:
+            return ""
+
+        # Read first character
+        c = self.read_char()
+        if c is None:
+            return None
+
+        chars = []
+        while True:
+            # Check for newlines
+            if c == ord('\n'):  # \n
+                break
+            if c == ord('\r'):  # \r
+                # Check for \r\n
+                next_c = self.read_char()
+                if next_c is not None and next_c != ord('\n'):
+                    self.unread_char(next_c)
+                break
+
+            chars.append(chr(c))
+            if len(chars) >= max_len:
+                break
+
+            c = self.read_char()
+            if c is None:
+                break
+
+        return ''.join(chars)
 
     def read_char(self):
         """Read a single character, return as Int (unicode code point) or None at end.
@@ -729,6 +761,42 @@ class InStream(Obj):
 
         return result
 
+    def pipe(self, out, n=None, close=True):
+        """Pipe data from this InStream to an OutStream.
+
+        Args:
+            out: The OutStream to write to
+            n: Number of bytes to pipe (None = all remaining)
+            close: Whether to close this stream when done
+
+        Returns:
+            Number of bytes piped
+        """
+        from .Err import IOErr
+
+        try:
+            total = 0
+            if n is None:
+                # Pipe all remaining
+                while True:
+                    b = self.read()
+                    if b is None:
+                        break
+                    out.write(b)
+                    total += 1
+            else:
+                # Pipe exactly n bytes
+                for _ in range(int(n)):
+                    b = self.read()
+                    if b is None:
+                        raise IOErr.make("Unexpected end of stream")
+                    out.write(b)
+                    total += 1
+            return total
+        finally:
+            if close:
+                self.close()
+
     def close(self):
         """Close the stream"""
         if self._in is not None and hasattr(self._in, 'close'):
@@ -757,7 +825,6 @@ class InStream(Obj):
         from fanx.ObjDecoder import ObjDecoder
         return ObjDecoder(self, options).read_obj()
 
-    def typeof(self):
-        """Return Type for InStream"""
-        from fan.sys.Type import Type
-        return Type.find("sys::InStream")
+    # NOTE: InStream intentionally does NOT define typeof() so that
+    # Type.of() uses the class-based fallback which correctly identifies
+    # subclasses like web::MultiPartInStream from their module path.
