@@ -1441,6 +1441,12 @@ class BufInStream(InStream):
         return self._buf.read_buf_fully(buf, n)
 
     def peek(self):
+        """Peek next byte without advancing.
+
+        Checks this stream's unread stack first, then underlying Buf.
+        """
+        if hasattr(self, '_unread_stack') and self._unread_stack:
+            return self._unread_stack[-1]
         return self._buf.peek()
 
     def read_u1(self):
@@ -1742,6 +1748,9 @@ class BufInStream(InStream):
 
         Returns:
             The string token, or None at end of stream
+
+        Note: Uses byte-level read/unread on THIS stream (BufInStream),
+        not the underlying Buf, so that subsequent read() calls see the pushed-back byte.
         """
         from .Int import Int
 
@@ -1749,8 +1758,8 @@ class BufInStream(InStream):
         if max_len <= 0:
             return ""
 
-        # Read first char
-        c = self._buf.read_char()
+        # Read first byte using THIS stream's read()
+        c = self.read()
         if c is None:
             return None
 
@@ -1763,14 +1772,15 @@ class BufInStream(InStream):
                 terminate = func.call(c)
 
             if terminate:
-                self._buf.unread_char(c)
+                # Push back byte using THIS stream's unread() so subsequent read() sees it
+                self.unread(c)
                 break
 
             chars.append(chr(c))
             if len(chars) >= max_len:
                 break
 
-            c = self._buf.read_char()
+            c = self.read()
             if c is None:
                 break
 
