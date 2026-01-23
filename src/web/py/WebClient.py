@@ -133,10 +133,16 @@ class WebClient(Obj):
         """Get or set cookies for the request.
 
         When setting cookies, the Cookie header is automatically updated.
+        Returns a Fantom List (not Python list) for Fantom compatibility.
         """
         if val is None:
-            return self._cookies
-        self._cookies = val if val else []
+            from fan.sys.List import List
+            return List.from_list(self._cookies)
+        # Accept either Fantom List or Python list
+        if hasattr(val, 'to_list'):
+            self._cookies = val.to_list()
+        else:
+            self._cookies = val if val else []
         # Update Cookie header when cookies are set
         self._update_cookie_header()
         return self
