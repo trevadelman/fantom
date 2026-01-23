@@ -32,6 +32,7 @@ class Build : BuildPod
     srcDirs    = [`fan/`, `test/`]
     javaDirs   = [`java/`]
     dotnetDirs = [`dotnet/`]
+    pyDirs     = [`py/`]
     docSrc     = true
   }
 }
