@@ -36,9 +36,9 @@ class Regex(Obj):
         """Convert Java regex escapes to Python equivalents.
 
         Java/Fantom regex has features Python doesn't support natively:
-        - \e (escape character)
-        - \p{...} and \P{...} POSIX/Unicode property escapes
-        - \Q...\E quotation
+        - \\e (escape character)
+        - \\p{...} and \\P{...} POSIX/Unicode property escapes
+        - \\Q...\\E quotation
         - Possessive quantifiers (*+, ++, ?+, {n}+, etc.)
         """
         import re as py_re
@@ -69,7 +69,7 @@ class Regex(Obj):
 
     @staticmethod
     def _convert_property_escapes(pattern):
-        """Convert \p{...} and \P{...} property escapes to Python equivalents."""
+        """Convert \\p{...} and \\P{...} property escapes to Python equivalents."""
         import re as py_re
 
         # Property class mappings (positive \p{...})

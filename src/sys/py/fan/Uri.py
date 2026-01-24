@@ -314,7 +314,7 @@ class Uri(Obj):
         Handles Fantom's query string format:
         - & and ; are delimiters (unless backslash-escaped)
         - params with no value get value "true"
-        - backslash escapes: \& \; \= \\ are unescaped
+        - backslash escapes: \\& \\; \\= \\\\ are unescaped
         """
         from fan.sys.Map import Map
         if not s:
@@ -523,7 +523,7 @@ class Uri(Obj):
     def _restore_backslash_escapes(path):
         """Convert percent-encoded special chars back to backslash escapes.
 
-        After urlparse processes the path, we need to convert %23 back to \# etc.
+        After urlparse processes the path, we need to convert %23 back to \\# etc.
         """
         # Map of percent-encoded -> backslash-escaped
         replacements = [
@@ -1461,7 +1461,7 @@ class UriDecoder:
 
     Port of the JavaScript UriDecoder class.
     Key insight: When NOT in decoding mode, backslashes before non-delimiter
-    characters are stripped (e.g., \y becomes y, but \# stays \#).
+    characters are stripped (e.g., \\y becomes y, but \\# stays \\#).
     """
 
     def __init__(self, s, decoding=False):

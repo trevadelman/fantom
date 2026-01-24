@@ -210,7 +210,7 @@ class File(Obj):
     def _unescape_path_from_uri(path_str):
         """Unescape backslash-escaped characters in URI path for OS path.
 
-        Converts URI path like 'file \#2' to OS path 'file #2'.
+        Converts URI path like 'file \\#2' to OS path 'file #2'.
         """
         result = []
         i = 0
