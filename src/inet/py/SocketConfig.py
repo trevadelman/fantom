@@ -35,6 +35,8 @@ class SocketConfig(Obj):
         # Default timeout: 60 seconds (same as Fantom default)
         self._connect_timeout = Duration.make(60_000_000_000)  # 60s in nanoseconds
         self._receive_timeout = Duration.make(60_000_000_000)
+        # SSL verification (default True, can be disabled for testing)
+        self._verify_ssl = True
 
     def connect_timeout(self, val=None):
         """Get or set the connect timeout."""
@@ -75,5 +77,26 @@ class SocketConfig(Obj):
         read_secs = self._receive_timeout.to_sec() if self._receive_timeout else 60.0
         return (connect_secs, read_secs)
 
+    def verify_ssl(self, val=None):
+        """Get or set SSL verification.
+
+        Args:
+            val: If provided, sets SSL verification (True/False)
+
+        Returns:
+            Current value if getting, or new SocketConfig if setting
+
+        Note: Disabling SSL verification is not recommended for production.
+        This is primarily for testing environments with self-signed certificates.
+        """
+        if val is None:
+            return self._verify_ssl
+        # Create a new config (don't modify existing)
+        config = SocketConfig()
+        config._connect_timeout = self._connect_timeout
+        config._receive_timeout = self._receive_timeout
+        config._verify_ssl = val
+        return config
+
     def to_str(self):
-        return f"SocketConfig(connect={self._connect_timeout}, receive={self._receive_timeout})"
+        return f"SocketConfig(connect={self._connect_timeout}, receive={self._receive_timeout}, verify_ssl={self._verify_ssl})"

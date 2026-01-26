@@ -1,35 +1,33 @@
 #
 # web::WebClient - Python native implementation
 #
-# HTTP client using Python's requests library.
+# HTTP client using Python's standard library (urllib).
 # This replaces the Fantom implementation which uses raw TcpSocket.
 #
 
 import io
+import gzip
+import urllib.request
+import urllib.error
+import urllib.parse
+import http.cookiejar
+import ssl
 from fan.sys.Obj import Obj
 from fan.sys.Buf import Buf
 from fan.sys.Map import Map
 
-# Try to import requests, provide helpful error if not installed
-try:
-    import requests
-except ImportError:
-    raise ImportError(
-        "The 'requests' library is required for HTTP client functionality.\n"
-        "Install it with: pip install requests"
-    )
+
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Handler that prevents automatic redirects."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 class WebClient(Obj):
-    """HTTP client using Python's requests library.
+    """HTTP client using Python's standard library.
 
-    This is a Python-native implementation that wraps the requests library
-    to provide the Fantom WebClient API. The requests library handles:
-    - SSL/TLS
-    - Chunked transfer encoding
-    - Cookies
-    - Redirects
-    - Connection pooling
+    This is a Python-native implementation that wraps urllib.request
+    to provide the Fantom WebClient API.
 
     Usage:
         c = WebClient.make(Uri.from_str("http://example.com/api"))
@@ -90,17 +88,43 @@ class WebClient(Obj):
         self._res_version = None  # HTTP version as Version object
         self._res_headers = Map.from_literal([], [], "sys::Str", "sys::Str")
         self._res_headers.case_insensitive = True
-        self._response = None  # requests.Response object
+        self._response = None  # urllib response object
+        self._response_content = None  # Cached response content
 
         # Configuration
         self._cookies = []
         self._follow_redirects = True
         self._socket_config = None
-        self._session = requests.Session()
+
+        # Cookie jar for urllib
+        self._cookie_jar = http.cookiejar.CookieJar()
 
         # Stream wrappers
         self._req_out_stream = None
         self._res_in_stream = None
+
+    def _build_opener(self, use_https=False):
+        """Build urllib opener with appropriate handlers."""
+        handlers = [urllib.request.HTTPCookieProcessor(self._cookie_jar)]
+        if not self._follow_redirects:
+            handlers.append(NoRedirectHandler())
+        if use_https:
+            # Create SSL context
+            # Check if socket_config disables SSL verification (for testing)
+            verify_ssl = True
+            if self._socket_config is not None:
+                if hasattr(self._socket_config, '_verify_ssl'):
+                    verify_ssl = self._socket_config._verify_ssl
+
+            if verify_ssl:
+                ssl_context = ssl.create_default_context()
+            else:
+                # Disable verification for testing (not recommended for production)
+                ssl_context = ssl.create_default_context()
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+            handlers.append(urllib.request.HTTPSHandler(context=ssl_context))
+        return urllib.request.build_opener(*handlers)
 
     # =========================================================================
     # Request Configuration
@@ -188,7 +212,7 @@ class WebClient(Obj):
     def write_req(self):
         """Prepare to write the request.
 
-        In Python's requests library, we buffer the request and send it
+        In Python's urllib, we buffer the request and send it
         all at once in read_res(). This method prepares the buffer.
         """
         # Create buffer for request body
@@ -227,50 +251,51 @@ class WebClient(Obj):
         # Get timeout from socket config
         timeout = self._get_timeout()
 
-        # Prepare cookies
-        cookies = {}
-        for cookie in self._cookies:
-            if hasattr(cookie, '_name') and hasattr(cookie, '_val'):
-                cookies[cookie._name] = cookie._val
+        # Check if HTTPS
+        use_https = uri_str.startswith('https://')
+
+        # Build the opener with appropriate handlers
+        opener = self._build_opener(use_https=use_https)
+
+        # Create the request
+        req = urllib.request.Request(
+            uri_str,
+            data=data,
+            headers=headers,
+            method=self._req_method
+        )
 
         # Make the request
         try:
-            self._response = self._session.request(
-                method=self._req_method,
-                url=uri_str,
-                headers=headers,
-                data=data,
-                cookies=cookies if cookies else None,
-                allow_redirects=self._follow_redirects,
-                timeout=timeout,
-            )
+            self._response = opener.open(req, timeout=timeout[0])
 
             # Store response info
-            self._res_code = self._response.status_code
+            self._res_code = self._response.status
             self._res_phrase = self._response.reason or ""
+
+            # Read and potentially decompress content
+            self._response_content = self._response.read()
+            content_encoding = self._response.headers.get('Content-Encoding', '')
+            if content_encoding == 'gzip':
+                try:
+                    self._response_content = gzip.decompress(self._response_content)
+                except Exception:
+                    pass  # Keep original content if decompression fails
 
             # Convert response headers to Fantom Map
             self._res_headers = Map.from_literal([], [], "sys::Str", "sys::Str")
             self._res_headers.case_insensitive = True
-            for key, value in self._response.headers.items():
-                self._res_headers[key] = value
+            for key in self._response.headers.keys():
+                self._res_headers[key] = self._response.headers[key]
 
             # Update req_uri to final URL after redirects
             if self._follow_redirects and self._response.url:
                 from fan.sys.Uri import Uri
                 self._req_uri = Uri.from_str(self._response.url)
 
-            # Set HTTP version from response
+            # Set HTTP version (urllib doesn't expose this directly, default to 1.1)
             from fan.sys.Version import Version
-            raw_version = getattr(self._response.raw, 'version', None)
-            if raw_version == 10:
-                self._res_version = Version.from_str("1.0")
-            elif raw_version == 11:
-                self._res_version = Version.from_str("1.1")
-            elif raw_version == 20:
-                self._res_version = Version.from_str("2.0")
-            else:
-                self._res_version = Version.from_str("1.1")  # Default
+            self._res_version = Version.from_str("1.1")
 
             # Handle cookies from response
             self._update_cookies_from_response()
@@ -278,7 +303,38 @@ class WebClient(Obj):
             # Prepare response input stream
             self._res_in_stream = None  # Will be created on demand
 
-        except requests.exceptions.RequestException as e:
+        except urllib.error.HTTPError as e:
+            # HTTPError is a valid response with status code >= 400
+            self._response = e
+            self._res_code = e.code
+            self._res_phrase = e.reason or ""
+
+            # Read content from error response
+            try:
+                self._response_content = e.read()
+                content_encoding = e.headers.get('Content-Encoding', '')
+                if content_encoding == 'gzip':
+                    try:
+                        self._response_content = gzip.decompress(self._response_content)
+                    except Exception:
+                        pass
+            except Exception:
+                self._response_content = b''
+
+            # Convert response headers to Fantom Map
+            self._res_headers = Map.from_literal([], [], "sys::Str", "sys::Str")
+            self._res_headers.case_insensitive = True
+            for key in e.headers.keys():
+                self._res_headers[key] = e.headers[key]
+
+            from fan.sys.Version import Version
+            self._res_version = Version.from_str("1.1")
+
+            self._res_in_stream = None
+
+        except urllib.error.URLError as e:
+            raise IOError(f"HTTP request failed: {e.reason}")
+        except Exception as e:
             raise IOError(f"HTTP request failed: {e}")
 
         return self
@@ -300,13 +356,13 @@ class WebClient(Obj):
         return (60, 60)  # Default 60 second timeout
 
     def _update_cookies_from_response(self):
-        """Update cookies from Set-Cookie response headers."""
-        if self._response is None:
+        """Update cookies from cookie jar after response."""
+        if self._cookie_jar is None:
             return
-        # Convert requests cookies to our Cookie objects using Cookie.make()
+        # Convert cookiejar cookies to our Cookie objects using Cookie.make()
         from fan.web.Cookie import Cookie as FanCookie
         new_cookies = []
-        for cookie in self._response.cookies:
+        for cookie in self._cookie_jar:
             # Use Cookie.make() with it-block to set domain/path
             def make_it_block(c, domain=cookie.domain, path=cookie.path):
                 if domain:
@@ -337,16 +393,8 @@ class WebClient(Obj):
             Version representing the HTTP version (e.g., Version("1.1"))
         """
         from fan.sys.Version import Version
-        # requests library stores raw HTTP version
-        if self._response is not None:
-            # requests uses raw.version which is 10 for HTTP/1.0, 11 for HTTP/1.1
-            raw_version = getattr(self._response.raw, 'version', None)
-            if raw_version == 10:
-                return Version.from_str("1.0")
-            elif raw_version == 11:
-                return Version.from_str("1.1")
-            elif raw_version == 20:
-                return Version.from_str("2.0")
+        if self._res_version is not None:
+            return self._res_version
         # Default to HTTP/1.1
         return Version.from_str("1.1")
 
@@ -365,12 +413,12 @@ class WebClient(Obj):
 
     def res_in(self):
         """Get the input stream for reading the response body."""
-        if self._response is None:
+        if self._response is None and self._response_content is None:
             raise IOError(f"No input stream for response {self._res_code}")
 
         if self._res_in_stream is None:
             # Create an InStream wrapping the response content
-            content = self._response.content
+            content = self._response_content if self._response_content is not None else b''
             self._res_in_stream = Buf.from_bytes(content).in_()
 
         return self._res_in_stream
@@ -453,8 +501,12 @@ class WebClient(Obj):
     def close(self):
         """Close the client and release resources."""
         if self._response is not None:
-            self._response.close()
+            try:
+                self._response.close()
+            except Exception:
+                pass
             self._response = None
+        self._response_content = None
         self._req_out_stream = None
         self._res_in_stream = None
         return self
