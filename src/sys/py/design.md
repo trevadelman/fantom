@@ -156,15 +156,15 @@ class Foo(Obj):
         self._b = 1
         self._c = 2
 
-    # Public getter/setter
-    def a(self, _val_=None):
+    # Public getter/setter with type hints
+    def a(self, _val_: 'int' = None) -> 'int':
         if _val_ is None:
             return self._a
         else:
             self._a = _val_
 
     # Public getter only
-    def b(self):
+    def b(self) -> 'int':
         return self._b
 
     # No method for _c (private getter/setter)
@@ -447,19 +447,22 @@ Each generated Python file has this import structure:
 import sys as sys_module
 sys_module.path.insert(0, '.')
 
-# 2. Pod namespace import (for non-sys pods)
+# 2. Type hints import
+from typing import Optional, Callable, List as TypingList, Dict as TypingDict
+
+# 3. Pod namespace import (for non-sys pods)
 from fan import sys
 
-# 3. Direct imports for class definition
+# 4. Direct imports for class definition
 from fan.sys.Obj import Obj              # Base class
 from fan.sys.ObjUtil import ObjUtil      # Always needed
 from fan.somePod.SomeMixin import SomeMixin  # Mixins
 
-# 4. Dependent pods as namespaces
+# 5. Dependent pods as namespaces
 from fan import concurrent
 from fan import haystack
 
-# 5. Exception types for catch clauses (Python requires class in local scope)
+# 6. Exception types for catch clauses (Python requires class in local scope)
 from fan.myPod.MyException import MyException
 ```
 
@@ -647,11 +650,43 @@ Python doesn't support method overloading by signature. Fantom constructors with
 signatures are handled via factory methods (`make`, `make1`, etc.) that all delegate to a
 single `__init__`.
 
-## Duck Typing vs Static Types
+## Type Hints
 
-Fantom is statically typed; Python is dynamically typed. The transpiled Python code doesn't
-include type hints (though this could be added in the future). Runtime type checks use
-`ObjUtil.is_()` and `ObjUtil.as_()`.
+The transpiler generates Python type hints for all public APIs:
+
+```python
+def from_str(s: 'str', checked: 'bool' = None) -> 'Optional[Number]':
+    ...
+
+def unit(self, _val_: 'Optional[Unit]' = None) -> 'Optional[Unit]':
+    ...
+
+def to_float(self) -> 'float':
+    ...
+```
+
+Type mapping:
+| Fantom | Python Type Hint |
+|--------|------------------|
+| `Bool` | `'bool'` |
+| `Int` | `'int'` |
+| `Float` | `'float'` |
+| `Str` | `'str'` |
+| `Void` | `None` |
+| `Type?` | `'Optional[Type]'` |
+| `Str[]` | `'List[str]'` |
+| `[Str:Int]` | `'Dict[str, int]'` |
+| `|Int->Bool|` | `'Callable[[int], bool]'` |
+
+All type hints use forward references (strings) to avoid import order issues. Required
+imports are added to each generated file:
+
+```python
+from typing import Optional, Callable, List as TypingList, Dict as TypingDict
+```
+
+**Note:** Runtime type checks still use `ObjUtil.is_()` and `ObjUtil.as_()` - type hints
+are for IDE autocomplete and static analysis, not runtime enforcement.
 
 ## None vs null
 
