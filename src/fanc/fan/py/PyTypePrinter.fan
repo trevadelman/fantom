@@ -59,6 +59,10 @@ class PyTypePrinter : PyPrinter
     w("sys_module.path.insert(0, '.')").nl
     nl
 
+    // Type hint imports (Python 3.9+ uses native types, but we use typing for compatibility)
+    w("from typing import Optional, Callable, List as TypingList, Dict as TypingDict").nl
+    nl
+
     // For types NOT in sys pod: Import sys pod as namespace (lazy loader)
     // For types IN sys pod: Import Type directly (needed for metadata registration)
     if (t.pod.name != "sys")
@@ -1565,12 +1569,13 @@ class PyTypePrinter : PyPrinter
     if (f.hasGet || f.hasSet) return
 
     name := escapeName(f.name)
+    typeHint := pyTypeHint(f.type)
 
-    // Generate combined getter/setter: def fieldName(self, _val_=None):
+    // Generate combined getter/setter with type hints: def fieldName(self, _val_: T = None) -> T:
     // This is required because PyExprPrinter.assign() uses method call syntax
     // for field assignments on transpiled types: target.fieldName(value)
     nl
-    w("def ${name}(self, _val_=None)").colon
+    w("def ${name}(self, _val_: ${typeHint} = None) -> ${typeHint}").colon
     indent
     w("if _val_ is None").colon
     indent
@@ -2041,7 +2046,7 @@ class PyTypePrinter : PyPrinter
     if (m.isStatic)
       w("@staticmethod").nl
 
-    // def method_name(self, params...):
+    // def method_name(self, params...) -> ReturnType:
     w("def ${escapeName(m.name)}(")
     if (!m.isStatic) w("self")
 
@@ -2049,12 +2054,13 @@ class PyTypePrinter : PyPrinter
     {
       if (i > 0 || !m.isStatic) w(", ")
       w(escapeName(p.name))
+      w(": ${pyTypeHint(p.type)}")  // Type hint for parameter
       if (p.hasDefault)
       {
-        w("=None")  // Default params simplified for bootstrap
+        w(" = None")  // Default params simplified for bootstrap
       }
     }
-    w(")")
+    w(") -> ${pyTypeHint(m.returns)}")  // Return type hint
     colon
 
     // Method body
@@ -2563,5 +2569,100 @@ class PyTypePrinter : PyPrinter
 
     // Check if it's an enum field
     return enumFieldNames.containsKey(fieldExpr.field.name)
+  }
+
+//////////////////////////////////////////////////////////////////////////
+// Python Type Hints
+//////////////////////////////////////////////////////////////////////////
+
+  ** Convert Fantom type to Python type hint string
+  ** Returns a forward-reference string in quotes like 'Optional[Unit]'
+  ** All type hints use forward references (strings) to avoid import order issues
+  Str pyTypeHint(CType t)
+  {
+    // Build the type hint string without quotes, then wrap in quotes at the end
+    inner := pyTypeHintInner(t)
+    // None is a special case - don't quote it
+    if (inner == "None") return "None"
+    return "'${inner}'"
+  }
+
+  ** Inner type hint builder - returns unquoted type string
+  private Str pyTypeHintInner(CType t)
+  {
+    // Handle nullable types -> Optional[T]
+    if (t.isNullable)
+    {
+      inner := pyTypeHintInner(t.toNonNullable)
+      return "Optional[${inner}]"
+    }
+
+    sig := t.signature
+
+    // Map Fantom primitives to Python built-in types
+    if (sig == "sys::Bool") return "bool"
+    if (sig == "sys::Int") return "int"
+    if (sig == "sys::Float") return "float"
+    if (sig == "sys::Str") return "str"
+    if (sig == "sys::Void") return "None"
+    if (sig == "sys::Obj") return "Obj"
+    if (sig == "sys::This") return "Self"  // Python 3.11+ Self type
+
+    // Handle List[T] - sys::Obj?[] -> List[Obj]
+    if (t.isList)
+    {
+      // Get the value type (V in List<V>)
+      listType := t as ListType
+      if (listType != null)
+      {
+        inner := pyTypeHintInner(listType.v)
+        return "List[${inner}]"
+      }
+      return "List"
+    }
+
+    // Handle Map[K,V] - [Str:Int] -> Dict[str, int]
+    if (t.isMap)
+    {
+      mapType := t as MapType
+      if (mapType != null)
+      {
+        k := pyTypeHintInner(mapType.k)
+        v := pyTypeHintInner(mapType.v)
+        return "Dict[${k}, ${v}]"
+      }
+      return "Dict"
+    }
+
+    // Handle Func types -> Callable
+    if (t.isFunc)
+    {
+      funcType := t as FuncType
+      if (funcType != null)
+      {
+        // Build Callable[[Param1, Param2], ReturnType]
+        params := StrBuf()
+        params.addChar('[')
+        funcType.params.each |p, i|
+        {
+          if (i > 0) params.add(", ")
+          params.add(pyTypeHintInner(p))
+        }
+        params.addChar(']')
+        retType := pyTypeHintInner(funcType.returns)
+        return "Callable[${params.toStr}, ${retType}]"
+      }
+      return "Callable"
+    }
+
+    // Default: use simple class name
+    return t.name
+  }
+
+  ** Simplified type hint without quotes (for use inside generics)
+  ** This is an alias for pyTypeHintInner for backward compatibility
+  private Str pyTypeHintSimple(CType t)
+  {
+    return pyTypeHintInner(t)
   }
 }
