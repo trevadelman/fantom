@@ -69,15 +69,19 @@ class Unit(Obj):
         current_dir = os.path.dirname(os.path.abspath(__file__))
 
         # Try several paths - Unit.py can be in different locations:
-        # 1. fan/src/sys/py/fan/Unit.py -> fan/etc/sys/units.txt (../../../../etc)
-        # 2. gen/py/fan/sys/Unit.py -> fan/etc/sys/units.txt (../../../../fan/etc)
+        # Priority: source/development paths first, bundled package fallback last
+        # 1. fan/src/sys/py/fan/Unit.py -> fan/etc/sys/units.txt (development)
+        # 2. gen/py/fan/sys/Unit.py -> fan/etc/sys/units.txt (development)
+        # 3. Site-packages: fan/sys/units.txt (bundled fallback for pip install)
         possible_paths = [
-            # From fan/src/sys/py/fan/
+            # From fan/src/sys/py/fan/ (development)
             os.path.join(current_dir, '..', '..', '..', '..', 'etc', 'sys', 'units.txt'),
-            # From gen/py/fan/sys/ (4 levels up to project root)
+            # From gen/py/fan/sys/ (development - 4 levels up to project root)
             os.path.join(current_dir, '..', '..', '..', '..', 'fan', 'etc', 'sys', 'units.txt'),
-            # From gen/py/fan/ (3 levels up to project root)
+            # From gen/py/fan/ (development - 3 levels up to project root)
             os.path.join(current_dir, '..', '..', '..', 'fan', 'etc', 'sys', 'units.txt'),
+            # Same directory - bundled fallback (for pip-installed packages)
+            os.path.join(current_dir, 'units.txt'),
         ]
 
         units_path = None
