@@ -80,6 +80,7 @@ class WebClient(Obj):
         self._req_headers = Map.from_literal([], [], "sys::Str", "sys::Str")
         self._req_headers.case_insensitive = True
         self._req_headers["Accept-Encoding"] = "gzip"
+        self._req_headers["User-Agent"] = "Fantom/Python"
         self._req_body = None  # Buffer for request body
 
         # Response state - use Fantom Map with case_insensitive=True
