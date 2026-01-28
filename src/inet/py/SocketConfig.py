@@ -26,9 +26,22 @@ class SocketConfig(Obj):
         return SocketConfig._cur_instance
 
     @staticmethod
-    def make():
-        """Create a new SocketConfig with default settings."""
-        return SocketConfig()
+    def make(it_block=None):
+        """Create a new SocketConfig with default settings.
+
+        Args:
+            it_block: Optional closure to configure the instance (Fantom it-block pattern)
+
+        Example Fantom:
+            SocketConfig { it.connectTimeout = 5sec }
+
+        This transpiles to:
+            SocketConfig.make(lambda it: setattr(it, '_connect_timeout', Duration...))
+        """
+        config = SocketConfig()
+        if it_block is not None:
+            it_block(config)
+        return config
 
     def __init__(self):
         super().__init__()
