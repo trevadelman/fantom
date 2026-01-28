@@ -19,6 +19,10 @@ class JsonTest : Test
     verifyBasics("null", null)
     verifyBasics("true", true)
     verifyBasics("false", false)
+    verifyErr(ParseErr#) { JsonInStream("nabc".in).readJson }
+    verifyErr(ParseErr#) { JsonInStream("tabc".in).readJson }
+    verifyErr(ParseErr#) { JsonInStream("fabcd".in).readJson }
+    verifyErr(ParseErr#) { JsonInStream("a".in).readJson }
 
     // numbers
     verifyBasics("5", 5)
@@ -238,6 +242,21 @@ class JsonTest : Test
     f()
   }
 
+  public Void testTransform()
+  {
+    verifyEq(
+      TransformJsonInStream(
+        Str<|[
+               {},
+               {"a": true},
+               {"b": "xyz", "c": 123}
+             ]|>.in).readJson,
+      Obj?[
+        Pair[,],
+        Pair[Pair("a", true)],
+        Pair[Pair("b", "xyz"), Pair("c", 123)],
+      ])
+  }
 }
 
 **************************************************************************
@@ -253,4 +272,48 @@ internal class SerialA
   Str s := "string\n"
   @Transient Int noGo := 99
   Int[] ints  := [1, 2, 3]
+}
+
+**************************************************************************
+** TransformJsonInStream
+**************************************************************************
+
+internal class TransformJsonInStream : JsonInStream
+{
+  new make(InStream in) : super(in) {}
+
+  override Obj transformObj(Str:Obj? obj)
+  {
+    pairs := Pair[,]
+    obj.each |v,k| { pairs.add(Pair(k, v)) }
+    return pairs
+  }
+}
+
+**************************************************************************
+** Pair
+**************************************************************************
+
+internal class Pair
+{
+  new make(Str key, Obj val)
+  {
+    this.key = key
+    this.val = val
+  }
+
+  override Bool equals(Obj? that)
+  {
+    x := that as Pair
+    if (x == null) return false
+    return key == x.key && val == x.val
+  }
+
+  override Int hash()
+  {
+    return key.hash*31 + val.hash
+  }
+
+  internal Str key
+  internal Obj val
 }

@@ -18,6 +18,7 @@ class JsonInStream : InStream
   **
   ** Construct by wrapping given input stream.
   **
+  **
   new make(InStream in) : super(in) {}
 
   **
@@ -41,7 +42,7 @@ class JsonInStream : InStream
     return parseVal
   }
 
-  private Str:Obj? parseObj()
+  private Obj parseObj()
   {
     pairs := Str:Obj?[:] { ordered = true }
 
@@ -52,18 +53,22 @@ class JsonInStream : InStream
     while (true)
     {
       skipWhitespace
-      if (maybe(JsonToken.objectEnd)) return pairs
+      if (maybe(JsonToken.objectEnd)) return transformObj(pairs)
 
-      // FIXIT would like pair to be a 2-tuple
-      // OR a map with atom/symbol keys!
-      // FIXIT what about empty object?
       parsePair(pairs)
       if (!maybe(JsonToken.comma)) break
     }
 
     expect(JsonToken.objectEnd)
 
-    return pairs
+    return transformObj(pairs)
+  }
+
+  ** Override this method to transform each Str:Obj? into
+  ** an arbitrary Obj during parsing.
+  virtual Obj transformObj(Str:Obj? obj)
+  {
+    return obj
   }
 
   private Void parsePair(Str:Obj? obj)
@@ -90,17 +95,27 @@ class JsonInStream : InStream
     else if (this.cur == JsonToken.arrayStart) return parseArray
     else if (this.cur == 't')
     {
-      "true".size.times |->| { consume }
+      consume
+      expect('r')
+      expect('u')
+      expect('e')
       return true
     }
     else if (this.cur == 'f')
     {
-      "false".size.times |->| { consume }
+      consume
+      expect('a')
+      expect('l')
+      expect('s')
+      expect('e')
       return false
     }
     else if (this.cur == 'n')
     {
-      "null".size.times |->| { consume }
+      consume
+      expect('u')
+      expect('l')
+      expect('l')
       return null
     }
 
@@ -110,54 +125,53 @@ class JsonInStream : InStream
 
   private Obj parseNum()
   {
-    integral := StrBuf()
-    fractional := StrBuf()
-    exponent := StrBuf()
+    s := StrBuf()
+    isFloat := false
+
     if (maybe('-'))
-      integral.add("-")
+      s.add("-")
 
     while (this.cur.isDigit)
     {
-      integral.addChar(this.cur)
+      s.addChar(this.cur)
       consume
     }
 
     if (this.cur == '.')
     {
-      decimal := true
+      isFloat = true
+
+      s.addChar(this.cur)
       consume
       while (this.cur.isDigit)
       {
-        fractional.addChar(this.cur)
+        s.addChar(this.cur)
         consume
       }
     }
 
     if (this.cur == 'e' || this.cur == 'E')
     {
-      exponent.addChar(this.cur)
+      isFloat = true
+
+      s.addChar(this.cur)
       consume
       if (this.cur == '+') consume
       else if (this.cur == '-')
       {
-        exponent.addChar(this.cur)
+        s.addChar(this.cur)
         consume
       }
       while (this.cur.isDigit)
       {
-        exponent.addChar(this.cur)
+        s.addChar(this.cur)
         consume
       }
     }
 
-    Num? num := null
-    if (fractional.size > 0)
-      num = Float.fromStr(integral.toStr+"."+fractional.toStr+exponent.toStr)
-    else if (exponent.size > 0)
-      num = Float.fromStr(integral.toStr+exponent.toStr)
-    else num = Int.fromStr(integral.toStr)
-
-    return num
+    return isFloat ?
+      Float.fromStr(s.toStr) :
+      Int.fromStr(s.toStr)
   }
 
   private Str parseStr()
@@ -279,5 +293,4 @@ internal class JsonToken
   internal static const Int arrayEnd := ']'
   internal static const Int comma := ','
   internal static const Int quote := '"'
-  internal static const Int grave := '`'
 }
