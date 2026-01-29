@@ -1408,7 +1408,25 @@ class BufInStream(InStream):
         return b[0]
 
     def read_buf(self, other, n):
-        return self._buf.read_buf(other, n)
+        """Read into another Buf.
+
+        Direct implementation that reads from underlying _bytes to avoid
+        calling ConstBuf.read_buf() which throws ReadonlyErr.
+        """
+        n = int(n)
+        avail = self._buf._size - self._buf._pos
+        to_read = min(n, avail)
+        if to_read <= 0:
+            return None
+        self._buf._bytes.seek(self._buf._pos)
+        data = self._buf._bytes.read(to_read)
+        self._buf._pos += len(data)
+        other._bytes.seek(other._pos)
+        other._bytes.write(data)
+        other._pos += len(data)
+        if other._pos > other._size:
+            other._size = other._pos
+        return len(data)
 
     def unread(self, n):
         """Push byte to be read next.

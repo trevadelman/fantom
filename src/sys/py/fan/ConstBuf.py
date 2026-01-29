@@ -119,9 +119,88 @@ class ConstBuf(Buf):
             return self
         self._readonly_err()
 
-    # READ methods are allowed on ConstBuf - they just read, don't modify content
-    # The parent Buf class implementations work fine for reading
-    # We only override write methods to throw ReadonlyErr
+    # Direct read methods on ConstBuf throw ReadonlyErr because they modify position.
+    # Use in_() to get an InStream for reading immutable buffers.
+    def each_line(self, f):
+        self._readonly_err()
+
+    def read_all_lines(self):
+        self._readonly_err()
+
+    def read_all_str(self, normalize=True):
+        self._readonly_err()
+
+    def read_line(self, max_chars=None):
+        self._readonly_err()
+
+    def read(self):
+        self._readonly_err()
+
+    def read_char(self):
+        self._readonly_err()
+
+    def read_buf(self, other, n):
+        self._readonly_err()
+
+    def read_all_buf(self):
+        self._readonly_err()
+
+    def peek(self):
+        self._readonly_err()
+
+    def peek_char(self):
+        self._readonly_err()
+
+    def read_bool(self):
+        self._readonly_err()
+
+    def read_buf_fully(self, buf, n):
+        self._readonly_err()
+
+    def read_chars(self, n):
+        self._readonly_err()
+
+    def read_decimal(self):
+        self._readonly_err()
+
+    def read_f4(self):
+        self._readonly_err()
+
+    def read_f8(self):
+        self._readonly_err()
+
+    def read_obj(self, options=None):
+        self._readonly_err()
+
+    def read_props(self):
+        self._readonly_err()
+
+    def read_s1(self):
+        self._readonly_err()
+
+    def read_s2(self):
+        self._readonly_err()
+
+    def read_s4(self):
+        self._readonly_err()
+
+    def read_s8(self):
+        self._readonly_err()
+
+    def read_str_token(self, max_chars=None, func=None):
+        self._readonly_err()
+
+    def read_u1(self):
+        self._readonly_err()
+
+    def read_u2(self):
+        self._readonly_err()
+
+    def read_u4(self):
+        self._readonly_err()
+
+    def read_utf(self):
+        self._readonly_err()
 
     def sync(self):
         self._readonly_err()
@@ -145,10 +224,8 @@ class ConstBuf(Buf):
         return self._size
 
     def capacity(self, val=None):
-        """For ConstBuf, capacity cannot be changed."""
-        if val is not None:
-            self._readonly_err()
-        return self._size  # Capacity equals size for immutable buffers
+        """For ConstBuf, capacity is not accessible - always throws ReadonlyErr."""
+        self._readonly_err()
 
     def charset(self, val=None):
         """For ConstBuf, charset cannot be changed.
