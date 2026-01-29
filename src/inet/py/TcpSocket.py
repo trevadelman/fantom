@@ -4,10 +4,6 @@
 # Implements raw TCP socket support using Python's socket module.
 # This enables use of the pure-Fantom Redis client and other TCP-based protocols.
 #
-# Note: TcpSocketInStream and TcpSocketOutStream are kept in this file as
-# internal implementation details - they're not standalone types meant for
-# general use. They extend the base InStream/OutStream for type compatibility.
-#
 
 import socket
 from fan.sys.Obj import Obj
@@ -27,16 +23,22 @@ class TcpSocket(Obj):
         super().__init__()
         self._config = config
         self._socket = None
+        self._bound = False
         self._connected = False
         self._closed = False
         self._in = None
         self._out = None
+        self._local_addr = None
+        self._local_port = None
+        self._remote_addr = None
+        self._remote_port = None
+        self._options = None
 
     def config(self):
         return self._config
 
     def is_bound(self):
-        return self._socket is not None
+        return self._bound
 
     def is_connected(self):
         return self._connected
@@ -44,35 +46,164 @@ class TcpSocket(Obj):
     def is_closed(self):
         return self._closed
 
+    def local_addr(self):
+        """Get the local IP address, or null if not bound."""
+        return self._local_addr
+
+    def local_port(self):
+        """Get the local port, or null if not bound."""
+        return self._local_port
+
+    def remote_addr(self):
+        """Get the remote IP address, or null if not connected."""
+        return self._remote_addr
+
+    def remote_port(self):
+        """Get the remote port, or null if not connected."""
+        return self._remote_port
+
+    def options(self):
+        """Get socket options."""
+        if self._options is None:
+            self._options = TcpSocketOptions(self)
+        return self._options
+
+    def bind(self, addr, port):
+        """Bind to a local address and port.
+
+        Args:
+            addr: IpAddr to bind to, or null for any local address
+            port: Port to bind to, or null for system-assigned port
+
+        Returns:
+            This socket
+        """
+        from fan.sys.IOErr import IOErr
+
+        if self._closed:
+            raise IOErr.make("Socket is closed")
+
+        # Create socket if not already created
+        if self._socket is None:
+            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # Allow address reuse
+            self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        # Determine bind address
+        if addr is not None:
+            if hasattr(addr, 'numeric'):
+                bind_addr = addr.numeric()
+            elif hasattr(addr, '_host'):
+                bind_addr = addr._host
+            else:
+                bind_addr = str(addr)
+        else:
+            bind_addr = ''
+
+        # Determine bind port
+        bind_port = int(port) if port is not None else 0
+
+        try:
+            self._socket.bind((bind_addr, bind_port))
+            self._bound = True
+
+            # Get actual bound address/port
+            actual_addr, actual_port = self._socket.getsockname()
+            from fan.inet.IpAddr import IpAddr
+            self._local_addr = IpAddr(actual_addr) if actual_addr else None
+            self._local_port = actual_port
+
+        except socket.error as e:
+            raise IOErr.make(f"Bind failed: {e}")
+
+        return self
+
     def connect(self, addr, port, timeout=None):
         """Connect to a remote address and port."""
-        # Create socket
-        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        from fan.sys.IOErr import IOErr
+        from fan.inet.IpAddr import IpAddr
+
+        if self._closed:
+            raise IOErr.make("Socket is closed")
+
+        # Create socket if not already created
+        if self._socket is None:
+            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         # Set timeout if specified
         if timeout is not None:
-            # timeout is Duration, convert to seconds
             if hasattr(timeout, 'to_millis'):
                 self._socket.settimeout(timeout.to_millis() / 1000.0)
             else:
                 self._socket.settimeout(float(timeout) / 1_000_000_000.0)
 
         # Get hostname from IpAddr
-        if hasattr(addr, '_hostname'):
-            hostname = addr._hostname
+        if hasattr(addr, '_host'):
+            hostname = addr._host
         elif hasattr(addr, 'numeric'):
             hostname = addr.numeric()
         else:
             hostname = str(addr)
 
-        # Connect
-        self._socket.connect((hostname, int(port)))
-        self._connected = True
+        try:
+            self._socket.connect((hostname, int(port)))
+            self._connected = True
+            self._bound = True
 
-        # Create wrapped streams
-        self._in = TcpSocketInStream(self._socket)
-        self._out = TcpSocketOutStream(self._socket)
+            # Get local address info
+            local = self._socket.getsockname()
+            self._local_addr = IpAddr(local[0]) if local[0] else None
+            self._local_port = local[1]
 
+            # Store remote address info
+            self._remote_addr = addr if isinstance(addr, IpAddr) else IpAddr(str(addr))
+            self._remote_port = int(port)
+
+            # Create wrapped streams
+            self._in = TcpSocketInStream(self._socket)
+            self._out = TcpSocketOutStream(self._socket)
+
+        except socket.timeout as e:
+            raise IOErr.make(f"Connection timed out: {e}")
+        except socket.error as e:
+            raise IOErr.make(f"Connection failed: {e}")
+
+        return self
+
+    def in_(self):
+        """Get the input stream."""
+        from fan.sys.IOErr import IOErr
+        if not self._connected or self._closed:
+            raise IOErr.make("Socket not connected")
+        return self._in
+
+    def out(self):
+        """Get the output stream."""
+        from fan.sys.IOErr import IOErr
+        if not self._connected or self._closed:
+            raise IOErr.make("Socket not connected")
+        return self._out
+
+    def shutdown_in(self):
+        """Shutdown the input side of the socket."""
+        from fan.sys.IOErr import IOErr
+        if not self._connected or self._closed:
+            raise IOErr.make("Socket not connected")
+        try:
+            self._socket.shutdown(socket.SHUT_RD)
+        except socket.error as e:
+            raise IOErr.make(f"Shutdown failed: {e}")
+        return self
+
+    def shutdown_out(self):
+        """Shutdown the output side of the socket."""
+        from fan.sys.IOErr import IOErr
+        if not self._connected or self._closed:
+            raise IOErr.make("Socket not connected")
+        try:
+            self._socket.shutdown(socket.SHUT_WR)
+        except socket.error as e:
+            raise IOErr.make(f"Shutdown failed: {e}")
         return self
 
     def close(self):
@@ -86,28 +217,242 @@ class TcpSocket(Obj):
         self._connected = False
         return True
 
-    def in_(self):
-        """Get the input stream."""
-        if self._in is None:
-            raise Exception("Socket not connected")
-        return self._in
 
-    def out(self):
-        """Get the output stream."""
-        if self._out is None:
-            raise Exception("Socket not connected")
-        return self._out
+# Sentinel for distinguishing no argument from None argument
+_UNSET = object()
+
+
+class TcpSocketOptions(Obj):
+    """Socket options for TcpSocket."""
+
+    def __init__(self, socket_obj):
+        super().__init__()
+        self._socket_obj = socket_obj
+        self._in_buffer_size = 4096
+        self._out_buffer_size = 4096
+        self._keep_alive = False
+        self._receive_buffer_size = 8192
+        self._send_buffer_size = 8192
+        self._reuse_addr = False
+        self._linger = None
+        self._receive_timeout = None
+        self._no_delay = True
+        self._traffic_class = 0
+        self._broadcast = False  # Stored for copyFrom
+        self._broadcast_copied = False  # True if broadcast was copied from another socket
+
+    def in_buffer_size(self, val=None):
+        if val is None:
+            return self._in_buffer_size
+        if self._socket_obj._connected:
+            from fan.sys.Err import Err
+            raise Err.make("Cannot change buffer size after connect")
+        self._in_buffer_size = val
+        return None
+
+    def out_buffer_size(self, val=None):
+        if val is None:
+            return self._out_buffer_size
+        if self._socket_obj._connected:
+            from fan.sys.Err import Err
+            raise Err.make("Cannot change buffer size after connect")
+        self._out_buffer_size = val
+        return None
+
+    def keep_alive(self, val=None):
+        if val is None:
+            return self._keep_alive
+        self._keep_alive = val
+        if self._socket_obj._socket is not None:
+            self._socket_obj._socket.setsockopt(
+                socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1 if val else 0
+            )
+        return None
+
+    def receive_buffer_size(self, val=None):
+        if val is None:
+            return self._receive_buffer_size
+        self._receive_buffer_size = val
+        if self._socket_obj._socket is not None:
+            self._socket_obj._socket.setsockopt(
+                socket.SOL_SOCKET, socket.SO_RCVBUF, val
+            )
+        return None
+
+    def send_buffer_size(self, val=None):
+        if val is None:
+            return self._send_buffer_size
+        self._send_buffer_size = val
+        if self._socket_obj._socket is not None:
+            self._socket_obj._socket.setsockopt(
+                socket.SOL_SOCKET, socket.SO_SNDBUF, val
+            )
+        return None
+
+    def reuse_addr(self, val=None):
+        if val is None:
+            return self._reuse_addr
+        self._reuse_addr = val
+        if self._socket_obj._socket is not None:
+            self._socket_obj._socket.setsockopt(
+                socket.SOL_SOCKET, socket.SO_REUSEADDR, 1 if val else 0
+            )
+        return None
+
+    def linger(self, val=_UNSET):
+        if val is _UNSET:
+            return self._linger
+        self._linger = val
+        if self._socket_obj._socket is not None:
+            if val is None:
+                import struct
+                self._socket_obj._socket.setsockopt(
+                    socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 0, 0)
+                )
+            else:
+                # val is Duration, convert to seconds
+                secs = int(val.to_sec()) if hasattr(val, 'to_sec') else int(val / 1_000_000_000)
+                import struct
+                self._socket_obj._socket.setsockopt(
+                    socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, secs)
+                )
+        return None
+
+    def receive_timeout(self, val=_UNSET):
+        if val is _UNSET:
+            return self._receive_timeout
+        self._receive_timeout = val
+        if self._socket_obj._socket is not None:
+            if val is None:
+                self._socket_obj._socket.settimeout(None)
+            else:
+                # val is Duration, convert to seconds
+                secs = val.to_sec() if hasattr(val, 'to_sec') else float(val) / 1_000_000_000.0
+                self._socket_obj._socket.settimeout(secs)
+        return None
+
+    def no_delay(self, val=None):
+        if val is None:
+            return self._no_delay
+        self._no_delay = val
+        if self._socket_obj._socket is not None:
+            self._socket_obj._socket.setsockopt(
+                socket.IPPROTO_TCP, socket.TCP_NODELAY, 1 if val else 0
+            )
+        return None
+
+    def traffic_class(self, val=None):
+        if val is None:
+            return self._traffic_class
+        self._traffic_class = val
+        if self._socket_obj._socket is not None:
+            try:
+                self._socket_obj._socket.setsockopt(
+                    socket.IPPROTO_IP, socket.IP_TOS, val
+                )
+            except:
+                pass  # May not be supported on all platforms
+        return None
+
+    def broadcast(self, val=None):
+        from fan.sys.UnsupportedErr import UnsupportedErr
+        if val is None:
+            # Getting only allowed if broadcast was copied from another socket
+            if self._broadcast_copied:
+                return self._broadcast
+            raise UnsupportedErr.make("Broadcast not supported for TCP sockets")
+        # Setting always throws - broadcast not supported for TCP
+        raise UnsupportedErr.make("Broadcast not supported for TCP sockets")
+
+    def copy_from(self, other):
+        """Copy options from another socket options object."""
+        # Copy broadcast for storage (even though TCP can't use it)
+        if hasattr(other, 'broadcast'):
+            try:
+                self._broadcast = other.broadcast()
+                self._broadcast_copied = True  # Mark that broadcast was copied
+            except:
+                pass
+
+        # Copy common options that exist on both TcpSocketOptions and UdpSocketOptions
+        if hasattr(other, 'receive_buffer_size'):
+            try:
+                self._receive_buffer_size = other.receive_buffer_size()
+            except:
+                pass
+        if hasattr(other, 'send_buffer_size'):
+            try:
+                self._send_buffer_size = other.send_buffer_size()
+            except:
+                pass
+        if hasattr(other, 'reuse_addr'):
+            try:
+                self._reuse_addr = other.reuse_addr()
+            except:
+                pass
+        if hasattr(other, 'traffic_class'):
+            try:
+                self._traffic_class = other.traffic_class()
+            except:
+                pass
+
+        # TCP-specific options - only copy if the other object has them
+        if hasattr(other, '_in_buffer_size'):
+            self._in_buffer_size = other._in_buffer_size
+        elif hasattr(other, 'in_buffer_size'):
+            try:
+                self._in_buffer_size = other.in_buffer_size()
+            except:
+                pass
+
+        if hasattr(other, '_out_buffer_size'):
+            self._out_buffer_size = other._out_buffer_size
+        elif hasattr(other, 'out_buffer_size'):
+            try:
+                self._out_buffer_size = other.out_buffer_size()
+            except:
+                pass
+
+        if hasattr(other, '_keep_alive'):
+            self._keep_alive = other._keep_alive
+        elif hasattr(other, 'keep_alive'):
+            try:
+                self._keep_alive = other.keep_alive()
+            except:
+                pass
+
+        if hasattr(other, '_linger'):
+            self._linger = other._linger
+        elif hasattr(other, 'linger'):
+            try:
+                self._linger = other.linger()
+            except:
+                pass
+
+        if hasattr(other, '_receive_timeout'):
+            self._receive_timeout = other._receive_timeout
+        elif hasattr(other, 'receive_timeout'):
+            try:
+                self._receive_timeout = other.receive_timeout()
+            except:
+                pass
+
+        if hasattr(other, '_no_delay'):
+            self._no_delay = other._no_delay
+        elif hasattr(other, 'no_delay'):
+            try:
+                self._no_delay = other.no_delay()
+            except:
+                pass
+
+        return self
 
 
 class TcpSocketInStream(InStream):
-    """Input stream wrapper for a TCP socket.
-
-    Extends InStream for type compatibility with Fantom code that expects InStream.
-    This is an internal implementation detail of TcpSocket.
-    """
+    """Input stream wrapper for a TCP socket."""
 
     def __init__(self, sock):
-        super().__init__(None)  # No wrapped stream
+        super().__init__(None)
         self._socket = sock
         self._file = sock.makefile('rb')
 
@@ -130,13 +475,11 @@ class TcpSocketInStream(InStream):
         data = self._file.read(n)
         if not data:
             return None
-        # Append to buf
         if hasattr(buf, '_data'):
             buf._data.extend(data)
         elif hasattr(buf, 'write_bytes'):
             buf.write_bytes(data)
         else:
-            # Assume it's a Buf with internal bytearray
             for b in data:
                 buf.write(b)
         return len(data)
@@ -160,6 +503,22 @@ class TcpSocketInStream(InStream):
         data = self._file.read(n)
         return data.decode('utf-8')
 
+    def read_line(self, max_len=None):
+        """Read a line of text."""
+        if max_len:
+            line = self._file.readline(max_len)
+        else:
+            line = self._file.readline()
+        if not line:
+            return None
+        # Strip trailing \r\n or \n
+        line = line.decode('utf-8')
+        if line.endswith('\r\n'):
+            line = line[:-2]
+        elif line.endswith('\n'):
+            line = line[:-1]
+        return line
+
     def close(self):
         """Close the stream."""
         try:
@@ -170,14 +529,10 @@ class TcpSocketInStream(InStream):
 
 
 class TcpSocketOutStream(OutStream):
-    """Output stream wrapper for a TCP socket.
-
-    Extends OutStream for type compatibility with Fantom code that expects OutStream.
-    This is an internal implementation detail of TcpSocket.
-    """
+    """Output stream wrapper for a TCP socket."""
 
     def __init__(self, sock):
-        super().__init__(None)  # No wrapped stream
+        super().__init__(None)
         self._socket = sock
         self._file = sock.makefile('wb')
 
@@ -192,20 +547,16 @@ class TcpSocketOutStream(OutStream):
     def write_buf(self, buf):
         """Write buffer contents."""
         if hasattr(buf, '_data'):
-            # Buf has internal bytearray
             size = buf._size if hasattr(buf, '_size') else len(buf._data)
             data = bytes(buf._data[:size])
         elif hasattr(buf, 'to_bytes'):
-            # Buf.toBytes() method
             data = buf.to_bytes()
         elif hasattr(buf, 'size'):
-            # Buf with size() method - read byte by byte
             data = bytearray()
             for i in range(buf.size()):
                 data.append(buf.get(i))
             data = bytes(data)
         else:
-            # Fallback - treat as bytes-like
             data = bytes(buf) if isinstance(buf, (bytes, bytearray)) else str(buf).encode('utf-8')
         self._file.write(data)
         return self
@@ -225,7 +576,7 @@ class TcpSocketOutStream(OutStream):
         """Print a string with newline."""
         if s is not None:
             self._file.write(str(s).encode('utf-8'))
-        self._file.write(b'\n')
+        self._file.write(b'\r\n')
         return self
 
     def flush(self):
