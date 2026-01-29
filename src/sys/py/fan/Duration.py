@@ -78,10 +78,7 @@ class Duration(Obj):
 
     @staticmethod
     def boot():
-        """Return boot time (stub - returns a fixed time before now)"""
-        if not hasattr(Duration, '_boot'):
-            import time
-            Duration._boot = Duration(int(time.time_ns()) - 1_000_000_000)  # 1 sec before first call
+        """Return system timer at boot time of the Python runtime"""
         return Duration._boot
 
     @staticmethod
@@ -535,3 +532,8 @@ class Duration(Obj):
         # timedelta.total_seconds() gives seconds as float
         total_ns = int(td.total_seconds() * 1_000_000_000)
         return Duration.make(total_ns)
+
+
+# Initialize boot time at module load (matches JavaScript __boot pattern)
+import time
+Duration._boot = Duration(int(time.time_ns()))
