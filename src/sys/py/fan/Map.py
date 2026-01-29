@@ -8,6 +8,14 @@
 from collections.abc import MutableMapping
 from .Obj import Obj
 
+# Known Issues:
+# - ro() does not behave the same as the Java impl. Java creates
+#   a shallow copy initially and saves it in a readOnlyMap field of the
+#   mutable version. Then if the mutable one gets modified, it detaches the
+#   shallow copy and does a deep clone transfer to the readOnlyMap.
+#      - So verifySame() tests in MapTest.testReadonly() will fail
+#      - This matches the JavaScript implementation behavior
+
 
 class Map(Obj, MutableMapping):
     """Fantom Map - extends Obj, implements Python's MutableMapping ABC.
