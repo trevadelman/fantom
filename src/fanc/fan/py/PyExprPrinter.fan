@@ -9,7 +9,26 @@
 using compiler
 
 **
-** Python expression printer
+** PyExprPrinter generates Python expressions from Fantom AST nodes.
+**
+** Key Patterns:
+**   - Primitives (Int, Str, Bool, Float) use static dispatch: sys.Int.plus(x, y)
+**   - List/Map use instance dispatch: list.each(f) (NOT primitives)
+**   - Closures wrap in Func.make_closure() for Fantom Func API (bind, params, etc.)
+**   - Safe navigation (?.) uses lambda wrapper: ((lambda _safe_: ... if _safe_ is not None else None)(target))
+**   - ObjUtil handles cross-type operations: equals, compare, typeof, is_, as_
+**
+** Dispatch Priority in call():
+**   1. Safe navigation check (?.method())
+**   2. cvar wrapper detection (closure variable wrappers)
+**   3. Dynamic call (-> operator) via ObjUtil.trap()
+**   4. Func.call() / Func.callList() -> direct invocation
+**   5. ObjUtil methods (equals, compare, typeof, etc.)
+**   6. Primitive type static dispatch (Int, Str, etc.)
+**   7. Private method static dispatch (non-virtual)
+**   8. Normal instance/static method call
+**
+** See design.md in this directory for full documentation.
 **
 class PyExprPrinter : PyPrinter
 {
@@ -1516,6 +1535,18 @@ class PyExprPrinter : PyPrinter
     }
     return e
   }
+
+//////////////////////////////////////////////////////////////////////////
+// Increment / Decrement
+//////////////////////////////////////////////////////////////////////////
+
+  // Python has no ++ or -- operators. We generate different code depending on target:
+  //   - Local vars: walrus operator (x := x + 1) for pre, tuple trick for post
+  //   - Fields: ObjUtil.inc_field(obj, "_name") / ObjUtil.inc_field_post(...)
+  //   - Index: ObjUtil.inc_index(container, key) / ObjUtil.inc_index_post(...)
+  //
+  // Post-increment/decrement returns the OLD value (before modification).
+  // Pre-increment/decrement returns the NEW value (after modification).
 
   private Void increment(ShortcutExpr e)
   {

@@ -1,6 +1,58 @@
 This is a "living" document covering many aspects of the design and implementation
 for the mapping from Fantom to Python.
 
+---
+
+## Table of Contents
+
+1. [Getting Started](#getting-started) - Usage and build integration
+2. [Porting Native Code](#porting-native-code) - Adding Python natives to a pod
+3. [Design](#design) - How Fantom constructs map to Python
+   - [Python Classes](#python-classes)
+   - [Fields](#fields) / [Static Fields](#static-fields)
+   - [Enums](#enums)
+   - [Funcs and Closures](#funcs-and-closures)
+   - [Primitives](#primitives)
+   - [List and Map Architecture](#list-and-map-architecture)
+   - [Import Architecture](#import-architecture)
+   - [Type Metadata](#type-metadata-reflection)
+   - [Generated Code Conventions](#generated-code-conventions)
+   - [ObjUtil Helper Methods](#objutil-helper-methods)
+   - [Exception Mapping](#exception-mapping)
+4. [Naming](#naming) - Identifier conventions (snake_case, escaping)
+5. [Python-Specific Considerations](#python-specific-considerations) - GIL, overloading, type hints
+6. [Performance Optimizations](#performance-optimizations) - Runtime caching strategies
+
+---
+
+## How to Read This Document
+
+**If you want to understand what Python code gets generated:**
+- Start with [Design](#design) for the core patterns (classes, fields, closures)
+- See [Naming](#naming) for how identifiers are transformed (snake_case, escaping)
+- Check [Generated Code Conventions](#generated-code-conventions) for internal naming patterns
+
+**If you want to understand the runtime:**
+- [ObjUtil Helper Methods](#objutil-helper-methods) documents the contract between transpiled code and runtime
+- [List and Map Architecture](#list-and-map-architecture) explains collection design
+- [Performance Optimizations](#performance-optimizations) covers caching strategies
+
+**If you're debugging generated code:**
+- [Generated Code Conventions](#generated-code-conventions) explains patterns like `_closure_N`, `_switch_N`
+- [Import Architecture](#import-architecture) explains why imports are structured the way they are
+- [Exception Mapping](#exception-mapping) shows how catch clauses are generated
+
+**If you're adding Python support to a pod:**
+- Start with [Getting Started](#getting-started) for build integration
+- See [Porting Native Code](#porting-native-code) for the process
+- Reference [Design](#design) for patterns to follow
+
+**Key Insight:** The transpiler generates Python code that calls `ObjUtil` and `Func` methods.
+The [ObjUtil Helper Methods](#objutil-helper-methods) section documents this contract - if a
+method is listed there, the transpiler generates calls to it and the runtime must implement it.
+
+---
+
 # Getting Started
 
 The Python implementation of the `sys` pod is in `src/sys/py/fan/`. Unlike JavaScript
@@ -215,7 +267,8 @@ class Foo(Obj):
 
 ## Enums
 
-Enums follow a factory pattern with lazy singleton initialization.
+Enums follow a factory pattern with lazy singleton initialization. Enum classes extend
+`sys::Enum` (not `Obj` directly).
 
 Fantom:
 ```fantom
@@ -224,7 +277,7 @@ enum class Color { red, green, blue }
 
 Python:
 ```python
-class Color(Obj):
+class Color(Enum):
     _vals = None
 
     @staticmethod
@@ -243,7 +296,7 @@ class Color(Obj):
     def vals():
         if Color._vals is None:
             # For non-sys pods, uses sys.List prefix
-            Color._vals = List.to_immutable(List.from_list([
+            Color._vals = sys.List.to_immutable(sys.List.from_list([
                 Color._make_enum(0, "red"),
                 Color._make_enum(1, "green"),
                 Color._make_enum(2, "blue")
@@ -584,6 +637,173 @@ Str.py loads -> am_() calls Type.find('sys::Int[]') -> Int.py loads ->
 By storing type signatures as strings and resolving them lazily on first access, the module
 initialization completes without triggering cross-type imports. This matches the JavaScript
 transpiler's approach and is critical for the runtime to load without circular import errors.
+
+## Generated Code Conventions
+
+The transpiler generates several internal names and patterns. These are implementation
+details but important for understanding generated code during debugging or review.
+
+### Variable Naming Patterns
+
+| Pattern | Purpose | Example |
+|---------|---------|---------|
+| `_closure_N` | Multi-statement closure functions | `def _closure_0(x=None): ...` |
+| `_switch_N` | Switch condition cache variable | `_switch_0 = condition` |
+| `_safe_` | Safe navigation lambda parameter | `(lambda _safe_: ... if _safe_ is not None else None)(target)` |
+| `_val_` | Field setter parameter | `def name(self, _val_=None):` |
+| `_old_x` | Post-increment/decrement temp | `((_old_x := x, x := x + 1, _old_x)[2])` |
+| `_self` | Outer self in multi-statement closures | `def _closure_0(..., _self=self):` |
+| `_outer` | Outer self in inline lambdas | `lambda x, _outer=self: ...` |
+
+### Sentinel Values
+
+| Value | Purpose | Location |
+|-------|---------|----------|
+| `"_once_"` | Uninitialized once field marker | `_fieldName_Store = "_once_"` |
+
+### Internal Methods
+
+| Method | Purpose |
+|--------|---------|
+| `_static_init()` | Initialize static fields (lazy) |
+| `_static_init_in_progress` | Re-entry guard for static init |
+| `_ctor_init()` | Initialize instance fields (for named ctors) |
+| `_make_enum(ordinal, name)` | Create enum instance |
+| `_ctorName_body(...)` | Named constructor body |
+
+### Why Closures Are Extracted
+
+Python lambdas cannot contain statements - only single expressions. When a Fantom closure
+contains multiple statements, local variable declarations, or control flow, the transpiler
+extracts it to a named `def` function emitted before the usage point:
+
+```python
+# Multi-statement closure: |x| { y := x + 1; return y * 2 }
+# Cannot be: lambda x: (y := x + 1, y * 2)  # Invalid - walrus in tuple doesn't work right
+
+# Instead, extracted as:
+def _closure_0(x=None, _self=self):
+    y = x + 1
+    return y * 2
+
+# Used as:
+list.map_(_closure_0)
+```
+
+The closure is emitted immediately before the statement that first uses it, ensuring
+captured variables are in scope.
+
+## ObjUtil Helper Methods
+
+The transpiler generates calls to `ObjUtil` methods for operations that don't map directly
+to Python syntax or require Fantom-specific semantics. These must be implemented in the
+`sys` runtime (PR2).
+
+### Comparison Methods
+
+| Method | Purpose | Fantom | Generated Python |
+|--------|---------|--------|------------------|
+| `ObjUtil.equals(a, b)` | NaN-aware equality | `a == b` | `ObjUtil.equals(a, b)` |
+| `ObjUtil.compare(a, b)` | Fantom comparison | `a <=> b` | `ObjUtil.compare(a, b)` |
+| `ObjUtil.compare_lt(a, b)` | Less than | `a < b` | `ObjUtil.compare_lt(a, b)` |
+| `ObjUtil.compare_le(a, b)` | Less or equal | `a <= b` | `ObjUtil.compare_le(a, b)` |
+| `ObjUtil.compare_gt(a, b)` | Greater than | `a > b` | `ObjUtil.compare_gt(a, b)` |
+| `ObjUtil.compare_ge(a, b)` | Greater or equal | `a >= b` | `ObjUtil.compare_ge(a, b)` |
+| `ObjUtil.compare_ne(a, b)` | Not equal | `a != b` | `ObjUtil.compare_ne(a, b)` |
+| `ObjUtil.same(a, b)` | Identity comparison | `a === b` | `ObjUtil.same(a, b)` |
+
+**Why not Python operators?** Fantom's `==` uses `equals()` which handles NaN correctly
+(NaN == NaN is true in Fantom). Python's `is` operator has interning issues with literals.
+
+### Arithmetic Methods
+
+| Method | Purpose | Why Needed |
+|--------|---------|------------|
+| `ObjUtil.div(a, b)` | Truncated integer division | Python `//` uses floor division (rounds toward -inf), Fantom uses truncated (toward zero) |
+| `ObjUtil.mod(a, b)` | Truncated modulo | Same floor vs truncated difference |
+
+Example: `-7 / 4` in Fantom = -1 (truncated), but `-7 // 4` in Python = -2 (floor).
+
+### Type Methods
+
+| Method | Purpose |
+|--------|---------|
+| `ObjUtil.typeof(obj)` | Get Fantom Type of any object |
+| `ObjUtil.is_(obj, type)` | Fantom `is` type check |
+| `ObjUtil.as_(obj, type)` | Fantom `as` safe cast |
+| `ObjUtil.coerce(obj, type)` | Fantom type coercion |
+| `ObjUtil.to_immutable(obj)` | Make object immutable |
+| `ObjUtil.is_immutable(obj)` | Check if immutable |
+
+### Expression Helpers
+
+| Method | Purpose | Use Case |
+|--------|---------|----------|
+| `ObjUtil.setattr_return(obj, name, val)` | Assignment as expression | `return x = 5` -> `return ObjUtil.setattr_return(self, '_x', 5)` |
+| `ObjUtil.throw_(err)` | Raise as expression | Used in lambdas: `lambda: ObjUtil.throw_(Err())` |
+| `ObjUtil.trap(obj, name, args)` | Dynamic call | `obj->method(args)` -> `ObjUtil.trap(obj, 'method', [args])` |
+
+### Increment/Decrement Helpers
+
+| Method | Purpose |
+|--------|---------|
+| `ObjUtil.inc_field(obj, name)` | Pre-increment field: `++x` |
+| `ObjUtil.inc_field_post(obj, name)` | Post-increment field: `x++` |
+| `ObjUtil.dec_field(obj, name)` | Pre-decrement field: `--x` |
+| `ObjUtil.dec_field_post(obj, name)` | Post-decrement field: `x--` |
+| `ObjUtil.inc_index(container, key)` | Pre-increment index: `++list[i]` |
+| `ObjUtil.inc_index_post(container, key)` | Post-increment index: `list[i]++` |
+| `ObjUtil.dec_index(container, key)` | Pre-decrement index: `--list[i]` |
+| `ObjUtil.dec_index_post(container, key)` | Post-decrement index: `list[i]--` |
+
+### Closure Variable Wrapper
+
+| Method | Purpose |
+|--------|---------|
+| `ObjUtil.cvar(val)` | Wrap closure-captured variable for mutation |
+
+When a local variable is captured by a closure AND modified, the Fantom compiler generates
+a wrapper class. The transpiler converts these to `ObjUtil.cvar()` calls which return a
+mutable container object.
+
+## Exception Mapping
+
+Catch clauses map Fantom exceptions to Python native exceptions. When catching a Fantom
+exception type, the transpiler also catches the corresponding Python native exception
+to ensure interoperability.
+
+| Fantom Exception | Python Native | Generated Catch |
+|------------------|---------------|-----------------|
+| `sys::Err` | `Exception` | `except Exception` |
+| `sys::IndexErr` | `IndexError` | `except (IndexErr, IndexError)` |
+| `sys::ArgErr` | `ValueError` | `except (ArgErr, ValueError)` |
+| `sys::IOErr` | `IOError` | `except (IOErr, IOError)` |
+| `sys::UnknownKeyErr` | `KeyError` | `except (UnknownKeyErr, KeyError)` |
+
+### Exception Wrapping
+
+When catching `sys::Err` (which catches all Python exceptions), the runtime wraps native
+Python exceptions to ensure they have Fantom's `Err` API (`.trace()`, `.msg()`, etc.):
+
+```python
+try:
+    some_code()
+except Exception as err:
+    err = sys.Err.wrap(err)  # Ensures .trace() method exists
+    # ... handle err
+```
+
+### Exceptions Not Yet Mapped
+
+The following Fantom exceptions don't have Python native equivalents and are caught
+directly:
+
+- `sys::ParseErr` - No direct Python equivalent
+- `sys::CastErr` - Could map to `TypeError` but semantics differ
+- `sys::NullErr` - Could map to `TypeError` for None access
+- `sys::NotImmutableErr` - Fantom-specific
+- `sys::ReadonlyErr` - Fantom-specific
+- `sys::UnsupportedErr` - Could map to `NotImplementedError`
 
 # Naming
 

@@ -9,7 +9,29 @@
 using compiler
 
 **
-** Python type/class printer
+** PyTypePrinter generates Python class files from Fantom TypeDefs.
+**
+** Output Structure (per file):
+**   1. Header comment (auto-generated notice)
+**   2. Imports:
+**      - sys path setup
+**      - typing imports (Optional, Callable, etc.)
+**      - pod namespace imports (from fan import sys)
+**      - base class and mixin direct imports
+**      - exception types for catch clauses
+**   3. Class definition:
+**      - Static fields (class-level storage + lazy getters)
+**      - Constructor (__init__ + factory methods like make())
+**      - Field accessors (combined getter/setter pattern)
+**      - Methods (instance and static)
+**      - Python operator methods (__add__, __getitem__, etc.)
+**   4. Type metadata registration (for reflection)
+**
+** Key Design Decisions:
+**   - Enums use factory pattern with _make_enum() and lazy vals()
+**   - Static fields use _static_init() with re-entry guard
+**   - Named constructors use _ctorName_body() pattern
+**   - See design.md in this directory for full documentation
 **
 class PyTypePrinter : PyPrinter
 {
@@ -142,6 +164,17 @@ class PyTypePrinter : PyPrinter
 
     nl
   }
+
+//////////////////////////////////////////////////////////////////////////
+// Import Scanning
+//////////////////////////////////////////////////////////////////////////
+
+  // These methods scan the AST to collect type references for imports.
+  // Python requires explicit imports (unlike JS which bundles everything).
+  // Key patterns handled:
+  //   - Cross-pod types used in method bodies, field types, catch clauses
+  //   - Same-pod exception types (Python except clause needs local scope)
+  //   - Type.find("pod::Type") string literals in reflection code
 
   ** Collect all cross-pod type references from a TypeDef
   ** Returns a map of podName -> Set of type names
@@ -1077,6 +1110,20 @@ class PyTypePrinter : PyPrinter
 // Constructor
 //////////////////////////////////////////////////////////////////////////
 
+  ** Generate Python constructor code from Fantom constructors.
+  **
+  ** Python Pattern:
+  **   - Static factory methods: make(), makeFrom(), etc. (all ctors)
+  **   - Single __init__(): uses primary ctor's signature
+  **   - Named ctor bodies: _makeFoo_body() for non-primary ctors
+  **   - Field init helper: _ctor_init() for named ctors to share field setup
+  **
+  ** Fantom -> Python mapping:
+  **   - `new make(a, b)` -> `make(a, b)` factory + `__init__(self, a, b)`
+  **   - `new makeFoo(x)` -> `makeFoo(x)` factory + `_makeFoo_body(self, x)`
+  **   - `static new make()` -> `make()` factory only (no __init__ body)
+  **   - Constructor chaining (: super, : this) handled in body methods
+  **
   private Void ctor(TypeDef t)
   {
     // Find ALL constructors
