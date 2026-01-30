@@ -39,9 +39,6 @@ class Build : BuildPod
     resDirs = [
                `res/`,
               ]
-    index   = [
-               "fanc.cmd": "fanPy::PyCmd",
-              ]
     docApi  = false
   }
 }

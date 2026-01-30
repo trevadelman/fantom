@@ -1289,6 +1289,15 @@ class PyStmtPrinter : PyPrinter
         w(" as ").w(escapeName(c.errVariable))
       }
       colon
+      // Wrap native Python exceptions to ensure they have .trace() method
+      // This is needed because except Exception catches native exceptions
+      // that don't have Fantom Err methods
+      if (c.errVariable != null && (c.errType == null || c.errType.qname == "sys::Err"))
+      {
+        indent
+        w(escapeName(c.errVariable)).w(" = sys.Err.wrap(").w(escapeName(c.errVariable)).w(")").eos
+        unindent
+      }
       block(c.block, true)  // isCatchBlock=true for catch variable handling
     }
 

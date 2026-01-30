@@ -15,6 +15,18 @@ class Err(Exception, Obj):
         self._msg = msg
         self._cause = cause
 
+    @staticmethod
+    def wrap(e):
+        """Wrap a native Python exception as a Fantom Err if needed.
+        If already a Fantom Err, return as-is."""
+        if isinstance(e, Err):
+            return e
+        # Wrap native Python exception
+        wrapped = Err(str(e))
+        wrapped.__traceback__ = e.__traceback__
+        wrapped.__cause__ = e
+        return wrapped
+
     @classmethod
     def make(cls, msg=None, cause=None):
         """Factory method - creates instance of the calling class"""

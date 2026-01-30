@@ -59,14 +59,52 @@ abstract class FanPyCmd : AbstractMain
 // Python
 //////////////////////////////////////////////////////////////////////////
 
+  ** Minimum required Python version
+  static const Int minPythonMajor := 3
+  static const Int minPythonMinor := 12
+
   protected Bool checkForPython()
   {
+    // Check if python3 exists
     cmd := ["which", "python3"]
     if ("win32" == Env.cur.os) cmd = ["where", "python"]
     if (Process(cmd) { it.out = null }.run.join != 0)
     {
       err("Python not found")
-      printLine("Please ensure Python 3 is installed and available in your PATH")
+      printLine("Please ensure Python 3.12+ is installed and available in your PATH")
+      return false
+    }
+
+    // Check version is 3.12+
+    buf := Buf()
+    versionCmd := ["python3", "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"]
+    if ("win32" == Env.cur.os) versionCmd[0] = "python"
+    proc := Process(versionCmd) { it.out = buf.out }
+    if (proc.run.join != 0)
+    {
+      err("Could not determine Python version")
+      return false
+    }
+
+    version := buf.flip.readAllStr.trim
+    dotIdx := version.index(".")
+    if (dotIdx == null)
+    {
+      err("Could not parse Python version: $version")
+      return false
+    }
+
+    major := Int.fromStr(version[0..<dotIdx], 10, false) ?: 0
+    minorStr := version[dotIdx+1..-1]
+    // Handle "3.12.1" -> take just "12"
+    dotIdx2 := minorStr.index(".")
+    if (dotIdx2 != null) minorStr = minorStr[0..<dotIdx2]
+    minor := Int.fromStr(minorStr, 10, false) ?: 0
+
+    if (major < minPythonMajor || (major == minPythonMajor && minor < minPythonMinor))
+    {
+      err("Python ${minPythonMajor}.${minPythonMinor}+ required, found $version")
+      printLine("Please upgrade Python or use: uv run --python 3.12 python")
       return false
     }
     return true

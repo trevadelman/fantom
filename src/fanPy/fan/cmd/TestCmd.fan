@@ -43,6 +43,7 @@ class TestCmd : FanPyCmd
 
     // Run Python with the test script
     cmd := ["python3", scriptFile.osPath]
+    if ("win32" == Env.cur.os) cmd[0] = "python"
     proc := Process(cmd) { it.dir = this.dir }
     result := proc.run.join
 
