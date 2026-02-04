@@ -206,12 +206,30 @@ class Actor(Obj):
 
     @staticmethod
     def sleep(duration):
-        """Put the currently executing actor thread to sleep"""
+        """Put the currently executing actor thread to sleep.
+
+        Handles Duration.max_val() by sleeping in chunks indefinitely.
+        """
         if hasattr(duration, 'ticks'):
             ns = duration.ticks()
         else:
             ns = int(duration)
-        time.sleep(ns / 1_000_000_000.0)
+
+        # Duration.max_val() is ~292 years in nanoseconds
+        # Python's time.sleep can overflow on some platforms with large values
+        # We cap each sleep to 1 day and loop for very long durations
+        ONE_DAY_NS = 86400 * 1_000_000_000  # 1 day in nanoseconds
+        MAX_SLEEP_SECS = 86400.0  # 1 day in seconds
+
+        remaining_ns = ns
+        while remaining_ns > 0:
+            sleep_ns = min(remaining_ns, ONE_DAY_NS)
+            try:
+                time.sleep(sleep_ns / 1_000_000_000.0)
+            except OverflowError:
+                # Platform can't handle even 1 day - use 1 hour chunks
+                time.sleep(3600.0)
+            remaining_ns -= sleep_ns
 
     @staticmethod
     def locals():
@@ -336,11 +354,25 @@ class Actor(Obj):
                 future.cancel()
                 return
             self._receive_count += 1
+            # Debug: Log actor processing
+            import sys as sys_mod
+            actor_type = type(self).__name__
+            if actor_type == 'WispActor':
+                print(f"[debug] WispActor._dispatch: processing message", file=sys_mod.stderr)
             result = self.receive(future.msg)
+            if actor_type == 'WispActor':
+                print(f"[debug] WispActor._dispatch: receive returned", file=sys_mod.stderr)
             future.complete(result)
         except Err as e:
+            import traceback
+            print(f"[err] Actor._dispatch Err: {e}", file=sys_mod.stderr)
+            traceback.print_exc()
             future.complete_err(e)
         except Exception as e:
+            import traceback
+            import sys as sys_mod
+            print(f"[err] Actor._dispatch Exception: {e}", file=sys_mod.stderr)
+            traceback.print_exc()
             future.complete_err(Err.make(str(e)))
 
     def _kill(self):

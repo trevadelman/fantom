@@ -724,6 +724,71 @@ class InStream(Obj):
         # Default implementation - may not be supported
         return self
 
+    def peek(self):
+        """Peek at the next byte without consuming it.
+
+        Returns the byte value as Int, or None at end of stream.
+        """
+        b = self.read()
+        if b is not None:
+            self.unread(b)
+        return b
+
+    def peek_char(self):
+        """Peek at the next character without consuming it.
+
+        Returns the character code point as Int, or None at end of stream.
+        """
+        c = self.read_char()
+        if c is not None:
+            self.unread_char(c)
+        return c
+
+    def read_str_token(self, max_chars=None, func=None):
+        """Read a string token terminated when func returns true.
+
+        Args:
+            max_chars: Maximum characters to read (default unlimited)
+            func: Function |Int ch->Bool| that returns true for terminator char.
+                  If null, terminates on whitespace (Int.isSpace).
+
+        Returns:
+            Token string, or None at end of stream.
+        """
+        from .Int import Int
+
+        max_len = int(max_chars) if max_chars is not None else 2147483647
+        if max_len <= 0:
+            return ""
+
+        # Read first char
+        c = self.read_char()
+        if c is None:
+            return None
+
+        chars = []
+        while True:
+            # Check termination
+            if func is None:
+                terminate = Int.is_space(c)
+            else:
+                terminate = func.call(c) if hasattr(func, 'call') else func(c)
+
+            if terminate:
+                # Push back the terminator
+                self.unread_char(c)
+                break
+
+            chars.append(chr(c))
+            if len(chars) >= max_len:
+                break
+
+            c = self.read_char()
+            if c is None:
+                break
+
+        return ''.join(chars)
+
     def unread_char(self, c):
         """Push back a character"""
         if self._in is not None and hasattr(self._in, 'unread_char'):

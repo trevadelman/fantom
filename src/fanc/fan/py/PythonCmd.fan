@@ -211,8 +211,9 @@ internal class PythonCmd : TranspileCmd
       if (metadata != null)
       {
         out.printLine("")
-        // Add Type import before metadata (needed for Type.find() calls)
-        out.printLine("from fan.sys.Type import Type")
+        // Add sys import before metadata (needed for sys.Type.find() calls)
+        // The transpiler uses sys.Type.find() for non-sys pods
+        out.printLine("import fan.sys as sys")
         out.print(metadata)
       }
     }

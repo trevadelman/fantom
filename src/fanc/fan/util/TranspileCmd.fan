@@ -64,18 +64,29 @@ abstract class TranspileCmd : FancCmd
     pods = Pod.flattenDepends(pods)
     pods = Pod.orderByDepends(pods)
 
-    // map Pods to TranspilePod instances
-    pods.each |pod| { this.pods.add(transpilePod(pod)) }
+    // map Pods to TranspilePod instances, skipping non-transpilable pods
+    pods.each |pod|
+    {
+      tp := transpilePod(pod)
+      if (tp != null) this.pods.add(tp)
+    }
   }
 
-  ** Load transpile pod
-  private TranspilePod transpilePod(Pod pod)
+  ** Load transpile pod, returns null if pod cannot be transpiled
+  private TranspilePod? transpilePod(Pod pod)
   {
-    TranspilePod {
+    buildScript := buildScriptMap[pod.name]
+    if (buildScript == null)
+    {
+      log.warn("Skipping pod '$pod.name' (no fan/ source directory - resource-only or Java-native)")
+      return null
+    }
+
+    return TranspilePod {
       it.name        = pod.name
       it.version     = pod.version
       it.podFile     = pod->loadFile
-      it.buildScript = buildScriptMap[pod.name] ?: throw Err("No build script found for pod: $pod.name")
+      it.buildScript = buildScript
     }
   }
 

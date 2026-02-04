@@ -455,20 +455,48 @@ class TcpSocketInStream(InStream):
         super().__init__(None)
         self._socket = sock
         self._file = sock.makefile('rb')
+        self._pushback = []  # For unread/peek support
 
     def read(self):
         """Read a single byte, return as int or None at EOF."""
+        # Check pushback first
+        if self._pushback:
+            return self._pushback.pop()
         b = self._file.read(1)
         if not b:
             return None
         return b[0]
 
-    def read_char(self):
-        """Read a single character (byte as int)."""
+    def peek(self):
+        """Peek at next byte without consuming it."""
+        if self._pushback:
+            return self._pushback[-1]
         b = self._file.read(1)
         if not b:
             return None
-        return b[0]
+        val = b[0]
+        self._pushback.append(val)
+        return val
+
+    def unread(self, b):
+        """Push back a byte to be read again."""
+        if b is not None:
+            self._pushback.append(int(b))
+        return self
+
+    def unread_char(self, c):
+        """Push back a character to be read again.
+
+        For ASCII/UTF-8 single-byte chars, this is equivalent to unread.
+        """
+        if c is not None:
+            self._pushback.append(int(c))
+        return self
+
+    def read_char(self):
+        """Read a single character (byte as int)."""
+        # Delegate to read() which handles pushback
+        return self.read()
 
     def read_buf(self, buf, n):
         """Read up to n bytes into buf."""
@@ -544,20 +572,35 @@ class TcpSocketOutStream(OutStream):
             self._file.write(bytes([int(val)]))
         return self
 
-    def write_buf(self, buf):
-        """Write buffer contents."""
+    def write_buf(self, buf, n=None):
+        """Write buffer contents.
+
+        Args:
+            buf: Buffer to write from
+            n: Number of bytes to write (None = all remaining)
+        """
         if hasattr(buf, '_data'):
             size = buf._size if hasattr(buf, '_size') else len(buf._data)
-            data = bytes(buf._data[:size])
+            pos = buf._pos if hasattr(buf, '_pos') else 0
+            if n is not None:
+                size = min(int(n), size - pos)
+            else:
+                size = size - pos
+            data = bytes(buf._data[pos:pos + size])
         elif hasattr(buf, 'to_bytes'):
             data = buf.to_bytes()
+            if n is not None:
+                data = data[:int(n)]
         elif hasattr(buf, 'size'):
+            count = int(n) if n is not None else buf.size()
             data = bytearray()
-            for i in range(buf.size()):
+            for i in range(count):
                 data.append(buf.get(i))
             data = bytes(data)
         else:
             data = bytes(buf) if isinstance(buf, (bytes, bytearray)) else str(buf).encode('utf-8')
+            if n is not None:
+                data = data[:int(n)]
         self._file.write(data)
         return self
 

@@ -276,6 +276,11 @@ class Env(Obj):
         # user.home - User home directory
         env_map.set_("user.home", os.path.expanduser("~"))
 
+        # java.home - JVM home directory (for code that expects Java runtime)
+        # We point to a non-existent path since we're in Python
+        # This allows code that checks for java.home to not throw NullErr
+        env_map.set_("java.home", "/not-a-jvm")
+
         return env_map.to_immutable()
 
     def find_file(self, uri, checked=True):
@@ -766,6 +771,66 @@ class Env(Obj):
         if not hasattr(self, '_in'):
             self._in = SysInStream()
         return self._in
+
+    #################################################################
+    # Exiting and Shutdown Hooks
+    #################################################################
+
+    _shutdown_hooks = []
+    _atexit_registered = False
+
+    def exit(self, status=0):
+        """Terminate the current virtual machine.
+
+        Args:
+            status: Exit status code (default 0)
+        """
+        import sys
+        sys.exit(status)
+
+    def add_shutdown_hook(self, func):
+        """Register a function to be called on VM shutdown.
+
+        Args:
+            func: A Fantom Func (or Python callable) to call on shutdown
+        """
+        import atexit
+
+        # Register atexit handler once
+        if not Env._atexit_registered:
+            atexit.register(Env._run_shutdown_hooks)
+            Env._atexit_registered = True
+
+        Env._shutdown_hooks.append(func)
+
+    def remove_shutdown_hook(self, func):
+        """Remove a previously registered shutdown hook.
+
+        Args:
+            func: The function to remove
+
+        Returns:
+            True if the function was found and removed
+        """
+        try:
+            Env._shutdown_hooks.remove(func)
+            return True
+        except ValueError:
+            return False
+
+    @staticmethod
+    def _run_shutdown_hooks():
+        """Execute all registered shutdown hooks."""
+        for hook in Env._shutdown_hooks:
+            try:
+                # Call the hook - could be a Fantom Func or Python callable
+                if hasattr(hook, 'call'):
+                    hook.call()
+                else:
+                    hook()
+            except Exception as e:
+                import sys
+                print(f"Error in shutdown hook: {e}", file=sys.stderr)
 
 
 class SysOutStream:

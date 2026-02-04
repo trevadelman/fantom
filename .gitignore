@@ -89,3 +89,16 @@ src/hxm
 src/hxd
 src/hxXeto
 src/hxRedis
+src/hxApi
+src/hxComps
+src/hxConn
+src/hxCrypto
+src/hxDocker
+src/hxHttp
+src/hxIO
+src/hxMath
+src/hxPoint
+src/hxShell
+src/hxTask
+src/hxXml
+src/ftp

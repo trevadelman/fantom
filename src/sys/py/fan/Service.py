@@ -213,9 +213,12 @@ class Service(Obj):
                 self.on_start()
                 self._running = True
             except Exception as e:
-                # onStart failed - service not running
-                # Log but don't re-raise (matches Fantom behavior)
-                pass
+                # onStart failed - log for debugging
+                import sys as sys_module
+                print(f"[err] Service.start() failed for {type(self).__name__}: {e}", file=sys_module.stderr)
+                import traceback
+                traceback.print_exc()
+                raise
         return self
 
     def stop(self):
