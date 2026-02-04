@@ -549,9 +549,11 @@ class Type(Obj):
             parts = self._qname.split("::")
             if len(parts) == 2:
                 pod, name = parts
+                # Convert Fantom pod name to Python module name (e.g., 'def' -> 'def_')
+                py_pod = Type._fantom_pod_to_py(pod)
                 cls = None
                 try:
-                    module = __import__(f'fan.{pod}.{name}', fromlist=[name])
+                    module = __import__(f'fan.{py_pod}.{name}', fromlist=[name])
                     cls = getattr(module, name, None)
                 except ImportError:
                     # For util:: types, try to find them in sys namespace
@@ -614,9 +616,11 @@ class Type(Obj):
             parts = self._qname.split("::")
             if len(parts) == 2:
                 pod, name = parts
+                # Convert Fantom pod name to Python module name (e.g., 'def' -> 'def_')
+                py_pod = Type._fantom_pod_to_py(pod)
                 cls = None
                 try:
-                    module = __import__(f'fan.{pod}.{name}', fromlist=[name])
+                    module = __import__(f'fan.{py_pod}.{name}', fromlist=[name])
                     cls = getattr(module, name, None)
                 except ImportError:
                     # For util:: types, try to find them in sys namespace
@@ -987,6 +991,23 @@ class Type(Obj):
             # Create empty list with this type as element type
             self._emptyList = FanList.from_literal([], self._qname).to_immutable()
         return self._emptyList
+
+    def finish(self):
+        """Finish type loading - Java-specific method for type initialization.
+
+        In Java, this is called after a type is fully loaded to perform
+        final initialization. In Python, this is a no-op since types are
+        loaded differently.
+        """
+        pass
+
+    def doc(self):
+        """Return fandoc documentation for this type.
+
+        In the Python runtime, we don't have access to fandoc comments
+        from the original Fantom source, so this returns None.
+        """
+        return None
 
     #########################################################################
     # Slot Reflection - Dynamic Discovery for Hand-Written Sys Types
@@ -3456,6 +3477,20 @@ class FacetInstance(Obj):
 
     def to_str(self):
         return f"@{self._facet_type.qname()}"
+
+    def decode(self, callback):
+        """Decode facet fields by calling callback for each name/value pair.
+
+        This is used by Reflect to extract facet metadata. The callback
+        is called with (name, value) for each field in the facet.
+
+        Args:
+            callback: Function to call with (name, value) for each field
+        """
+        # Iterate over the raw facet data and call callback for each
+        for name, value in self._facet_data.items():
+            decoded_value = self._decode_value(value)
+            callback(name, decoded_value)
 
 
 # Pre-populate static type$ fields for common types

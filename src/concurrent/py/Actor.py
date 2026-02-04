@@ -354,17 +354,11 @@ class Actor(Obj):
                 future.cancel()
                 return
             self._receive_count += 1
-            # Debug: Log actor processing
-            import sys as sys_mod
-            actor_type = type(self).__name__
-            if actor_type == 'WispActor':
-                print(f"[debug] WispActor._dispatch: processing message", file=sys_mod.stderr)
             result = self.receive(future.msg)
-            if actor_type == 'WispActor':
-                print(f"[debug] WispActor._dispatch: receive returned", file=sys_mod.stderr)
             future.complete(result)
         except Err as e:
             import traceback
+            import sys as sys_mod
             print(f"[err] Actor._dispatch Err: {e}", file=sys_mod.stderr)
             traceback.print_exc()
             future.complete_err(e)

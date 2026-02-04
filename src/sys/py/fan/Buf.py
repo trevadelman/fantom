@@ -1580,6 +1580,192 @@ class BufInStream(InStream):
         finally:
             self._buf.charset(origCharset)
 
+    def read_props_list_vals(self):
+        """Read a properties file where keys can have multiple values.
+
+        Returns [Str:Str[]] - a map where each key maps to a list of values.
+        If the same key appears multiple times, values are accumulated in a list.
+
+        This follows the Java pattern where readPropsListVals() delegates to
+        readProps(true) with a boolean flag for list mode.
+        """
+        from .Map import Map
+        from .List import List
+        from .Charset import Charset
+
+        # Props files are always UTF-8 - save and restore charset
+        origCharset = self._buf.charset()
+        self._buf.charset(Charset.utf8())
+
+        try:
+            # Read remaining buffer as string
+            content = self.read_all_str(normalize=False)
+
+            # Parse props with list values mode
+            result = Map.make_with_type("sys::Str", "sys::Str[]")
+            name = ""
+            v = None
+            in_block_comment = 0
+            in_eol_comment = False
+            c = 32
+            last = 32
+            line_num = 1
+            col_num = 0
+            pos = 0
+
+            def r_char():
+                nonlocal pos
+                if pos >= len(content):
+                    return -1
+                ch = ord(content[pos])
+                pos += 1
+                return ch
+
+            pushback = []
+
+            def unread_char(ch):
+                pushback.append(ch)
+
+            def get_char():
+                if pushback:
+                    return pushback.pop()
+                return r_char()
+
+            while True:
+                last = c
+                c = get_char()
+                col_num += 1
+                if c < 0:
+                    break
+
+                # End of line
+                if c == 10 or c == 13:
+                    col_num = 0
+                    in_eol_comment = False
+                    if last == 13 and c == 10:
+                        continue
+                    n = name.strip()
+                    if v is not None:
+                        # Add to list values map
+                        existing = result.get(n, None)
+                        if existing is None:
+                            values_list = List.from_literal([v.strip()], "sys::Str")
+                            result.set_(n, values_list)
+                        else:
+                            existing.add(v.strip())
+                        name = ""
+                        v = None
+                    elif len(n) > 0:
+                        from .Err import IOErr
+                        raise IOErr.make(f"Invalid name/value pair [Line {line_num}]")
+                    line_num += 1
+                    continue
+
+                # If in comment
+                if in_eol_comment:
+                    continue
+
+                # Block comment
+                if in_block_comment > 0:
+                    if last == 47 and c == 42:  # /*
+                        in_block_comment += 1
+                    if last == 42 and c == 47:  # */
+                        in_block_comment -= 1
+                    continue
+
+                # Equal sign
+                if c == 61 and v is None:  # =
+                    v = ""
+                    continue
+
+                # Line comment at start of line
+                if c == 35 and col_num == 1:  # #
+                    in_eol_comment = True
+                    continue
+
+                # End of line comment (//) or block comment (/*)
+                if c == 47 and (last == 32 or last == 9 or last == 10 or last == 13):
+                    peek = get_char()
+                    if peek < 0:
+                        break
+                    if peek == 47:  # //
+                        in_eol_comment = True
+                        continue
+                    if peek == 42:  # /*
+                        in_block_comment += 1
+                        continue
+                    unread_char(peek)
+
+                # Escape or line continuation
+                if c == 92:  # \
+                    peek = get_char()
+                    if peek < 0:
+                        break
+                    elif peek == 110:  # n
+                        c = 10
+                    elif peek == 114:  # r
+                        c = 13
+                    elif peek == 116:  # t
+                        c = 9
+                    elif peek == 92:  # \
+                        c = 92
+                    elif peek == 13 or peek == 10:
+                        # Line continuation
+                        line_num += 1
+                        if peek == 13:
+                            peek = get_char()
+                            if peek != 10:
+                                unread_char(peek)
+                        # Skip leading whitespace on next line
+                        while True:
+                            peek = get_char()
+                            if peek == 32 or peek == 9:
+                                continue
+                            if peek >= 0:
+                                unread_char(peek)
+                            break
+                        continue
+                    elif peek == 117:  # u - unicode escape
+                        def hex_val(ch):
+                            if 48 <= ch <= 57: return ch - 48
+                            if 97 <= ch <= 102: return ch - 97 + 10
+                            if 65 <= ch <= 70: return ch - 65 + 10
+                            return -1
+                        n3 = hex_val(get_char())
+                        n2 = hex_val(get_char())
+                        n1 = hex_val(get_char())
+                        n0 = hex_val(get_char())
+                        if n3 < 0 or n2 < 0 or n1 < 0 or n0 < 0:
+                            from .Err import IOErr
+                            raise IOErr.make(f"Invalid hex value for \\uxxxx [Line {line_num}]")
+                        c = (n3 << 12) | (n2 << 8) | (n1 << 4) | n0
+                    else:
+                        from .Err import IOErr
+                        raise IOErr.make(f"Invalid escape sequence [Line {line_num}]")
+
+                # Normal character
+                if v is None:
+                    name += chr(c)
+                else:
+                    v += chr(c)
+
+            # Handle final line without newline
+            n = name.strip()
+            if v is not None:
+                existing = result.get(n, None)
+                if existing is None:
+                    values_list = List.from_literal([v.strip()], "sys::Str")
+                    result.set_(n, values_list)
+                else:
+                    existing.add(v.strip())
+            elif len(n) > 0:
+                from .Err import IOErr
+                raise IOErr.make(f"Invalid name/value pair [Line {line_num}]")
+
+            return result
+        finally:
+            self._buf.charset(origCharset)
+
     def read_char(self):
         """Read character using THIS stream's charset (not the underlying Buf's charset).
 

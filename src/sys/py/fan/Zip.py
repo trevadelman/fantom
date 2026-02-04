@@ -617,6 +617,19 @@ class GzipOutStream:
         self._gzip.write((s + "\n").encode('utf-8'))
         return self
 
+    def write_char(self, c):
+        """Write single character using UTF-8 encoding."""
+        ch = chr(c) if isinstance(c, int) else c
+        self._gzip.write(ch.encode('utf-8'))
+        return self
+
+    def write_chars(self, s, off=0, length=None):
+        """Write string characters using UTF-8 encoding."""
+        if length is None:
+            length = len(s) - off
+        self._gzip.write(s[off:off+length].encode('utf-8'))
+        return self
+
     def flush(self):
         self._gzip.flush()
         self._flush_to_out()

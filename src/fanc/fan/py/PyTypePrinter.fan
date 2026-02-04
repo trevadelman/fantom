@@ -54,6 +54,12 @@ class PyTypePrinter : PyPrinter
     // Type metadata registration (for reflection)
     typeMetadata(t)
 
+    // Generate if __name__ == "__main__" block at module level for main() methods
+    // This MUST be after the class definition ends (unindented to module level)
+    mainMethod := t.methodDefs.find |method| { isMain(method) }
+    if (mainMethod != null)
+      pyMain(mainMethod)
+
     m.curType = null
   }
 
@@ -2159,9 +2165,8 @@ class PyTypePrinter : PyPrinter
     // Clear closure state for next method
     this.m.clearClosures()
 
-    // Generate Python main block for main() methods
-    if (isMain(m))
-      pyMain(m)
+    // NOTE: pyMain is now called from type() method after class ends
+    // to ensure if __name__ block is at module level, not inside class
 
     // Reset static context flag
     if (m.isStatic)
@@ -2292,8 +2297,10 @@ class PyTypePrinter : PyPrinter
     indent
     typeName := m.parent.name
     w("import sys as sys_mod").nl
-    w("main_instance = ${typeName}()").nl
-    w("main_instance.main(sys_mod.argv[1:])").nl
+    w("from fan.sys.List import List").nl
+    w("args = List.from_literal(sys_mod.argv[1:], 'sys::Str')").nl
+    w("exit_code = ${typeName}.main(args)").nl
+    w("sys_mod.exit(exit_code if exit_code is not None else 0)").nl
     unindent
   }
 

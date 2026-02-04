@@ -109,55 +109,44 @@ class Pod(Obj):
     def depends(self):
         """Return list of dependencies as immutable Depend[]"""
         if self._depends is None:
-            from .Depend import Depend
-            from .List import List
-
-            deps = []
-            # For known pods, define dependencies
-            if self._name == "sys":
-                pass  # sys has no dependencies
-            elif self._name == "concurrent":
-                deps.append(Depend.from_str("sys 1.0"))
-            elif self._name == "testSys":
-                deps.append(Depend.from_str("sys 1.0"))
-                deps.append(Depend.from_str("concurrent 1.0"))
-            elif self._name == "graphics":
-                deps.append(Depend.from_str("sys 1.0"))
-            elif self._name == "inet":
-                deps.append(Depend.from_str("sys 1.0"))
-                deps.append(Depend.from_str("concurrent 1.0"))
-            elif self._name == "crypto":
-                deps.append(Depend.from_str("sys 1.0"))
-            elif self._name == "web":
-                deps.append(Depend.from_str("sys 1.0"))
-                deps.append(Depend.from_str("concurrent 1.0"))
-                deps.append(Depend.from_str("inet 1.0"))
-            elif self._name == "dom":
-                deps.append(Depend.from_str("sys 1.0"))
-                deps.append(Depend.from_str("concurrent 1.0"))
-                deps.append(Depend.from_str("graphics 1.0"))
-            elif self._name == "domkit":
-                deps.append(Depend.from_str("sys 1.0"))
-                deps.append(Depend.from_str("concurrent 1.0"))
-                deps.append(Depend.from_str("graphics 1.0"))
-                deps.append(Depend.from_str("dom 1.0"))
-                deps.append(Depend.from_str("web 1.0"))
-                deps.append(Depend.from_str("inet 1.0"))
-                deps.append(Depend.from_str("crypto 1.0"))
-            elif self._name == "util":
-                deps.append(Depend.from_str("sys 1.0"))
-                deps.append(Depend.from_str("concurrent 1.0"))
-            elif self._name == "webmod":
-                deps.append(Depend.from_str("sys 1.0"))
-                deps.append(Depend.from_str("concurrent 1.0"))
-                deps.append(Depend.from_str("inet 1.0"))
-                deps.append(Depend.from_str("web 1.0"))
-                deps.append(Depend.from_str("util 1.0"))
-
-            # Create immutable list with proper type
-            result = List.from_literal(deps, "sys::Depend")
-            self._depends = result.to_immutable()
+            self._load_depends()
         return self._depends
+
+    def _load_depends(self):
+        """Load dependencies from the pod's meta.props file."""
+        from .Depend import Depend
+        from .List import List
+        import zipfile
+
+        deps = []
+
+        # Try to read from pod file
+        from .Env import Env
+        pod_file = Env.cur().find_pod_file(self._name)
+
+        if pod_file is not None and pod_file.exists():
+            try:
+                os_path = pod_file.os_path()
+                with zipfile.ZipFile(os_path, 'r') as zf:
+                    if 'meta.props' in zf.namelist():
+                        content = zf.read('meta.props').decode('utf-8')
+                        for line in content.strip().split('\n'):
+                            line = line.strip()
+                            if line.startswith('pod.depends='):
+                                depends_str = line[len('pod.depends='):]
+                                if depends_str:
+                                    # Dependencies are semicolon-separated
+                                    for dep_str in depends_str.split(';'):
+                                        dep_str = dep_str.strip()
+                                        if dep_str:
+                                            deps.append(Depend.from_str(dep_str))
+                                break
+            except Exception as e:
+                pass  # Use empty list on error
+
+        # Create immutable list with proper type
+        result = List.from_literal(deps, "sys::Depend")
+        self._depends = result.to_immutable()
 
     def log(self):
         """Return the log for this pod"""
@@ -184,22 +173,117 @@ class Pod(Obj):
     def files(self):
         """Return list of files in this pod.
 
-        Note: In Python runtime, we throw UnsupportedErr like JavaScript.
+        Returns an immutable list of files contained in this pod's .pod file.
+        Excludes fcode/ directory and .class files.
         """
-        from .Err import UnsupportedErr
-        raise UnsupportedErr("Pod.files")
+        self._load_files()
+        return self._files_list
 
     def file(self, uri, checked=True):
         """Return a file from this pod by uri.
 
         Args:
-            uri: Uri to the file
-            checked: If true, throw error if not found
+            uri: Uri to the file (e.g., `/res/login.css`)
+            checked: If true, throw UnresolvedErr if not found
 
-        Note: In Python runtime, we throw UnsupportedErr like JavaScript.
+        Returns:
+            File if found, None if not found and checked=False
         """
-        from .Err import UnsupportedErr
-        raise UnsupportedErr("Pod.file")
+        from .Uri import Uri
+        from .Err import ArgErr, UnresolvedErr
+
+        self._load_files()
+
+        # Convert to Uri if needed
+        if isinstance(uri, str):
+            uri = Uri.from_str(uri)
+
+        # URI must be path absolute
+        uri_str = str(uri)
+        if not uri_str.startswith('/'):
+            raise ArgErr.make(f"Pod.file Uri must be path abs: {uri}")
+
+        # Build full URI: fan://{podName}/{path}
+        full_uri = self.uri().plus(uri)
+
+        # Look up in files map
+        f = self._files_map.get(str(full_uri))
+        if f is not None:
+            return f
+
+        # Not found
+        if checked:
+            raise UnresolvedErr.make(str(uri))
+        return None
+
+    def _load_files(self):
+        """Load files from pod's .pod zip file.
+
+        Populates _files_list and _files_map from the zip entries.
+        Thread-safe: uses a lock to prevent race conditions.
+        """
+        import threading
+
+        # Ensure we have a lock for this pod instance
+        if not hasattr(self, '_files_lock'):
+            self._files_lock = threading.Lock()
+
+        # Quick check without lock (optimization for common case)
+        if hasattr(self, '_files_loaded') and self._files_loaded:
+            return
+
+        # Acquire lock for thread-safe initialization
+        with self._files_lock:
+            # Double-check after acquiring lock (another thread may have loaded)
+            if hasattr(self, '_files_loaded') and self._files_loaded:
+                return
+
+            import zipfile
+            from .List import List
+            from .Uri import Uri
+
+            self._files_map = {}
+            self._files_list = None
+
+            # Find the .pod file
+            from .Env import Env
+            pod_file = Env.cur().find_pod_file(self._name)
+
+            if pod_file is None or not pod_file.exists():
+                # No .pod file - empty file list
+                self._files_list = List.from_literal([], "sys::File").to_immutable()
+                self._files_loaded = True
+                return
+
+            # Open the zip and enumerate files
+            files = []
+            try:
+                os_path = pod_file.os_path()
+                with zipfile.ZipFile(os_path, 'r') as zf:
+                    for name in zf.namelist():
+                        # Skip fcode/ directory (internal compiler data)
+                        if name.startswith('fcode/'):
+                            continue
+                        # Skip .class files
+                        if name.endswith('.class'):
+                            continue
+
+                        # Create URI for this entry: fan://{podName}/{path}
+                        # Entry names don't have leading slash, add it
+                        entry_path = '/' + name if not name.startswith('/') else name
+                        full_uri = Uri.from_str(f"fan://{self._name}{entry_path}")
+
+                        # Create a ZipEntryFile for this entry
+                        entry_file = PodZipEntryFile(os_path, name, full_uri)
+                        files.append(entry_file)
+                        self._files_map[str(full_uri)] = entry_file
+
+            except Exception:
+                pass  # Empty file list on error
+
+            self._files_list = List.from_literal(files, "sys::File").to_immutable()
+            # Set loaded flag LAST, after everything is ready
+            self._files_loaded = True
 
     def types(self):
         """Get list of types in this pod"""
@@ -372,8 +456,10 @@ class Pod(Obj):
     def find(name, checked=True):
         """Find a pod by name.
 
-        Dynamically discovers pods by checking if a Python module exists
-        at fan.{podname}. No hardcoded list needed.
+        Dynamically discovers pods by checking:
+        1. If already registered in Pod._pods
+        2. If a Python module exists at fan.{podname}
+        3. If a .pod file exists (for def-only pods without code)
 
         Handles Python keyword escaping: pod name "def" maps to module "fan.def_"
 
@@ -408,6 +494,17 @@ class Pod(Obj):
             return pod
         except ImportError:
             pass
+
+        # Try to find a .pod file (for def-only pods without Python code)
+        # This handles pods like ph, phScience, phIoT, phIct that have no code
+        from .Env import Env
+        pod_file = Env.cur().find_pod_file(name)
+        if pod_file is not None and pod_file.exists():
+            # Pod file exists - create and register
+            pod = Pod(name, "1.0.80")
+            Pod._pods[name] = pod
+            Pod._list = None
+            return pod
 
         # Unknown pod
         if checked:
@@ -459,11 +556,11 @@ class Pod(Obj):
             for dep in pod.depends():
                 dep_pod = Pod.find(dep.name(), False)
                 if dep_pod is not None:
-                    addWithDepends(dep_pod)
+                    add_with_depends(dep_pod)
 
         # Process each input pod
         for pod in pods:
-            addWithDepends(pod)
+            add_with_depends(pod)
 
         # Return as immutable list
         return List.from_literal(list(result), "sys::Pod")
@@ -534,6 +631,176 @@ class Pod(Obj):
             pod = Pod("sys", "1.0")
             Pod._pods["sys"] = pod
         return Pod._pods["sys"]
+
+
+class PodZipEntryFile:
+    """File implementation for entries inside a pod's .pod zip file.
+
+    This is a read-only file backed by a zip entry. Used by Pod.file()
+    to return files from the pod's bundled resources.
+    """
+
+    def __init__(self, zip_path, entry_name, uri):
+        """Create a PodZipEntryFile.
+
+        Args:
+            zip_path: Path to the .pod zip file
+            entry_name: Name of the entry within the zip (e.g., "res/login.css")
+            uri: Full URI for this file (e.g., fan://hxd/res/login.css)
+        """
+        self._zip_path = zip_path
+        self._entry_name = entry_name
+        self._uri = uri
+
+    def typeof(self):
+        from .Type import Type
+        return Type.find("sys::File")
+
+    def uri(self):
+        return self._uri
+
+    def name(self):
+        """Return file name (last path segment)."""
+        return self._uri.name() if hasattr(self._uri, 'name') else self._entry_name.split('/')[-1]
+
+    def ext(self):
+        """Return file extension without dot, or null if none."""
+        name = self.name()
+        if '.' in name:
+            return name.rsplit('.', 1)[1]
+        return None
+
+    def parent(self):
+        return None
+
+    def os_path(self):
+        return None
+
+    def exists(self):
+        return True
+
+    def is_dir(self):
+        return self._entry_name.endswith('/')
+
+    def size(self):
+        """Return file size in bytes."""
+        import zipfile
+        try:
+            with zipfile.ZipFile(self._zip_path, 'r') as zf:
+                info = zf.getinfo(self._entry_name)
+                return info.file_size
+        except:
+            return None
+
+    def modified(self):
+        """Return last modified time as DateTime."""
+        import zipfile
+        import time as time_mod
+        try:
+            with zipfile.ZipFile(self._zip_path, 'r') as zf:
+                info = zf.getinfo(self._entry_name)
+                dt = info.date_time
+                # date_time is (year, month, day, hour, min, sec) in local time
+                local_time_tuple = (dt[0], dt[1], dt[2], dt[3], dt[4], dt[5], 0, 0, -1)
+                epoch_secs = time_mod.mktime(local_time_tuple)
+                epoch_millis = int(epoch_secs * 1000)
+                from .DateTime import DateTime
+                return DateTime.from_java(epoch_millis)
+        except:
+            return None
+
+    def mime_type(self):
+        """Return MIME type based on extension."""
+        from .MimeType import MimeType
+        ext = self.ext()
+        if ext is None:
+            return None
+        return MimeType.for_ext(ext)
+
+    def in_(self, bufSize=4096):
+        """Get an input stream to read the entry."""
+        import zipfile
+        from .Buf import Buf
+        try:
+            with zipfile.ZipFile(self._zip_path, 'r') as zf:
+                data = zf.read(self._entry_name)
+            buf = Buf.make(len(data))
+            for b in data:
+                buf.write(b)
+            buf.flip()
+            return buf.in_()
+        except Exception as e:
+            from .Err import IOErr
+            raise IOErr.make(f"Cannot read pod file: {self._entry_name}: {e}")
+
+    def read_all_str(self, normalizeNewlines=True):
+        """Read entire entry as string."""
+        import zipfile
+        try:
+            with zipfile.ZipFile(self._zip_path, 'r') as zf:
+                data = zf.read(self._entry_name)
+            text = data.decode('utf-8')
+            if normalizeNewlines:
+                text = text.replace('\r\n', '\n').replace('\r', '\n')
+            return text
+        except Exception as e:
+            from .Err import IOErr
+            raise IOErr.make(f"Cannot read pod file: {self._entry_name}: {e}")
+
+    def read_all_buf(self):
+        """Read entire entry as Buf."""
+        import zipfile
+        from .Buf import Buf
+        try:
+            with zipfile.ZipFile(self._zip_path, 'r') as zf:
+                data = zf.read(self._entry_name)
+            buf = Buf.make(len(data))
+            for b in data:
+                buf.write(b)
+            buf.flip()
+            return buf
+        except Exception as e:
+            from .Err import IOErr
+            raise IOErr.make(f"Cannot read pod file: {self._entry_name}: {e}")
+
+    def out(self, append=False, bufSize=4096):
+        from .Err import IOErr
+        raise IOErr.make("Cannot write to pod file")
+
+    def create(self):
+        from .Err import IOErr
+        raise IOErr.make("Cannot create pod file")
+
+    def delete(self):
+        from .Err import IOErr
+        raise IOErr.make("Cannot delete pod file")
+
+    def move_to(self, target):
+        from .Err import IOErr
+        raise IOErr.make("Cannot move pod file")
+
+    def with_in(self, callback, bufSize=None):
+        """Open file for reading, call callback with InStream, then close.
+
+        Args:
+            callback: Function to call with InStream
+            bufSize: Optional buffer size
+
+        Returns:
+            Result of callback function
+        """
+        inp = self.in_(bufSize)
+        try:
+            result = callback(inp)
+            return result
+        finally:
+            inp.close()
+
+    def to_str(self):
+        return str(self._uri)
+
+    def __str__(self):
+        return self.to_str()
 
 
 class UnknownPodErr(Exception):

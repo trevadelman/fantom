@@ -39,6 +39,14 @@ class Method(Slot):
     def is_method(self):
         return True
 
+    def doc(self):
+        """Return fandoc documentation for this method.
+
+        In the Python runtime, we don't have access to fandoc comments
+        from the original Fantom source, so this returns None.
+        """
+        return None
+
     def returns(self):
         """Get return type - lazily resolves from string signature if needed.
 

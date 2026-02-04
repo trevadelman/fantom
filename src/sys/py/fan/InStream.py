@@ -826,6 +826,62 @@ class InStream(Obj):
 
         return result
 
+    def read_props_list_vals(self):
+        """Read a properties file where keys can have multiple values.
+
+        Returns [Str:Str[]] - a map where each key maps to a list of values.
+        If the same key appears multiple times, values are accumulated in a list.
+        """
+        from .Map import Map
+        from .List import List
+
+        result = Map.make_with_type("sys::Str", "sys::Str[]")
+        content = ""
+
+        if hasattr(self, '_stream'):
+            content = self._stream.read()
+        elif self._in is not None:
+            if hasattr(self._in, 'read_props_list_vals'):
+                return self._in.read_props_list_vals()
+            # Fall back to reading raw content
+            if hasattr(self._in, 'read_all_str'):
+                content = self._in.read_all_str()
+            elif hasattr(self._in, 'read'):
+                # Read all bytes and decode
+                data = b''
+                while True:
+                    b = self._in.read()
+                    if b is None:
+                        break
+                    data += bytes([b])
+                content = data.decode('utf-8')
+
+        if isinstance(content, bytes):
+            content = content.decode('utf-8')
+
+        for line in content.splitlines():
+            # Skip empty lines and comments
+            line = line.strip()
+            if not line or line.startswith('#') or line.startswith('//'):
+                continue
+
+            # Find the = separator
+            eq_pos = line.find('=')
+            if eq_pos > 0:
+                key = line[:eq_pos].strip()
+                value = line[eq_pos + 1:].strip()
+
+                # Get existing list or create new one
+                existing = result.get(key, None)
+                if existing is None:
+                    values_list = List.from_literal([value], "sys::Str")
+                    result.set_(key, values_list)
+                else:
+                    # Add to existing list
+                    existing.add(value)
+
+        return result
+
     def pipe(self, out, n=None, close=True):
         """Pipe data from this InStream to an OutStream.
 

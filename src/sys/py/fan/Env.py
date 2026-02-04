@@ -47,6 +47,8 @@ class Env(Obj):
                 except ImportError:
                     # PathEnv not available (e.g., util pod not transpiled yet)
                     Env._instance = Env()
+                except Exception:
+                    Env._instance = Env()
             else:
                 Env._instance = Env()
         return Env._instance
@@ -352,6 +354,45 @@ class Env(Obj):
                 continue
 
         return List.from_literal(result, "sys::File")
+
+    def find_pod_file(self, name):
+        """Find the .pod file for a given pod name.
+
+        Searches lib/fan/{name}.pod in the environment path (which is
+        configured via fan.props path= property).
+
+        Args:
+            name: Pod name (without .pod extension)
+
+        Returns:
+            File if found, None otherwise
+        """
+        from .Uri import Uri
+
+        # Look for lib/fan/{name}.pod in all paths (configured via fan.props)
+        uri = Uri.from_str(f"lib/fan/{name}.pod")
+        return self.find_file(uri, False)  # checked=False
+
+    def find_all_pod_names(self):
+        """Return list of all pod names in the environment.
+
+        Searches lib/fan/ for .pod files and returns their basenames.
+
+        Returns:
+            List of pod name strings
+        """
+        from .Uri import Uri
+        from .List import List
+
+        result = []
+        lib_fan_uri = Uri.from_str("lib/fan/")
+        lib_fan = self.find_file(lib_fan_uri, False)
+        if lib_fan is not None and lib_fan.exists():
+            for f in lib_fan.list_():
+                if not f.is_dir() and f.ext() == "pod":
+                    result.append(f.basename())
+
+        return List.from_literal(sorted(result), "sys::Str")
 
     def props(self, pod, uri, maxAge):
         """Load props file with caching.

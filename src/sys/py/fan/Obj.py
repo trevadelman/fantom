@@ -121,6 +121,17 @@ class Obj:
         # Keep args as-is (None or list) to match Fantom semantics
         # Only spread args for method calls
 
+        # Helper to strip trailing None values from args
+        # This handles cases where Fantom code passes optional args as null
+        # but the Python method has fewer parameters
+        def strip_trailing_nones(args_list):
+            if not args_list:
+                return args_list
+            # Remove trailing None values
+            while args_list and args_list[-1] is None:
+                args_list = args_list[:-1]
+            return args_list
+
         # Try to find method or field directly on object
         attr = getattr(self, name, None)
         if attr is not None:
@@ -139,7 +150,9 @@ class Obj:
                                 slot.set_(self, args[0])
                                 return args[0]
                 # Not a field, call as method
-                return attr(*(args or []))
+                # Strip trailing None values to handle optional parameters
+                call_args = strip_trailing_nones(list(args) if args else [])
+                return attr(*call_args)
             else:
                 # It's a field value - if args provided, use reflection for const check
                 if args:
