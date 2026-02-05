@@ -8,12 +8,56 @@ sys_module.path.insert(0, '.')
 
 from typing import Optional, Callable, List as TypingList, Dict as TypingDict
 
+from pathlib import Path
+
 from fan import sys
 from fan.sys.Obj import Obj
 from fan.sys.ObjUtil import ObjUtil
 from fan.web.Weblet import Weblet
 from fan import concurrent
 from fan import inet
+
+
+# PYTHON-FANTOM: Cache for extracted asset directories
+_extracted_js_dir = None
+_extracted_res_dir = None
+
+def _find_extracted_assets_dir():
+    """Find the directory containing extracted JS/CSS assets.
+
+    During transpilation, fanc py extracts JS/CSS from pods into:
+      gen/py/fan/_assets/js/     - JavaScript files
+      gen/py/fan/_assets/res/    - Resources (CSS, images, etc.)
+
+    For pip-installed packages, these are at:
+      {site-packages}/fan/_assets/js/
+      {site-packages}/fan/_assets/res/
+
+    This follows Python packaging best practices by keeping static assets
+    co-located with the code that serves them (fan/web/FilePack.py).
+
+    Returns tuple of (js_dir, res_dir) as Path objects, or (None, None) if not found.
+    """
+    global _extracted_js_dir, _extracted_res_dir
+
+    if _extracted_js_dir is not None or _extracted_res_dir is not None:
+        return (_extracted_js_dir, _extracted_res_dir)
+
+    # Find assets relative to this module (fan/web/FilePack.py)
+    # Structure: fan/web/FilePack.py -> fan/web -> fan -> fan/_assets/
+    module_path = Path(__file__).resolve()
+    fan_dir = module_path.parent.parent  # fan/web -> fan/
+    assets_dir = fan_dir / '_assets'
+
+    js_dir = assets_dir / 'js'
+    res_dir = assets_dir / 'res'
+
+    if js_dir.exists():
+        _extracted_js_dir = js_dir
+    if res_dir.exists():
+        _extracted_res_dir = res_dir
+
+    return (_extracted_js_dir, _extracted_res_dir)
 
 class FilePack(Weblet):
 
@@ -180,18 +224,59 @@ class FilePack(Weblet):
 
   @staticmethod
   def to_pod_js_file(pod: 'Pod') -> 'Optional[File]':
-    uri = (sys.Uri.from_str("/js/") if __import__('fan.web.WebJsMode', fromlist=['WebJsMode']).WebJsMode.cur().is_es() else sys.Uri.from_str("/")).plus(sys.Str.to_uri((("" + pod.name()) + ".js")))
+    """Get the JavaScript file for a pod.
+
+    PYTHON-FANTOM: First checks for extracted JS files (from fanc py),
+    then falls back to reading from pod file.
+    """
+    pod_name = pod.name()
+
+    # First try extracted JS directory
+    js_dir, _ = _find_extracted_assets_dir()
+    if js_dir is not None:
+      js_path = js_dir / f'{pod_name}.js'
+      if js_path.exists():
+        return sys.File.make(sys.Uri.from_str(f"file:{js_path}"))
+
+    # Fallback to pod file
+    uri = (sys.Uri.from_str("/js/") if __import__('fan.web.WebJsMode', fromlist=['WebJsMode']).WebJsMode.cur().is_es() else sys.Uri.from_str("/")).plus(sys.Str.to_uri((("" + pod_name) + ".js")))
     return pod.file(uri, False)
 
   @staticmethod
   def to_pod_js_files(pods: 'List') -> 'List':
+    """Get JavaScript files for a list of pods.
+
+    PYTHON-FANTOM: Uses extracted JS files when available.
+    """
     acc = sys.List.from_literal([], "sys::File")
     acc.capacity = pods.size
+
+    # Check for extracted JS directory
+    js_dir, _ = _find_extracted_assets_dir()
+
     def _closure_3(pod=None):
+      pod_name = pod.name()
+
+      # For sys pod, also include fan.js (ES6 module bootstrap)
+      if ObjUtil.equals(pod_name, "sys") and __import__('fan.web.WebJsMode', fromlist=['WebJsMode']).WebJsMode.cur().is_es():
+        # Try extracted fan.js first
+        if js_dir is not None:
+          fan_js_path = js_dir / 'fan.js'
+          if fan_js_path.exists():
+            acc.add(sys.File.make(sys.Uri.from_str(f"file:{fan_js_path}")))
+          else:
+            # Fallback to pod file
+            fan_js = pod.file(sys.Uri.from_str("/js/fan.js"), False)
+            if fan_js is not None:
+              acc.add(ObjUtil.coerce(fan_js, "sys::File"))
+        else:
+          fan_js = pod.file(sys.Uri.from_str("/js/fan.js"), False)
+          if fan_js is not None:
+            acc.add(ObjUtil.coerce(fan_js, "sys::File"))
+
+      # Get main pod JS file
       js = FilePack.to_pod_js_file(pod)
       if js is not None:
-        if (ObjUtil.equals(pod.name(), "sys") and __import__('fan.web.WebJsMode', fromlist=['WebJsMode']).WebJsMode.cur().is_es()):
-          acc.add(ObjUtil.coerce(pod.file(sys.Uri.from_str("/js/fan.js")), "sys::File"))
         acc.add(ObjUtil.coerce(js, "sys::File"))
       return
 
@@ -423,9 +508,30 @@ const sys = __require('sys.ext');
 
   @staticmethod
   def to_pod_css_files(pods: 'List') -> 'List':
+    """Get CSS files for a list of pods.
+
+    PYTHON-FANTOM: First checks for extracted CSS files (from fanc py),
+    then falls back to reading from pod file.
+    """
     acc = sys.List.from_literal([], "sys::File")
+
+    # Check for extracted resources directory
+    _, res_dir = _find_extracted_assets_dir()
+
     def _closure_5(pod=None):
-      css = pod.file(sys.Str.to_uri((("/res/css/" + pod.name()) + ".css")), False)
+      pod_name = pod.name()
+
+      # First try extracted CSS (in res/css/)
+      if res_dir is not None:
+        css_path = res_dir / 'css' / f'{pod_name}.css'
+        if css_path.exists():
+          acc.add(sys.File.make(sys.Uri.from_str(f"file:{css_path}")))
+          return
+
+      # Fallback to pod file (try both res/css/ and res/)
+      css = pod.file(sys.Str.to_uri((("/res/css/" + pod_name) + ".css")), False)
+      if css is None:
+        css = pod.file(sys.Str.to_uri((("/res/" + pod_name) + ".css")), False)
       if css is not None:
         acc.add(ObjUtil.coerce(css, "sys::File"))
       return

@@ -89,6 +89,110 @@ internal class PythonCmd : TranspileCmd
     {
       copyExtraNatives(pod, nativeDir)
     }
+
+    // Extract web assets (JS, CSS, resources) from the pre-built pod file
+    // Assets go into fan/_assets/ to keep them co-located with the serving code
+    extractAssets(pod.name)
+  }
+
+//////////////////////////////////////////////////////////////////////////
+// Asset Extraction
+//////////////////////////////////////////////////////////////////////////
+
+  **
+  ** Extract all web assets (JS, CSS, resources) from the pre-built pod file.
+  ** Assets are placed in fan/_assets/ following Python packaging best practices,
+  ** keeping static files co-located with the code that serves them (fan/web/FilePack.py).
+  **
+  ** Package Size Notes:
+  ** -------------------
+  ** Current extraction includes ALL JS files, resulting in ~10MB uncompressed assets.
+  ** For production releases, consider adding a flag to skip test JS files:
+  **
+  **   test*.js files (~2.6MB uncompressed):
+  **     - testSys.js (1.4MB) - Fantom sys tests for browser JS runtime
+  **     - testXeto.js, testHaystack.js, testAxon.js, testDomkit.js, testGraphics.js
+  **
+  ** These test JS files are for browser-based testing of the JavaScript runtime,
+  ** not for testing the Python transpilation. To reduce wheel size for production:
+  **
+  **   1. Add a --production flag to fanc py
+  **   2. In extractJs(), skip files where pod.name.startsWith("test")
+  **   3. This would reduce the wheel from ~2.2MB to ~1.4MB compressed
+  **
+  private Void extractAssets(Str podName)
+  {
+    podObj := Pod.find(podName, false)
+    if (podObj == null) return
+
+    extractJs(podObj)
+    extractResources(podObj)
+  }
+
+  ** Extract JavaScript and source maps from pod
+  private Void extractJs(Pod pod)
+  {
+    // Place JS in fan/_assets/js/ (co-located with fan/web/FilePack.py)
+    jsDir := outDir + `fan/_assets/js/`
+    jsDir.create
+
+    // Try ES6 first (/js/{pod}.js), then legacy (/{pod}.js)
+    jsFile := pod.file(`/js/${pod.name}.js`, false)
+             ?: pod.file(`/${pod.name}.js`, false)
+    if (jsFile != null)
+    {
+      outFile := jsDir + `${pod.name}.js`
+      jsFile.copyTo(outFile, ["overwrite": true])
+      info("  Extracted ${pod.name}.js")
+    }
+
+    // Also extract fan.js for sys pod (ES6 module system bootstrap)
+    if (pod.name == "sys")
+    {
+      fanJs := pod.file(`/js/fan.js`, false)
+      if (fanJs != null)
+      {
+        outFile := jsDir + `fan.js`
+        fanJs.copyTo(outFile, ["overwrite": true])
+        info("  Extracted fan.js")
+      }
+    }
+
+    // Source map (try ES6 location first, then legacy)
+    mapFile := pod.file(`/js/${pod.name}.js.map`, false)
+              ?: pod.file(`/${pod.name}.js.map`, false)
+    if (mapFile != null)
+    {
+      outFile := jsDir + `${pod.name}.js.map`
+      mapFile.copyTo(outFile, ["overwrite": true])
+    }
+  }
+
+  ** Extract all resources (CSS, images, data files) from pod
+  private Void extractResources(Pod pod)
+  {
+    // Place resources in fan/_assets/res/ (co-located with fan/web/FilePack.py)
+    resDir := outDir + `fan/_assets/res/`
+
+    // Get all files in the pod and filter for res/
+    // URIs are like: fan://podName/res/css/file.css
+    pod.files.each |file|
+    {
+      // Get the path part of the URI (e.g., "/res/css/domkit.css")
+      path := file.uri.pathStr
+      if (path.startsWith("/res/"))
+      {
+        // Preserve directory structure under res/
+        relPath := path[5..-1]  // Strip "/res/"
+        outFile := resDir + relPath.toUri
+        outFile.parent.create
+        file.copyTo(outFile, ["overwrite": true])
+
+        // Log CSS files specifically
+        if (file.ext == "css")
+          info("  Extracted ${file.name}")
+      }
+    }
   }
 
   ** Copy native files that don't have corresponding type definitions
