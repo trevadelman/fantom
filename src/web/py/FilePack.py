@@ -512,6 +512,9 @@ const sys = __require('sys.ext');
 
     PYTHON-FANTOM: First checks for extracted CSS files (from fanc py),
     then falls back to reading from pod file.
+
+    Resources are namespaced by pod name to avoid collisions:
+      fan/_assets/res/{podName}/css/{podName}.css
     """
     acc = sys.List.from_literal([], "sys::File")
 
@@ -521,9 +524,9 @@ const sys = __require('sys.ext');
     def _closure_5(pod=None):
       pod_name = pod.name()
 
-      # First try extracted CSS (in res/css/)
+      # First try extracted CSS (namespaced by pod: res/{podName}/css/{podName}.css)
       if res_dir is not None:
-        css_path = res_dir / 'css' / f'{pod_name}.css'
+        css_path = res_dir / pod_name / 'css' / f'{pod_name}.css'
         if css_path.exists():
           acc.add(sys.File.make(sys.Uri.from_str(f"file:{css_path}")))
           return

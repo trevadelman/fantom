@@ -171,8 +171,9 @@ internal class PythonCmd : TranspileCmd
   ** Extract all resources (CSS, images, data files) from pod
   private Void extractResources(Pod pod)
   {
-    // Place resources in fan/_assets/res/ (co-located with fan/web/FilePack.py)
-    resDir := outDir + `fan/_assets/res/`
+    // Place resources in fan/_assets/res/{podName}/ to avoid collisions
+    // between pods that have files with the same name (e.g., style.css)
+    resDir := outDir + `fan/_assets/res/${pod.name}/`
 
     // Get all files in the pod and filter for res/
     // URIs are like: fan://podName/res/css/file.css
@@ -182,7 +183,7 @@ internal class PythonCmd : TranspileCmd
       path := file.uri.pathStr
       if (path.startsWith("/res/"))
       {
-        // Preserve directory structure under res/
+        // Preserve directory structure under res/{podName}/
         relPath := path[5..-1]  // Strip "/res/"
         outFile := resDir + relPath.toUri
         outFile.parent.create
@@ -190,7 +191,7 @@ internal class PythonCmd : TranspileCmd
 
         // Log CSS files specifically
         if (file.ext == "css")
-          info("  Extracted ${file.name}")
+          info("  Extracted ${pod.name}/${file.name}")
       }
     }
   }
