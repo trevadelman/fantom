@@ -747,6 +747,10 @@ class Type(Obj):
         return base._qname in Type._VAL_TYPES
 
     def is_abstract(self):
+        """Check if this type is abstract. Uses transpiler flags if available."""
+        from .Slot import FConst
+        if self._type_flags & FConst.Abstract:
+            return True
         return self._qname in Type._ABSTRACT_TYPES
 
     def is_class(self):

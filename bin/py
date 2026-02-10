@@ -1,0 +1,14 @@
+#!/bin/bash
+#
+# py: Run Fantom programs in Python
+#
+# Usage:
+#   py help                     Show available commands
+#   py init                     Initialize Python environment
+#   py test testSys::BoolTest   Run tests in Python
+#   py fan hx init ./myproject  Run hx init in Python
+#   py fan hx run ./myproject   Run hx run in Python
+#
+
+. "${0%/*}/fanlaunch"
+fanlaunch Fan py "$@"
