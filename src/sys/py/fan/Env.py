@@ -813,6 +813,32 @@ class Env(Obj):
             self._in = SysInStream()
         return self._in
 
+    def prompt(self, msg=""):
+        """Display prompt and read a line of input from stdin.
+
+        Matches Fantom's Env.prompt(Str msg := "").
+        Returns the line entered by the user (without trailing newline),
+        or None if end of input is reached.
+        """
+        import sys as sys_mod
+        try:
+            return input(msg)
+        except EOFError:
+            return None
+
+    def prompt_password(self, msg=""):
+        """Display prompt and read a password (input is not echoed).
+
+        Matches Fantom's Env.promptPassword(Str msg := "").
+        Returns the password entered by the user,
+        or None if end of input is reached.
+        """
+        import getpass
+        try:
+            return getpass.getpass(msg)
+        except EOFError:
+            return None
+
     #################################################################
     # Exiting and Shutdown Hooks
     #################################################################

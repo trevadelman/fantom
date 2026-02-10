@@ -88,6 +88,7 @@ internal class FanCmd : PyCmd
 
     return
       """import sys
+         import inspect
          sys.path.insert(0, '.')
 
          try:
@@ -101,8 +102,20 @@ internal class FanCmd : PyCmd
          # Convert Python list to Fantom List
          args = List.from_literal([${argsStr}], 'sys::Str')
          try:
-             result = Main.main(args)
+             # Detect whether main() is static or instance method.
+             # In Fantom, Main classes use two patterns:
+             #   static Int main(Str[] args)  -- e.g., hx::Main, xetom::Main
+             #   Int main(Str[] args)         -- e.g., axonsh::Main (instance method)
+             # Python transpilation preserves this: static -> @staticmethod,
+             # instance -> regular method requiring self.
+             raw = inspect.getattr_static(Main, 'main', None)
+             if isinstance(raw, staticmethod):
+                 result = Main.main(args)
+             else:
+                 result = Main().main(args)
              sys.exit(result if result is not None else 0)
+         except SystemExit:
+             raise
          except Exception as e:
              print(f"ERROR: {e}")
              import traceback

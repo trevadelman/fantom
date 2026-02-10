@@ -53,11 +53,12 @@ class Log(Obj):
 
     @staticmethod
     def _is_valid_name(name):
-        """Validate log name - must be valid identifier characters"""
+        """Validate log name - allows alphanumeric, dot, underscore, and hyphen.
+        Matches the Java Fantom implementation: isAlphaNum || '.' || '_' || '-'"""
         if not name:
             return False
         for c in name:
-            if not (c.isalnum() or c == '.' or c == '_'):
+            if not (c.isalnum() or c == '.' or c == '_' or c == '-'):
                 return False
         if name.startswith('@'):
             return False
