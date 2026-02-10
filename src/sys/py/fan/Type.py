@@ -3502,5 +3502,3 @@ class FacetInstance(Obj):
 def _init_type_fields():
     """Initialize static type$ fields on type classes"""
     pass  # Will be called by runtime initialization
-    pass  # Will be called by runtime initialization
-    pass  # Will be called by runtime initialization

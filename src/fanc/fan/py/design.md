@@ -864,6 +864,17 @@ Python's Global Interpreter Lock (GIL) means true parallelism isn't possible wit
 The `concurrent` pod's Actor model implementation uses Python's `concurrent.futures` but
 won't achieve the same parallelism as JVM or JavaScript runtimes.
 
+**Free-Threaded Python (3.13+):** Starting with Python 3.13 (PEP 703), CPython offers an
+experimental free-threaded build that disables the GIL entirely. This can be enabled at
+runtime with `python3 -X gil=0` or by setting the `PYTHON_GIL=0` environment variable.
+The `concurrent` pod's implementation already uses proper threading primitives
+(`threading.Lock`, `threading.RLock`, `concurrent.futures.ThreadPoolExecutor`) throughout
+Actor, ActorPool, ConcurrentMap, and the Atomic types, so **no code changes are required**
+to benefit from true parallelism under the free-threaded build. CPU-bound actor message
+processing will achieve real multi-core parallelism when the GIL is disabled. Note that
+some third-party C extensions may not yet be compatible with free-threaded mode, so users
+should verify their full dependency chain before enabling it in production.
+
 ## No Method Overloading
 
 Python doesn't support method overloading by signature. Fantom constructors with different
