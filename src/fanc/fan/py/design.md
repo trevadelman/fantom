@@ -156,6 +156,31 @@ If you have a pod with native Python implementations, follow these steps:
 
 Native files are named to match the Fantom type they implement (e.g., `List.py` for `sys::List`).
 
+## Native `__init__.py` Merging
+
+Each pod gets a generated `__init__.py` containing a lazy loader with a `_types` dict
+that `Pod.types()` uses for type discovery. Some pods also have a hand-written
+`__init__.py` in their native directory with module initialization code (import caching,
+eager imports, etc.).
+
+When a native `__init__.py` exists, the transpiler **merges** it with the generated
+lazy loader: native content is prepended, generated content is appended. This preserves
+both the native infrastructure and the `_types` registry.
+
+**Pods with native `__init__.py`:**
+
+| Pod | Purpose |
+|-----|---------|
+| sys | Import caching optimization, module class fix for submodule shadowing, eager base type imports |
+| concurrent | Eager imports of native types |
+| util | Eager imports of native types |
+| inet | Eager imports of native types |
+
+**Rules for native `__init__.py`:**
+- Keep module initialization code that genuinely needs to run at import time
+- Do NOT put monkey-patches for transpiled types here -- fix the transpiler or runtime instead
+- The `_types` dict and `__getattr__` lazy loader are always appended by the transpiler
+
 # Design
 
 This section details the design decisions and implementation patterns for Python code.

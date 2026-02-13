@@ -209,6 +209,28 @@ internal class PythonCmd : TranspileCmd
     {
       if (f.ext != "py") return
       typeName := f.basename
+
+      // Special handling for __init__.py: prepend native content to the
+      // generated lazy loader rather than overwriting it. The lazy loader
+      // contains the _types dict needed by Pod.types() for type discovery.
+      if (typeName == "__init__")
+      {
+        initFile := PyUtil.podDir(outDir, pod.name) + `__init__.py`
+        existingContent := initFile.readAllStr
+        nativeContent := f.readAllStr
+        out := initFile.out
+        try
+        {
+          out.print(nativeContent)
+          out.printLine("")
+          out.printLine("# ---- Generated lazy loader (do not edit below) ----")
+          out.printLine("")
+          out.print(existingContent)
+        }
+        finally out.close
+        return
+      }
+
       if (typeNames[typeName] != true)
       {
         // This is an extra native file - copy it directly
