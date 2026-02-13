@@ -72,5 +72,7 @@ class Enum(Obj):
             parts = module.split('.')
             if len(parts) >= 3:
                 pod = parts[1]
-                return Type.find(f"{pod}::{cls.__name__}")
-        return Type.find(f"sys::{cls.__name__}")
+                type_name = Type._py_type_to_fantom(cls.__name__)
+                return Type.find(f"{pod}::{type_name}")
+        type_name = Type._py_type_to_fantom(cls.__name__)
+        return Type.find(f"sys::{type_name}")

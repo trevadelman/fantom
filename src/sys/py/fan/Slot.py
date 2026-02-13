@@ -183,8 +183,11 @@ class Slot(Obj):
         # the module fully completes execution
         if "::" in type_qname:
             pod_name, type_name = type_qname.split("::", 1)
+            from .Type import Type as _Type
+            py_pod = _Type._fantom_pod_to_py(pod_name)
+            py_type = _Type._fantom_type_to_py(type_name)
             try:
-                __import__(f'fan.{pod_name}.{type_name}', fromlist=[type_name])
+                __import__(f'fan.{py_pod}.{py_type}', fromlist=[py_type])
             except ImportError:
                 pass  # Type.find will handle the error
 

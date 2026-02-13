@@ -323,7 +323,7 @@ class PyTypePrinter : PyPrinter
   {
     // class ClassName(Mixin1, Mixin2, BaseClass):
     // Python supports multiple inheritance - include all mixins plus base class
-    w("class ${t.name}")
+    w("class ${PyUtil.escapeTypeName(t.name)}")
     w("(")
 
     bases := Str[,]
@@ -517,7 +517,7 @@ class PyTypePrinter : PyPrinter
       w("@staticmethod").nl
       w("def ${escapeName(def.name)}()").colon
       indent
-      w("return ${t.name}.vals().get(${def.ordinal})").eos
+      w("return ${PyUtil.escapeTypeName(t.name)}.vals().get(${def.ordinal})").eos
       unindent
     }
 
@@ -526,16 +526,16 @@ class PyTypePrinter : PyPrinter
     w("@staticmethod").nl
     w("def vals()").colon
     indent
-    w("if ${t.name}._vals is None").colon
+    w("if ${PyUtil.escapeTypeName(t.name)}._vals is None").colon
     indent
     // Add sys. prefix only when NOT inside the sys pod
     prefix := t.pod.name != "sys" ? "sys." : ""
-    w("${t.name}._vals = ${prefix}List.to_immutable(${prefix}List.from_list([").nl
+    w("${PyUtil.escapeTypeName(t.name)}._vals = ${prefix}List.to_immutable(${prefix}List.from_list([").nl
     indent
     enumFields.each |f, i|
     {
       def := f.enumDef
-      w("${t.name}._make_enum(${def.ordinal}, ${def.name.toCode}")
+      w("${PyUtil.escapeTypeName(t.name)}._make_enum(${def.ordinal}, ${def.name.toCode}")
       if (!def.ctorArgs.isEmpty)
       {
         def.ctorArgs.each |arg|
@@ -551,7 +551,7 @@ class PyTypePrinter : PyPrinter
     unindent
     w("]))").eos
     unindent
-    w("return ${t.name}._vals").eos
+    w("return ${PyUtil.escapeTypeName(t.name)}._vals").eos
     unindent
 
     // from_str() method
@@ -559,7 +559,7 @@ class PyTypePrinter : PyPrinter
     w("@staticmethod").nl
     w("def from_str(name, checked=True)").colon
     indent
-    w("for v in ${t.name}.vals()").colon
+    w("for v in ${PyUtil.escapeTypeName(t.name)}.vals()").colon
     indent
     w("if v.name() == name").colon
     indent
@@ -597,7 +597,7 @@ class PyTypePrinter : PyPrinter
     }
     w(")").colon
     indent
-    w("inst = object.__new__(${t.name})").eos
+    w("inst = object.__new__(${PyUtil.escapeTypeName(t.name)})").eos
     w("inst._ordinal = _ordinal").eos
     w("inst._name = _name").eos
     // Initialize custom fields from ctor params (skip first 2: ordinal, name)
@@ -665,7 +665,7 @@ class PyTypePrinter : PyPrinter
     nl
     w("def equals(self, other)").colon
     indent
-    w("if not isinstance(other, ${t.name})").colon
+    w("if not isinstance(other, ${PyUtil.escapeTypeName(t.name)})").colon
     indent
     w("return False").eos
     unindent
@@ -707,7 +707,7 @@ class PyTypePrinter : PyPrinter
     nl
     w("def __eq__(self, other)").colon
     indent
-    w("if not isinstance(other, ${t.name})").colon
+    w("if not isinstance(other, ${PyUtil.escapeTypeName(t.name)})").colon
     indent
     w("return False").eos
     unindent
@@ -782,7 +782,7 @@ class PyTypePrinter : PyPrinter
       w("@staticmethod").nl
       w("def make()").colon
       indent
-      w("return ${t.name}()").eos
+      w("return ${PyUtil.escapeTypeName(t.name)}()").eos
       unindent
 
       // Generate __init__ constructor
@@ -870,7 +870,7 @@ class PyTypePrinter : PyPrinter
       else if (ctorName != "make")
       {
         // Named instance constructor (not "make") - create instance and run ctor body
-        w("inst = object.__new__(${t.name})").eos
+        w("inst = object.__new__(${PyUtil.escapeTypeName(t.name)})").eos
 
         // Check if this ctor chains to this.make() - if so, skip _ctor_init
         // because __init__() will handle field initialization
@@ -896,7 +896,7 @@ class PyTypePrinter : PyPrinter
       else
       {
         // Primary instance make() just delegates to __init__
-        w("return ${t.name}(")
+        w("return ${PyUtil.escapeTypeName(t.name)}(")
         ctorMethod.params.each |p, i|
         {
           if (i > 0) w(", ")
@@ -1371,7 +1371,7 @@ class PyTypePrinter : PyPrinter
   ** Generate _static_init() for enum types - handles computed static fields
   private Void enumStaticInit(TypeDef t, MethodDef? staticInitMethod, FieldDef[] staticFieldDefs, Str:Bool onceStorageFieldNames)
   {
-    typeName := t.name
+    typeName := PyUtil.escapeTypeName(t.name)
 
     nl
     w("@staticmethod").nl
@@ -1524,7 +1524,7 @@ class PyTypePrinter : PyPrinter
   private Void staticFieldGetter(TypeDef t, FieldDef f, Bool hasStaticInit, Bool isOnceStorage)
   {
     name := escapeName(f.name)
-    typeName := t.name
+    typeName := PyUtil.escapeTypeName(t.name)
 
     nl
     w("@staticmethod").nl
@@ -1575,7 +1575,7 @@ class PyTypePrinter : PyPrinter
   ** Follows Fantom's source order: static blocks run before fields declared after them
   private Void staticInit(TypeDef t, MethodDef? staticInitMethod, FieldDef[] staticFieldDefs)
   {
-    typeName := t.name
+    typeName := PyUtil.escapeTypeName(t.name)
 
     nl
     w("@staticmethod").nl
@@ -1928,7 +1928,7 @@ class PyTypePrinter : PyPrinter
     nl
     w("if __name__ == \"__main__\":").nl
     indent
-    typeName := m.parent.name
+    typeName := PyUtil.escapeTypeName(m.parent.name)
     w("import sys as sys_mod").nl
     w("from fan.sys.List import List").nl
     w("args = List.from_literal(sys_mod.argv[1:], 'sys::Str')").nl

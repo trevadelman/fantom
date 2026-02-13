@@ -364,12 +364,14 @@ class Method(Slot):
         qname = type_obj.qname() if hasattr(type_obj, 'qname') else str(type_obj)
 
         # Map of known types to their Python runtime classes
+        from .Type import Type as _Type
         if qname.startswith("sys::"):
             type_name = qname[5:]  # Remove "sys::"
+            py_type_name = _Type._fantom_type_to_py(type_name)
             try:
                 # Import from fan.sys module
-                module = __import__(f'fan.sys.{type_name}', fromlist=[type_name])
-                return getattr(module, type_name, None)
+                module = __import__(f'fan.sys.{py_type_name}', fromlist=[py_type_name])
+                return getattr(module, py_type_name, None)
             except ImportError:
                 pass
 
@@ -378,9 +380,11 @@ class Method(Slot):
             parts = qname.split("::")
             if len(parts) == 2:
                 pod, name = parts
+                py_pod = _Type._fantom_pod_to_py(pod)
+                py_name = _Type._fantom_type_to_py(name)
                 try:
-                    module = __import__(f'fan.{pod}.{name}', fromlist=[name])
-                    return getattr(module, name, None)
+                    module = __import__(f'fan.{py_pod}.{py_name}', fromlist=[py_name])
+                    return getattr(module, py_name, None)
                 except ImportError:
                     pass
 

@@ -1256,7 +1256,7 @@ class PyStmtPrinter : PyPrinter
           // Also catch corresponding Python native exceptions where applicable
           curPod := m.curType?.pod?.name
           errPod := c.errType.pod.name
-          errName := c.errType.name
+          errName := PyUtil.escapeTypeName(c.errType.name)
 
           // Map Fantom exceptions to Python native exceptions
           // These need to catch both Fantom and Python versions

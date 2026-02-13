@@ -27,12 +27,23 @@ class PyUtil
     reservedPodNames.contains(podName) ? "${podName}_" : podName
   }
 
+  ** Python keywords that cannot be used as class names or attribute accesses
+  static const Str[] reservedTypeNames := ["None", "True", "False"]
+
+  ** Escape type name if it conflicts with Python keywords
+  ** e.g., xeto::None -> None_ (because "class None" and ".None" are syntax errors)
+  static Str escapeTypeName(Str typeName)
+  {
+    reservedTypeNames.contains(typeName) ? "${typeName}_" : typeName
+  }
+
   ** Get output file for a type
   ** Uses fan/{podName}/ namespace to avoid Python built-in conflicts
   static File typeFile(File outDir, TypeDef t)
   {
     escapedPod := escapePodName(t.pod.name)
-    return outDir + `fan/${escapedPod}/${t.name}.py`
+    escapedType := escapeTypeName(t.name)
+    return outDir + `fan/${escapedPod}/${escapedType}.py`
   }
 
   ** Get output directory for a pod

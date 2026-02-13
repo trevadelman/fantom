@@ -399,7 +399,7 @@ class StrInStream:
         # Get the actual class name and map to Fantom type
         cls = type(self)
         module = cls.__module__
-        class_name = cls.__name__
+        class_name = Type._py_type_to_fantom(cls.__name__)
         # Extract pod name from module (e.g., 'fan.web.MultiPartInStream' -> 'web')
         if module.startswith('fan.'):
             parts = module.split('.')

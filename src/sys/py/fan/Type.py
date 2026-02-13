@@ -196,8 +196,10 @@ class Type(Obj):
                     # Convert Python pod name to Fantom pod name
                     # Python uses 'def_' because 'def' is a reserved word
                     pod = Type._py_pod_to_fantom(pod)
-                    return Type.find(f"{pod}::{cls.__name__}")
-            return Type.find(f"sys::{cls.__name__}")
+                    type_name = Type._py_type_to_fantom(cls.__name__)
+                    return Type.find(f"{pod}::{type_name}")
+            type_name = Type._py_type_to_fantom(cls.__name__)
+            return Type.find(f"sys::{type_name}")
         return Type.find("sys::Obj")
 
     # Generic type parameter names
@@ -209,10 +211,43 @@ class Type(Obj):
         "def_": "def",  # 'def' is a Python keyword
     }
 
+    # Python type names that differ from Fantom type names
+    # Python uses trailing underscore for keywords that can't be class names
+    _PY_TYPE_TO_FANTOM = {
+        "None_": "None",   # 'None' is a Python keyword
+        "True_": "True",   # 'True' is a Python keyword
+        "False_": "False", # 'False' is a Python keyword
+    }
+
+    # Reverse mapping: Fantom type name -> Python class name
+    _FANTOM_TYPE_TO_PY = {
+        "None": "None_",   # 'None' is a Python keyword
+        "True": "True_",   # 'True' is a Python keyword
+        "False": "False_", # 'False' is a Python keyword
+    }
+
     # Reverse mapping: Fantom pod name -> Python module name
     _FANTOM_POD_TO_PY = {
         "def": "def_",  # 'def' is a Python keyword
     }
+
+    @staticmethod
+    def _py_type_to_fantom(py_type):
+        """Convert Python class name to Fantom type name.
+
+        Python uses underscore suffix for keywords that can't be class names
+        (e.g., 'None_' -> 'None').
+        """
+        return Type._PY_TYPE_TO_FANTOM.get(py_type, py_type)
+
+    @staticmethod
+    def _fantom_type_to_py(fantom_type):
+        """Convert Fantom type name to Python class/module name.
+
+        Python uses underscore suffix for keywords that can't be class names
+        (e.g., 'None' -> 'None_').
+        """
+        return Type._FANTOM_TYPE_TO_PY.get(fantom_type, fantom_type)
 
     @staticmethod
     def _py_pod_to_fantom(py_pod):
@@ -407,16 +442,18 @@ class Type(Obj):
             parts = qname.split("::")
             if len(parts) == 2:
                 pod, name = parts
-                # Convert Fantom pod name to Python module name (e.g., 'def' -> 'def_')
+                # Convert Fantom pod/type names to Python module names
+                # (e.g., 'def' -> 'def_', 'None' -> 'None_')
                 py_pod = Type._fantom_pod_to_py(pod)
+                py_name = Type._fantom_type_to_py(name)
                 try:
-                    module = __import__(f'fan.{py_pod}.{name}', fromlist=[name])
+                    module = __import__(f'fan.{py_pod}.{py_name}', fromlist=[py_name])
                     # The import triggers the class definition which calls tf_()
                 except ImportError:
                     # For util:: types, try to find them in sys namespace
                     if pod == "util":
                         try:
-                            module = __import__(f'fan.sys.{name}', fromlist=[name])
+                            module = __import__(f'fan.sys.{py_name}', fromlist=[py_name])
                         except ImportError:
                             pass
 
@@ -469,9 +506,11 @@ class Type(Obj):
                 parts = self._qname.split("::")
                 if len(parts) == 2:
                     pod, name = parts
+                    py_pod = Type._fantom_pod_to_py(pod)
+                    py_name = Type._fantom_type_to_py(name)
                     # Try importing the class
-                    module = __import__(f'fan.{pod}.{name}', fromlist=[name])
-                    cls = getattr(module, name, None)
+                    module = __import__(f'fan.{py_pod}.{py_name}', fromlist=[py_name])
+                    cls = getattr(module, py_name, None)
                     if cls is not None:
                         from .Err import Err
                         if isinstance(cls, type) and issubclass(cls, Err):
@@ -500,9 +539,11 @@ class Type(Obj):
                     pod, name = parts
                     cls = None
                     # Try importing the class
+                    py_pod = Type._fantom_pod_to_py(pod)
+                    py_name = Type._fantom_type_to_py(name)
                     try:
-                        module = __import__(f'fan.{pod}.{name}', fromlist=[name])
-                        cls = getattr(module, name, None)
+                        module = __import__(f'fan.{py_pod}.{py_name}', fromlist=[py_name])
+                        cls = getattr(module, py_name, None)
                     except:
                         pass
                     # Try importing from Err module for sys Err subclasses
@@ -521,9 +562,9 @@ class Type(Obj):
                             if isinstance(parent, type) and issubclass(parent, Err) and parent is not Err:
                                 # Found an intermediate Err subclass
                                 parent_module = parent.__module__
-                                parent_name = parent.__name__
+                                parent_name = Type._py_type_to_fantom(parent.__name__)
                                 if parent_module.startswith('fan.'):
-                                    parent_pod = parent_module.split('.')[1]
+                                    parent_pod = Type._py_pod_to_fantom(parent_module.split('.')[1])
                                     return Type.find(f"{parent_pod}::{parent_name}")
         except:
             pass
@@ -770,8 +811,10 @@ class Type(Obj):
                 if len(parts) == 2:
                     pod, name = parts
                     # Try importing the class
-                    module = __import__(f'fan.{pod}.{name}', fromlist=[name])
-                    cls = getattr(module, name, None)
+                    py_pod_e = Type._fantom_pod_to_py(pod)
+                    py_name_e = Type._fantom_type_to_py(name)
+                    module = __import__(f'fan.{py_pod_e}.{py_name_e}', fromlist=[py_name_e])
+                    cls = getattr(module, py_name_e, None)
                     if cls is not None:
                         # Check if it has _make_enum (our transpiled enums do)
                         if hasattr(cls, '_make_enum') and hasattr(cls, 'vals'):
@@ -2045,8 +2088,10 @@ class Type(Obj):
                 parts = facet_qname.split("::")
                 if len(parts) == 2:
                     pod, name = parts
-                    module = __import__(f'fan.{pod}.{name}', fromlist=[name])
-                    cls = getattr(module, name, None)
+                    py_pod = Type._fantom_pod_to_py(pod)
+                    py_name = Type._fantom_type_to_py(name)
+                    module = __import__(f'fan.{py_pod}.{py_name}', fromlist=[py_name])
+                    cls = getattr(module, py_name, None)
                     if cls is not None and hasattr(cls, 'def_val'):
                         return cls.def_val()
             except:
@@ -2183,8 +2228,11 @@ class Type(Obj):
             parts = self._qname.split("::")
             if len(parts) == 2:
                 pod, name = parts
+                # Convert Fantom pod/type names to Python module names
+                py_pod = Type._fantom_pod_to_py(pod)
+                py_name = Type._fantom_type_to_py(name)
                 try:
-                    __import__(f'fan.{pod}.{name}', fromlist=[name])
+                    __import__(f'fan.{py_pod}.{py_name}', fromlist=[py_name])
                 except ImportError:
                     pass
 
@@ -3227,8 +3275,10 @@ class FacetInstance(Obj):
                 parts = qname.split("::")
                 if len(parts) == 2:
                     pod, name = parts
-                    module = __import__(f'fan.{pod}.{name}', fromlist=[name])
-                    facet_cls = getattr(module, name, None)
+                    py_pod_f = Type._fantom_pod_to_py(pod)
+                    py_name_f = Type._fantom_type_to_py(name)
+                    module = __import__(f'fan.{py_pod_f}.{py_name_f}', fromlist=[py_name_f])
+                    facet_cls = getattr(module, py_name_f, None)
                     if facet_cls is not None and hasattr(facet_cls, 'def_val'):
                         return facet_cls.def_val()
             except:
@@ -3256,8 +3306,10 @@ class FacetInstance(Obj):
             parts = qname.split("::")
             if len(parts) == 2:
                 pod, name = parts
-                module = __import__(f'fan.{pod}.{name}', fromlist=[name])
-                facet_cls = getattr(module, name, None)
+                py_pod_fi = Type._fantom_pod_to_py(pod)
+                py_name_fi = Type._fantom_type_to_py(name)
+                module = __import__(f'fan.{py_pod_fi}.{py_name_fi}', fromlist=[py_name_fi])
+                facet_cls = getattr(module, py_name_fi, None)
                 if facet_cls is not None:
                     # Create a default instance to get field defaults
                     try:

@@ -446,7 +446,7 @@ class PyExprPrinter : PyPrinter
     // NOTE: Constructors (isCtor) become static factories in Python, so don't add self
     if (e.method.isPrivate && !e.method.isStatic && !e.method.isCtor)
     {
-      w(e.method.parent.name).w(".").w(escapeName(e.method.name)).w("(")
+      w(PyUtil.escapeTypeName(e.method.parent.name)).w(".").w(escapeName(e.method.name)).w("(")
       if (e.target != null)
       {
         expr(e.target)
@@ -477,7 +477,7 @@ class PyExprPrinter : PyPrinter
       // Static method call without explicit target needs class qualification
       curPod := m.curType?.pod?.name
       targetPod := e.method.parent.pod.name
-      typeName := e.method.parent.name
+      typeName := PyUtil.escapeTypeName(e.method.parent.name)
 
       if (targetPod == "sys" && curPod != "sys")
       {
@@ -500,14 +500,14 @@ class PyExprPrinter : PyPrinter
     else if (m.inStaticContext)
     {
       // In static context (like _static_init), use class name instead of self
-      w(e.method.parent.name).w(".")
+      w(PyUtil.escapeTypeName(e.method.parent.name)).w(".")
     }
     else if (e.method.isPrivate && !e.method.isCtor)
     {
       // Private methods are non-virtual in Fantom - use static dispatch
       // Generate: ClassName.method(self, args) instead of self.method(args)
       // NOTE: Constructors (isCtor) become static factories in Python, so don't add self
-      w(e.method.parent.name).w(".").w(escapeName(e.method.name)).w("(self")
+      w(PyUtil.escapeTypeName(e.method.parent.name)).w(".").w(escapeName(e.method.name)).w("(self")
       if (!e.args.isEmpty) w(", ")
       e.args.each |arg, i|
       {
@@ -774,7 +774,7 @@ class PyExprPrinter : PyPrinter
     // The .make() factory method handles dispatching to the right constructor.
     curPod := m.curType?.pod?.name
     targetPod := e.method.parent.pod.name
-    typeName := e.method.parent.name
+    typeName := PyUtil.escapeTypeName(e.method.parent.name)
     methodName := e.method.name
 
     if (curPod != null && curPod != "sys" && curPod == targetPod)
@@ -887,7 +887,7 @@ class PyExprPrinter : PyPrinter
       // Static field without explicit target - need class prefix
       curPod := m.curType?.pod?.name
       targetPod := e.field.parent.pod.name
-      typeName := e.field.parent.name
+      typeName := PyUtil.escapeTypeName(e.field.parent.name)
 
       if (targetPod == "sys" && curPod != "sys")
       {
@@ -1013,7 +1013,7 @@ class PyExprPrinter : PyPrinter
         else if (fieldExpr.field.isStatic)
         {
           // Static field without explicit target - need class prefix
-          w(fieldExpr.field.parent.name).w(".")
+          w(PyUtil.escapeTypeName(fieldExpr.field.parent.name)).w(".")
         }
         w("_").w(escapeName(fieldExpr.field.name))
         w(" = ")
@@ -1749,7 +1749,7 @@ class PyExprPrinter : PyPrinter
     // For same-pod types, use a runtime import to avoid circular import issues
     curPod := m.curType?.pod?.name
     targetPod := e.ctype.pod.name
-    typeName := e.ctype.name
+    typeName := PyUtil.escapeTypeName(e.ctype.name)
 
     if (curPod != null && curPod != "sys" && curPod == targetPod)
     {

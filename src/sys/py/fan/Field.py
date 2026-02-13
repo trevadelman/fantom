@@ -283,11 +283,13 @@ class Field(Slot):
 
         qname = self._parent.qname() if hasattr(self._parent, 'qname') else str(self._parent)
 
+        from .Type import Type as _Type
         if qname.startswith("sys::"):
             type_name = qname[5:]  # Remove "sys::"
+            py_type_name = _Type._fantom_type_to_py(type_name)
             try:
-                module = __import__(f'fan.sys.{type_name}', fromlist=[type_name])
-                return getattr(module, type_name, None)
+                module = __import__(f'fan.sys.{py_type_name}', fromlist=[py_type_name])
+                return getattr(module, py_type_name, None)
             except ImportError:
                 pass
 
@@ -295,9 +297,11 @@ class Field(Slot):
             parts = qname.split("::")
             if len(parts) == 2:
                 pod, name = parts
+                py_pod = _Type._fantom_pod_to_py(pod)
+                py_name = _Type._fantom_type_to_py(name)
                 try:
-                    module = __import__(f'fan.{pod}.{name}', fromlist=[name])
-                    return getattr(module, name, None)
+                    module = __import__(f'fan.{py_pod}.{py_name}', fromlist=[py_name])
+                    return getattr(module, py_name, None)
                 except ImportError:
                     pass
 
@@ -333,10 +337,13 @@ class Field(Slot):
             # Empty dict = marker facet -> return defVal singleton
             if len(facet_data) == 0:
                 try:
+                    from .Type import Type as _Type
                     pod = facet_qname.split('::')[0]
                     name = facet_qname.split('::')[1]
-                    module = __import__(f'fan.{pod}.{name}', fromlist=[name])
-                    cls = getattr(module, name)
+                    py_pod = _Type._fantom_pod_to_py(pod)
+                    py_name = _Type._fantom_type_to_py(name)
+                    module = __import__(f'fan.{py_pod}.{py_name}', fromlist=[py_name])
+                    cls = getattr(module, py_name)
                     return cls.def_val()
                 except Exception as e:
                     # Fall back to FacetInstance

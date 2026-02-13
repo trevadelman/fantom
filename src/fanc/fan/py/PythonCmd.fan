@@ -53,12 +53,12 @@ internal class PythonCmd : TranspileCmd
       genTypeWithNative(t, nativeDir)
     }
 
-    // Collect type names for lazy loader
+    // Collect type names for lazy loader (escaped for Python keyword safety)
     typeNames := Str[,]
     pod.typeDefs.each |t|
     {
       if (t.isSynthetic) return
-      typeNames.add(t.name)
+      typeNames.add(PyUtil.escapeTypeName(t.name))
     }
 
     // Also include extra native types (ObjUtil, etc.)
@@ -67,7 +67,7 @@ internal class PythonCmd : TranspileCmd
       nativeDir.list.each |f|
       {
         if (f.ext != "py") return
-        typeName := f.basename
+        typeName := PyUtil.escapeTypeName(f.basename)
         if (!typeNames.contains(typeName))
           typeNames.add(typeName)
       }
@@ -200,9 +200,9 @@ internal class PythonCmd : TranspileCmd
   ** These are utility modules like ObjUtil.py that are hand-written only
   private Void copyExtraNatives(PodDef pod, File nativeDir)
   {
-    // Get set of type names that have type definitions
+    // Get set of type names that have type definitions (escaped for Python keyword safety)
     typeNames := Str:Bool[:]
-    pod.typeDefs.each |t| { typeNames[t.name] = true }
+    pod.typeDefs.each |t| { typeNames[PyUtil.escapeTypeName(t.name)] = true }
 
     // Copy any .py files that don't have corresponding types
     nativeDir.list.each |f|
@@ -231,7 +231,7 @@ internal class PythonCmd : TranspileCmd
         return
       }
 
-      if (typeNames[typeName] != true)
+      if (typeNames[PyUtil.escapeTypeName(typeName)] != true)
       {
         // This is an extra native file - copy it directly
         outFile := PyUtil.podDir(outDir, pod.name) + `${f.name}`

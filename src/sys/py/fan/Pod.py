@@ -329,16 +329,18 @@ class Pod(Obj):
 
         # Try to import the module directly to see if type exists
         # Convert Fantom pod name to Python module name (e.g., 'def' -> 'def_')
+        from .Type import Type
         py_pod = self._name + "_" if self._name in Pod._PYTHON_KEYWORDS else self._name
+        # Convert Fantom type name to Python module name (e.g., 'None' -> 'None_')
+        py_name = Type._fantom_type_to_py(name)
 
         try:
-            module = __import__(f'fan.{py_pod}.{name}', fromlist=[name])
+            module = __import__(f'fan.{py_pod}.{py_name}', fromlist=[py_name])
             # Module exists - check if the type was registered during import
             t = self._types.get(name)
             if t is not None:
                 return t
             # Module exists but type not registered - create and register it
-            from .Type import Type
             t = Type.find(f"{self._name}::{name}", False)
             if t is not None:
                 self._types[name] = t

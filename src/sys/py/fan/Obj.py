@@ -95,10 +95,12 @@ class Obj:
                 py_pod = parts[1]  # e.g., 'sys', 'testSys', 'def_'
                 # Convert Python pod name to Fantom pod name (e.g., 'def_' -> 'def')
                 pod = Type._py_pod_to_fantom(py_pod)
-                return Type.find(f"{pod}::{class_name}")
+                type_name = Type._py_type_to_fantom(class_name)
+                return Type.find(f"{pod}::{type_name}")
 
         # Default to sys pod
-        return Type.find(f"sys::{class_name}")
+        type_name = Type._py_type_to_fantom(class_name)
+        return Type.find(f"sys::{type_name}")
 
     def is_immutable(self):
         """Check if this object is immutable.
