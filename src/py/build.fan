@@ -30,7 +30,6 @@ class Build : BuildPod
     depends = ["sys 1.0",
                "build 1.0",
                "compiler 1.0",
-               "fanc 1.0",
                "util 1.0",
               ]
     srcDirs = [
