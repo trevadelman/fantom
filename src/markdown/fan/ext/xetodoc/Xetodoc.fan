@@ -149,9 +149,12 @@ internal const class BracketLinkProcessor : CoreLinkProcessor
 
     // treat shortcut [foo] as a [foo](foo). The normal CoreLinkProcessor
     // would just leave it as Text node if it doesn't resolve to a link reference.
-    if (info.label == null)
+    // Also - dont't allow empty brackets (e.g. Str[])
+    if (info.label == null && !info.text.isEmpty)
     {
-      return LinkResult.wrapTextIn(Link(info.text), scanner.pos)
+      link := Link(info.text)
+      link.shortcut = true
+      return LinkResult.wrapTextIn(link, scanner.pos)
     }
     return LinkResult.none
   }
@@ -221,8 +224,8 @@ internal class VideoRenderer : NodeRenderer
   private static const [Str:Str] stdAttrs := [
     "frameborder": "0",
     "allowfullscreen": "true",
-    "width": "50%",
-    "height": "35%",
+    "width": "960",
+    "height": "540",
   ]
 
   override Void render(Node node)
@@ -231,8 +234,10 @@ internal class VideoRenderer : NodeRenderer
     type  := video.uri.host.lower
     switch (type)
     {
-      case "loom": renderLoom(video)
-      // case "vimeo": renderVimeo(embed)
+      case "loom":
+        renderLoom(video)
+      case "vimeo":
+        renderVimeo(video)
       case "youtube":
       case "youtu.be":
         renderYoutube(video)
@@ -249,6 +254,22 @@ internal class VideoRenderer : NodeRenderer
     attrs := stdAttrs.dup.addAll([
       "title": "${video.altText}",
       "src": "${src}"
+    ]).setAll(uri.query)
+    renderVideo(attrs)
+  }
+
+  private Void renderVimeo(Video video)
+  {
+    uri := video.uri
+    path := uri.toStr
+    if (!path.startsWith("video://vimeo/")) echo("WARN: invalid vimeo URI: $uri")
+    else path = path["video://vimeo/".size..-1]
+    src := `https://player.vimeo.com/video/${path}`
+    attrs := stdAttrs.dup.addAll([
+      "title": "${video.altText}",
+      "portrait": "0",
+      "byline":"0",
+      "src": src.toStr,
     ]).setAll(uri.query)
     renderVideo(attrs)
   }

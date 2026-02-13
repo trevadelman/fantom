@@ -29,6 +29,7 @@ abstract class LinkNode : Node
 
   ** Replace the display text for this link
   @NoDoc Void setText(Str text) { setContent(Text(text)) }
+
   ** Replace the display content with the given node
   @NoDoc Void setContent(Node content)
   {
@@ -57,6 +58,9 @@ class Link : LinkNode
   new make(Str destination, Str? title := null) : super(destination, title)
   {
   }
+
+  ** Flag that indicates this was specified as '[uri]' instead of '(text)[uri]'
+  @NoDoc Bool shortcut
 }
 
 **************************************************************************
@@ -111,3 +115,4 @@ class LinkReferenceDefinition : Block
   const Str destination
   const Str? title
 }
+
