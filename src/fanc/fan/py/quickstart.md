@@ -45,7 +45,7 @@ bin/fan src/py/build.fan
 bin/fanc py sys testSys util
 ```
 
-Output goes to `gen/py/`. The transpiler automatically resolves dependencies (`concurrent` is pulled in by `testSys`).
+Output goes to `gen/py/` under `Env.cur.workDir` (the first entry in your PathEnv path, or FAN_HOME if not using PathEnv). The transpiler automatically resolves dependencies (`concurrent` is pulled in by `testSys`).
 
 **Important:** Each `fanc py` invocation regenerates the output directory. Transpile all pods you need in a single command.
 
