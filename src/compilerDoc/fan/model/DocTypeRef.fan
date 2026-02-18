@@ -56,6 +56,9 @@ abstract const class DocTypeRef
   ** Is this a parameterized generic type such as 'Str[]'
   abstract Bool isParameterized()
 
+  ** Return if this type is just bare type (not parameterized, nor generic var)
+  @NoDoc Bool isSimple() { !isParameterized && !isGenericVar }
+
   ** If this a parameterized list or map get value type else null
   @NoDoc abstract DocTypeRef? v()
 
@@ -364,3 +367,4 @@ internal class DocTypeRefParser
   private Int peek       // next character; sig[pos+1]
 
 }
+

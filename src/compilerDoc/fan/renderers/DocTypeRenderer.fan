@@ -252,38 +252,36 @@ class DocTypeRenderer : DocRenderer
   ** Write the given type ref as a hyperlink
   virtual Void writeTypeRef(DocTypeRef ref, Bool full := false)
   {
+    writeTypeRefHtml(out, ref, full) |x->Uri| { typeRefToHref(x) }
+  }
+
+  ** Static utility to write a DocTypeRef as HTML with anchor links.
+  ** The 'toHref' maps a basic (non-parameterized) type ref to its href URI.
+  static Void writeTypeRefHtml(WebOutStream out, DocTypeRef ref, Bool full, |DocTypeRef->Uri| toHref)
+  {
     if (ref.isParameterized)
     {
-      if (ref.qname == "sys::List")
+      switch (ref.qname)
       {
-        writeTypeRef(ref.v)
-        out.w("[]")
+        case "sys::List":
+          writeTypeRefHtml(out, ref.v, false, toHref)
+          out.w("[]")
+        case "sys::Map":
+          if (ref.isNullable) out.w("[")
+          writeTypeRefHtml(out, ref.k, false, toHref)
+          out.w(":")
+          writeTypeRefHtml(out, ref.v, false, toHref)
+          if (ref.isNullable) out.w("]")
+        case "sys::Func":
+          isVoid := ref.funcReturn.qname == "sys::Void"
+          out.w("|")
+          ref.funcParams.each |p, i| { if (i > 0) out.w(","); writeTypeRefHtml(out, p, false, toHref) }
+          if (!isVoid || ref.funcParams.isEmpty)
+          { out.w("->"); writeTypeRefHtml(out, ref.funcReturn, false, toHref) }
+          out.w("|")
+        default:
+          throw Err("Unsupported parameterized type: $ref")
       }
-      else if (ref.qname == "sys::Map")
-      {
-        if (ref.isNullable) out.w("[")
-        writeTypeRef(ref.k)
-        out.w(":")
-        writeTypeRef(ref.v)
-        if (ref.isNullable) out.w("]")
-      }
-      else if (ref.qname == "sys::Func")
-      {
-        isVoid := ref.funcReturn.qname == "sys::Void"
-        out.w("|")
-        ref.funcParams.each |p, i|
-        {
-          if (i > 0) out.w(",")
-          writeTypeRef(p)
-        }
-        if (!isVoid || ref.funcParams.isEmpty)
-        {
-          out.w("->")
-          writeTypeRef(ref.funcReturn)
-        }
-        out.w("|")
-      }
-      else throw Err("Unsupported parameterized type: $ref")
       if (ref.isNullable) out.w("?")
     }
     else if (ref.isGenericVar)
@@ -293,19 +291,23 @@ class DocTypeRenderer : DocRenderer
     }
     else
     {
-      // make link by hand to avoid having to resolve
-      // every type to a full fledged Doc instance
-      uri := StrBuf()
-      if (ref.pod != type.pod.name) uri.add("../").add(ref.pod).add("/")
-      uri.add(ref.name)
-      uriExt := env.linkUriExt
-      if (uriExt != null) uri.add(uriExt)
-
-      out.a(uri.toStr.toUri)
+      out.a(toHref(ref))
          .w(full ? ref.qname : ref.name)
          .w(ref.isNullable ? "?" : "")
          .aEnd
     }
+  }
+
+  ** Make type ref href URI by hand to avoid having to resolve
+  ** every tyep to a full fledge Doc instance
+  private Uri typeRefToHref(DocTypeRef r)
+  {
+    s := StrBuf()
+    if (r.pod != type.pod.name) s.add("../").add(r.pod).add("/")
+    s.add(r.name)
+    uriExt := env.linkUriExt
+    if (uriExt != null) s.add(uriExt)
+    return s.toStr.toUri
   }
 
   ** Write the given facet.
