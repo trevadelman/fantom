@@ -131,7 +131,8 @@
   {
     if (cx.disableHtml)
     {
-      echo("WARN: ignore block html ${block.loc}")
+      if (!(block.literal ?: "").trim.startsWith("<!--"))
+        echo("WARN: ignore block html ${block.loc}")
       return
     }
 
