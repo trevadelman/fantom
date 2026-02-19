@@ -7,23 +7,25 @@
 //
 
 @Js
-class XetodocExtTest : RenderingTest
+class XetodocExtTest : Test
 {
-  private static const Parser parser := Xetodoc.parser(TestLinkResolver())
-  private static const HtmlRenderer renderer := Xetodoc.htmlRenderer
-  private static const MarkdownRenderer md := Xetodoc.markdownRenderer
+  Xetodoc? xetodoc
+
+  override Void setup() { this.xetodoc = Xetodoc() }
+
+  private Str toHtml(Str src) { xetodoc.toHtml(src) }
 
   Void testInlineCode()
   {
     // sanity check that backticks renders as inline code
-    verifyEq(render("`code`"), "<p><code>code</code></p>\n")
+    verifyEq(toHtml("`code`"), "<p><code>code</code></p>\n")
   }
 
   Void testBracketLinks()
   {
-    verifyEq(Xetodoc.toHtml("[a]"), """<p><a href="a">a</a></p>\n""")
-    verifyEq(Xetodoc.toHtml("Use [now()] for timestamp"), """<p>Use <a href="now()">now()</a> for timestamp</p>\n""")
-    verifyEq(Xetodoc.toHtml("Str[]"), """<p>Str[]</p>\n""")
+    verifyEq(toHtml("[a]"), """<p><a href="a">a</a></p>\n""")
+    verifyEq(toHtml("Use [now()] for timestamp"), """<p>Use <a href="now()">now()</a> for timestamp</p>\n""")
+    verifyEq(toHtml("Str[]"), """<p>Str[]</p>\n""")
   }
 
   // Void testBacktickLinks()
@@ -37,29 +39,25 @@ class XetodocExtTest : RenderingTest
   Void testHeadingAnchor()
   {
     // simple test
-    verifyEq(render("# Intro"), """<h1 id="intro">Intro</h1>\n""")
+    verifyEq(toHtml("# Intro"), """<h1 id="intro">Intro</h1>\n""")
 
     // ignore formatting
-    verifyEq(render("# _Intro_ Section"), """<h1 id="intro-section"><em>Intro</em> Section</h1>\n""")
+    verifyEq(toHtml("# _Intro_ Section"), """<h1 id="intro-section"><em>Intro</em> Section</h1>\n""")
 
     // handle duplicate section ids
-    verifyEq(render("# Intro\n# Intro"), """<h1 id="intro">Intro</h1>\n<h1 id="intro-1">Intro</h1>\n""")
+    verifyEq(toHtml("# Intro\n# Intro"), """<h1 id="intro">Intro</h1>\n<h1 id="intro-1">Intro</h1>\n""")
 
     // text and code mixed
-    verifyEq(render("## `Heading` 2"), """<h2 id="heading-2"><code>Heading</code> 2</h2>\n""")
+    verifyEq(toHtml("## `Heading` 2"), """<h2 id="heading-2"><code>Heading</code> 2</h2>\n""")
 
     // whacky symbols and spacing
-    verifyEq(render("# Heading#!\tNoSpace!!!  "), """<h1 id="headingnospace">Heading#!\tNoSpace!!!</h1>\n""")
+    verifyEq(toHtml("# Heading#!\tNoSpace!!!  "), """<h1 id="headingnospace">Heading#!\tNoSpace!!!</h1>\n""")
   }
 
   Void testIgnoreHtml()
   {
-    verifyEq(render("Foo<h1>H1</h1>\n<h2>H2</h2>\n\nText"), "<p>FooH1</p>\n<p>Text</p>\n")
-  }
-
-  override protected Str render(Str source)
-  {
-    renderer.render(parser.parse(source))
+    // xetodoc.onWarn |node, msg| { echo("${node.loc}: ${msg}") }
+    verifyEq(toHtml("Foo<h1>H1</h1>\n<h2>H2</h2>\n\nText"), "<p>FooH1</p>\n<p>Text</p>\n")
   }
 }
 

@@ -8,6 +8,149 @@
 
 using util
 
+
+**
+** The xetodoc class contains several utilities for configuring and rendering
+** xetodoc markdown.
+**
+** pre>
+** Configure Xetodoc with custom link reseolver and warning handler
+** xetodoc := Xetodoc
+**   .withLinkResolver(MyLinkResolver())
+**   .onWarn |node, msg| { echo("${node.loc}: ${msg}") }
+** <pre
+**
+@Js
+@NoDoc
+class Xetodoc
+{
+
+//////////////////////////////////////////////////////////////////////////
+// Constructor
+//////////////////////////////////////////////////////////////////////////
+
+  new make(|This|? f := null)
+  {
+    f?.call(this)
+  }
+
+  private static const MarkdownExt[] exts := [XetodocExt()]
+
+  ** The link resolver to use
+  LinkResolver? linkResolver { protected set }
+
+  ** Configure a link resolver and return this
+  This withLinkResolver(LinkResolver? linkResolver)
+  {
+    this.linkResolver = linkResolver
+    return this
+  }
+
+  ** Callback to handle warnings on nodes.
+  |Node node, Str msg|? onWarnCb { protected set }
+
+  ** Configure the callback for warnings. The node and a warning message are passed.
+  ** The location of the warning can be obtained from the node by using `Node.loc` or
+  ** inspecting the `Node.sourceSpans`. Currently warnings are only generated when
+  ** block or inline HTML nodes are found in the xetdoc source.
+  This onWarn(|Node node, Str msg| cb) { this.onWarnCb = cb; return this }
+
+//////////////////////////////////////////////////////////////////////////
+// Parsing
+//////////////////////////////////////////////////////////////////////////
+
+  ** Parse Xetodoc source into a `Document`
+  Document parse(Str source) { parser.parse(source) }
+
+  ** Get a fully-configured Xetodoc parser. Note that if the parser is re-used, and
+  ** you configured a `LinkResolver`, then the link resolver should be idempotent.
+  Parser parser()
+  {
+    builder := parserBuilder
+    if (linkResolver != null)
+      builder.postProcessorFactory |->LinkResolver| { linkResolver }
+    if (onWarnCb != null)
+      builder.postProcessorFactory |->WarnProcessor| { WarnProcessor(onWarnCb) }
+    return builder.build
+  }
+
+  ** Get a `ParserBuilder` with all the standard Xetodoc features enabled.
+  ParserBuilder parserBuilder()
+  {
+    Parser.builder
+      .withIncludeSourceSpans(IncludeSourceSpans.blocks_and_inlines)
+      .linkProcessor(VideoProcessor())
+      .linkProcessor(BracketLinkProcessor())
+      .extensions(exts)
+  }
+
+//////////////////////////////////////////////////////////////////////////
+// HTML
+//////////////////////////////////////////////////////////////////////////
+
+  ** Convenience to render the given Xetodoc source to HTML
+  Str toHtml(Str source)
+  {
+    htmlRenderer.render(parser.parse(source))
+  }
+
+  ** Get a Xetotodc html renderer
+  HtmlRenderer htmlRenderer() { htmlBuilder.build }
+
+  ** Get an `HtmlRendererBuilder` with all the standard Xetodoc features enabled.
+  HtmlRendererBuilder htmlBuilder()
+  {
+    HtmlRenderer.builder
+      .withDisableHtml
+      .nodeRendererFactory |cx->NodeRenderer| { VideoRenderer(cx) }
+      .extensions(exts)
+  }
+
+  // ** Convenience to render the given node to HTML
+  // static Str renderToHtml(Node node) { htmlRenderer.render(node) }
+
+  // ** Convenience to render parsed AST back to Xetodoc markdown text
+  // Str renderToMarkdown(Node node) { markdownRenderer.render(node) }
+
+  // ** Get a Xetodoc markdown renderer
+  // static const MarkdownRenderer markdownRenderer := markdownBuilder.build
+
+  // ** Get a `MarkdownRendererBuilder` with all the standard Xetodoc features enabled.
+  // static MarkdownRendererBuilder markdownBuilder()
+  // {
+  //   MarkdownRenderer.builder.extensions(xetodoc)
+  // }
+}
+
+**************************************************************************
+** WarnProcessor
+**************************************************************************
+
+@Js
+internal class WarnProcessor : PostProcessor, Visitor
+{
+  new make(|Node, Str| cb) { this.cb = cb }
+
+  private |Node, Str| cb
+
+  override Node process(Node node)
+  {
+    node.walk(this)
+    return node
+  }
+
+  override Void visitHtmlBlock(HtmlBlock block)
+  {
+    cb(block, "Block HTML is ignored")
+  }
+
+  override Void visitHtmlInline(HtmlInline inline)
+  {
+    cb(inline, "Inline HTML is ignored")
+  }
+
+}
+
 **
 ** Xetodoc is a curated set of features and extensions to the CommonMark syntax.
 **
@@ -18,91 +161,31 @@ using util
 **   - ![alt text](video://youtu.be/abc?si=123)
 **   - ![alt text](video://loom/def?sid=456)
 **
+** The `Xetodoc` class is the recommended way to configure and render Xetodoc source.
+**
 ** pre>
-** parser := Xetodoc.parser |->LinkResolver| { MyCustomLinkResolver() }
+** // Configure xetodoc with a custom link resolver
+** xetodoc  := Xetodoc().withLinkResolver(MyCustomLinkResolver())
+**
+** // Obtain explicit parser and renderer to generate HTML
+** parser   := xetodoc.parser
 ** renderer := Xetodoc.htmlRenderer
 ** html := renderer.render(parser.parse("Hello `Xetodoc`!"))
 **
-** // using convenience methods
-** html = Xetodoc.toHtml("Hello, `Xetodoc`!")
-**
-** // roundtrip the parsed Document back to xetodoc markdown text
-** md := Xetodoc.renderToMarkdown(parser.parse("Round-trip to markdown"))
+** // Generate HTML using convenience method
+** html = xetodoc.toHtml("Hello, `Xetodoc`!")
 ** <pre
 **
 @Js
-@NoDoc const class Xetodoc : MarkdownExt
+@NoDoc internal const class XetodocExt : MarkdownExt
 {
-  ** Extensions automatically enabled by Xetodoc
-  private static const MarkdownExt[] exts := [ImgAttrsExt(), TablesExt()]
-  private static const MarkdownExt[] xetodoc := [Xetodoc()]
-
-  ** Convenience to parse the Xetodoc source
-  static Document parse(Str source, LinkResolver? linkResolver := null)
-  {
-    parser(linkResolver).parse(source)
-  }
-
-  ** Get a Xetodoc parser optionally configured with the given `LinkResolver`.
-  ** Note that if the parser is re-used, the link resolver should be idempotent.
-  static Parser parser(LinkResolver? linkResolver := null)
-  {
-    builder := parserBuilder
-    if (linkResolver != null)
-    {
-      // need to wrap in unsafe to make the closure looks const
-      unsafe := Unsafe(linkResolver)
-      builder.postProcessorFactory |->LinkResolver| { unsafe.val }
-    }
-    return builder.build
-  }
-
-  ** Get a `ParserBuilder` with all the standard Xetodoc features enabled.
-  static ParserBuilder parserBuilder()
-  {
-    Parser.builder
-      .withIncludeSourceSpans(IncludeSourceSpans.blocks_and_inlines)
-      .linkProcessor(VideoProcessor())
-      .linkProcessor(BracketLinkProcessor())
-      .extensions(xetodoc)
-  }
-
-  ** Convenience to render the given Xetodoc to HTML
-  static Str toHtml(Str source, LinkResolver? linkResolver := null, FileLoc? loc := null)
-  {
-    htmlRenderer.render(parser(linkResolver).parse(source).withFileLoc(loc))
-  }
-
-  ** Convenience to render the given node to HTML
-  static Str renderToHtml(Node node) { htmlRenderer.render(node) }
-
-  ** Get a Xetodoc html renderer
-  static const HtmlRenderer htmlRenderer := htmlBuilder.build
-
-  ** Get an `HtmlRendererBuilder` with all the standard Xetodoc features enabled.
-  static HtmlRendererBuilder htmlBuilder()
-  {
-    HtmlRenderer.builder
-      .withDisableHtml
-      .nodeRendererFactory |cx->NodeRenderer| { VideoRenderer(cx) }
-      .extensions(xetodoc)
-  }
-
-  ** Convenience to render parsed AST back to Xetodoc markdown text
-  Str renderToMarkdown(Node node) { markdownRenderer.render(node) }
-
-  ** Get a Xetodoc markdown renderer
-  static const MarkdownRenderer markdownRenderer := markdownBuilder.build
-
-  ** Get a `MarkdownRendererBuilder` with all the standard Xetodoc features enabled.
-  static MarkdownRendererBuilder markdownBuilder()
-  {
-    MarkdownRenderer.builder.extensions(xetodoc)
-  }
 
 //////////////////////////////////////////////////////////////////////////
 // MarkdownExt
 //////////////////////////////////////////////////////////////////////////
+
+  ** Extensions automatically enabled by the Xetodoc extension
+  private static const MarkdownExt[] exts := [ImgAttrsExt(), TablesExt()]
 
   override Void extendParser(ParserBuilder builder)
   {

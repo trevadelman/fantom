@@ -41,10 +41,11 @@ const class Parser
     this.linkMarkers = builder.linkMarkers
 
     // install post-processors. We auto-inject a HeadingProcessor so that
-    // anchor ids are always generated.
-    this.postProcessorFactories =
+    // anchor ids are always generated. Save them in Unsafe because they are not const
+    this.postProcessorFactoriesRef = Unsafe(
       [|->HeadingProcessor| { HeadingProcessor() }]
         .addAll(builder.postProcessorFactories)
+    )
 
     // try to make an inline parser. invalid configuration might result in
     // an error, which we want to detect as soon as possible
@@ -58,7 +59,8 @@ const class Parser
   internal const DelimiterProcessor[] delimiterProcessors
   internal const LinkProcessor[] linkProcessors
   internal const Int[] linkMarkers
-  internal const |->PostProcessor|[] postProcessorFactories
+  internal const Unsafe postProcessorFactoriesRef
+  internal |->PostProcessor|[] postProcessorFactories() { postProcessorFactoriesRef.val }
 
 //////////////////////////////////////////////////////////////////////////
 // Parse
@@ -177,7 +179,6 @@ final class ParserBuilder
     return this
   }
 
-  ** TODO: this feature not fully implemented yet
   @NoDoc This withIncludeSourceSpans(IncludeSourceSpans val)
   {
     this.includeSourceSpans = val
