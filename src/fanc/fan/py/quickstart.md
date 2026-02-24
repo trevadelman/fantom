@@ -133,9 +133,13 @@ src/inet/py/               # inet pod natives (9 files)
 src/web/py/                # web pod natives (5 files)
 src/crypto/py/             # crypto pod natives (2 files)
 
-src/py/                    # py pod -- test runner CLI
+src/py/                    # py pod -- Python CLI tools
+  fan/Main.fan             # CLI entry point (command dispatch)
   fan/PyCmd.fan            # Base command (Python discovery, version check)
   fan/cmd/TestCmd.fan      # Test runner (util::TestRunner)
+  fan/cmd/FanCmd.fan       # Run Fantom main programs (py fan <pod>)
+  fan/cmd/HelpCmd.fan      # Help and command listing
+  fan/cmd/InitCmd.fan      # Initialize Python environment
 ```
 
 See `design.md` for the full technical reference on how Fantom constructs map to Python.
