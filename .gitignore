@@ -72,6 +72,7 @@ src/xetoc
 src/testHaystack
 src/testXeto
 src/testAxon
+src/testFolio
 src/axon
 src/axonsh
 src/def

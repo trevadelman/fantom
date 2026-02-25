@@ -4,6 +4,7 @@
 #
 
 from .Slot import Slot
+from .Obj import Obj
 
 
 class Method(Slot):
@@ -420,9 +421,10 @@ class Method(Slot):
         return None
 
 
-class MethodFunc:
+class MethodFunc(Obj):
     """Wraps a Method as a Func for reflection.
 
+    Extends Obj (matching JS: MethodFunc extends Obj).
     This allows Method.func() to return a Func-like object
     that can be called and has parameter metadata.
     """

@@ -9,6 +9,8 @@ import tempfile
 import shutil
 from pathlib import Path
 from fan.sys.Obj import Obj
+from fan.sys.OutStream import OutStream
+from fan.sys.InStream import InStream
 
 
 class File(Obj):
@@ -934,77 +936,94 @@ class File(Obj):
         raise UnknownSlotErr.make(f"sys::File.{name}")
 
 
-class SysOutStream(Obj):
+class SysOutStream(OutStream):
     """SysOutStream - file-backed output stream.
 
-    This is returned by File.out() and reports type sys::SysOutStream
-    with base type sys::OutStream.
+    This is returned by File.out() and reports type sys::SysOutStream.
+    Extends OutStream (matching JS: SysOutStream extends OutStream)
+    so it inherits writeProps, writeXml, writeObj etc.
     """
 
     def __init__(self, buf, path, append=False):
+        super().__init__()  # OutStream.__init__ sets _out=None, _charset=None, _endian=None
         self._buf = buf
         self._path = path
         self._append = append
+        self._dirty = append  # Only sync on close if data was actually written
 
     def typeof(self):
         from .Type import Type
         return Type.find("sys::SysOutStream")
 
     def write(self, b):
+        self._dirty = True
         self._buf.write(b)
         return self
 
     def write_buf(self, other, n=None):
+        self._dirty = True
         self._buf.write_buf(other, n)
         return self
 
     def write_i2(self, x):
+        self._dirty = True
         self._buf.write_i2(x)
         return self
 
     def write_i4(self, x):
+        self._dirty = True
         self._buf.write_i4(x)
         return self
 
     def write_i8(self, x):
+        self._dirty = True
         self._buf.write_i8(x)
         return self
 
     def write_f4(self, x):
+        self._dirty = True
         self._buf.write_f4(x)
         return self
 
     def write_f8(self, x):
+        self._dirty = True
         self._buf.write_f8(x)
         return self
 
     def write_bool(self, x):
+        self._dirty = True
         self._buf.write_bool(x)
         return self
 
     def write_decimal(self, x):
+        self._dirty = True
         self._buf.write_decimal(x)
         return self
 
     def write_utf(self, s):
+        self._dirty = True
         self._buf.write_utf(s)
         return self
 
     def write_char(self, c):
+        self._dirty = True
         self._buf.write_char(c)
         return self
 
     def write_chars(self, s, off=0, length=None):
+        self._dirty = True
         self._buf.write_chars(s, off, length)
         return self
 
     def print_(self, obj):
+        self._dirty = True
         self._buf.print_(obj)
         return self
 
     print = print_
 
     def print_line(self, obj=None):
+        self._dirty = True
         self._buf.print_line(obj)
         return self
 
@@ -1013,13 +1032,14 @@ class SysOutStream(Obj):
         return self
 
     def sync(self):
-        """Write buffer content to file."""
-        data = self._buf._get_data()
-        self._path.write_bytes(data)
+        """Write buffer content to file (only if data was written)."""
+        if self._dirty:
+            data = self._buf._get_data()
+            self._path.write_bytes(data)
         return self
 
     def close(self):
-        """Close and write to file."""
+        """Close and write to file if dirty."""
         self.sync()
         return True
 
@@ -1030,14 +1050,16 @@ class SysOutStream(Obj):
         return self._buf.endian(val)
 
 
-class SysInStream(Obj):
+class SysInStream(InStream):
     """SysInStream - file-backed input stream.
 
-    This is returned by File.in_() and reports type sys::SysInStream
-    with base type sys::InStream.
+    This is returned by File.in_() and reports type sys::SysInStream.
+    Extends InStream (matching JS: SysInStream extends InStream)
+    so it inherits readProps, readObj etc.
     """
 
     def __init__(self, buf):
+        super().__init__()
         self._buf = buf
 
     def typeof(self):

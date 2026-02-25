@@ -4,6 +4,7 @@
 #
 
 from .Obj import Obj
+from .Err import Err
 
 
 class Pod(Obj):
@@ -826,8 +827,12 @@ class PodZipEntryFile:
         return self.to_str()
 
 
-class UnknownPodErr(Exception):
-    """Error thrown when a pod cannot be found"""
+class UnknownPodErr(Err):
+    """Error thrown when a pod cannot be found.
+
+    Extends Err (matching JS: UnknownPodErr extends Err).
+    Note: there is also a canonical UnknownPodErr in Err.py.
+    """
 
     def __init__(self, msg="Unknown pod"):
         super().__init__(msg)

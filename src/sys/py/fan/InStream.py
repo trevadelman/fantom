@@ -6,409 +6,6 @@
 from .Obj import Obj
 
 
-class StrInStream:
-    """InStream implementation for reading characters from a string.
-
-    Binary read operations (read, readBuf, unread) throw UnsupportedErr.
-    Character read operations work directly on the string.
-    """
-
-    def __init__(self, s):
-        self._str = s
-        self._size = len(s)
-        self._pos = 0
-        self._pushback = []
-        self._charset = None  # Lazy init
-
-    def _get_charset(self):
-        """Lazily get charset, defaulting to UTF-8"""
-        if self._charset is None:
-            from fan.sys.Charset import Charset
-            self._charset = Charset.utf8()
-        return self._charset
-
-    def charset(self, val=None):
-        """Get or set charset (mainly for API compatibility)"""
-        if val is None:
-            return self._get_charset()
-        else:
-            self._charset = val
-            return self
-
-    def _r_char(self):
-        """Read char as int code point, or -1 at end"""
-        if self._pushback:
-            return self._pushback.pop()
-        if self._pos >= self._size:
-            return -1
-        c = ord(self._str[self._pos])
-        self._pos += 1
-        return c
-
-    def read(self):
-        """Binary read - not supported on string stream"""
-        from .Err import UnsupportedErr
-        raise UnsupportedErr.make("Binary read on Str.in")
-
-    def read_buf(self, buf, n):
-        """Binary read - not supported on string stream"""
-        from .Err import UnsupportedErr
-        raise UnsupportedErr.make("Binary read on Str.in")
-
-    def unread(self, b):
-        """Binary unread - not supported on string stream"""
-        from .Err import UnsupportedErr
-        raise UnsupportedErr.make("Binary read on Str.in")
-
-    def read_char(self):
-        """Read a single character as Int code point, or None at end"""
-        c = self._r_char()
-        return None if c < 0 else c
-
-    def unread_char(self, c):
-        """Push back a character to be read again"""
-        self._pushback.append(int(c))
-        return self
-
-    def peek_char(self):
-        """Peek at next character without consuming"""
-        c = self._r_char()
-        if c >= 0:
-            self._pushback.append(c)
-        return None if c < 0 else c
-
-    def read_chars(self, n):
-        """Read n characters as a string"""
-        if n < 0:
-            from .Err import ArgErr
-            raise ArgErr.make(f"readChars n < 0: {n}")
-        if n == 0:
-            return ""
-        chars = []
-        for _ in range(int(n)):
-            c = self._r_char()
-            if c < 0:
-                from .Err import IOErr
-                raise IOErr.make("Unexpected end of stream")
-            chars.append(chr(c))
-        return ''.join(chars)
-
-    def read_line(self, max_chars=None):
-        """Read a line of text"""
-        max_len = int(max_chars) if max_chars is not None else 2147483647
-        if max_len <= 0:
-            return ""
-
-        # Read first char
-        c = self._r_char()
-        if c < 0:
-            return None
-
-        chars = []
-        while True:
-            # Check for newlines
-            if c == 10:  # \n
-                break
-            if c == 13:  # \r
-                # Check for \r\n
-                next_c = self._r_char()
-                if next_c >= 0 and next_c != 10:
-                    self._pushback.append(next_c)
-                break
-
-            chars.append(chr(c))
-            if len(chars) >= max_len:
-                break
-
-            c = self._r_char()
-            if c < 0:
-                break
-
-        return ''.join(chars)
-
-    def read_all_str(self, normalizeNewlines=True):
-        """Read all remaining characters as a string"""
-        chars = []
-        last = -1
-        while True:
-            c = self._r_char()
-            if c < 0:
-                break
-            if normalizeNewlines:
-                if c == 13:  # \r -> \n
-                    chars.append(chr(10))
-                elif last == 13 and c == 10:
-                    pass  # skip \n after \r
-                else:
-                    chars.append(chr(c))
-                last = c
-            else:
-                chars.append(chr(c))
-        return ''.join(chars)
-
-    def read_all_lines(self):
-        """Read all lines"""
-        from .List import List
-        lines = []
-        while True:
-            line = self.read_line()
-            if line is None:
-                break
-            lines.append(line)
-        return List.from_literal(lines, "sys::Str")
-
-    def each_line(self, f):
-        """Iterate each line"""
-        while True:
-            line = self.read_line()
-            if line is None:
-                break
-            f.call(line)
-
-    def read_str_token(self, max_chars=None, func=None):
-        """Read string token until whitespace or func returns true"""
-        from .Int import Int
-
-        max_len = int(max_chars) if max_chars is not None else 2147483647
-        if max_len <= 0:
-            return ""
-
-        c = self._r_char()
-        if c < 0:
-            return None
-
-        chars = []
-        while True:
-            if func is None:
-                terminate = Int.is_space(c)
-            else:
-                terminate = func.call(c)
-
-            if terminate:
-                self._pushback.append(c)
-                break
-
-            chars.append(chr(c))
-            if len(chars) >= max_len:
-                break
-
-            c = self._r_char()
-            if c < 0:
-                break
-
-        return ''.join(chars)
-
-    def read_null_terminated_str(self, max_chars=None):
-        """Read until null byte or max chars"""
-        max_len = int(max_chars) if max_chars is not None else 2147483647
-        if max_len <= 0:
-            return ""
-
-        c = self._r_char()
-        if c < 0:
-            return None
-
-        chars = []
-        while True:
-            if c == 0:
-                break
-            chars.append(chr(c))
-            if len(chars) >= max_len:
-                break
-            c = self._r_char()
-            if c < 0:
-                break
-
-        return ''.join(chars)
-
-    def read_props(self):
-        """Read properties file format and return as Map[Str:Str]"""
-        from .Map import Map
-        from .Type import Type, MapType
-
-        # Create properly typed [Str:Str] map
-        strType = Type.find("sys::Str")
-        props = Map.make_with_type(strType, strType)
-        name = ""
-        v = None
-        in_block_comment = 0
-        in_eol_comment = False
-        c = 32
-        last = 32
-        line_num = 1
-        col_num = 0
-
-        while True:
-            last = c
-            c = self._r_char()
-            col_num += 1
-            if c < 0:
-                break
-
-            # End of line
-            if c == 10 or c == 13:
-                col_num = 0
-                in_eol_comment = False
-                if last == 13 and c == 10:
-                    continue
-                n = name.strip()
-                if v is not None:
-                    props.add(n, v.strip())
-                    name = ""
-                    v = None
-                elif len(n) > 0:
-                    from .Err import IOErr
-                    raise IOErr.make(f"Invalid name/value pair [Line {line_num}]")
-                line_num += 1
-                continue
-
-            # If in comment
-            if in_eol_comment:
-                continue
-
-            # Block comment
-            if in_block_comment > 0:
-                if last == 47 and c == 42:  # /*
-                    in_block_comment += 1
-                if last == 42 and c == 47:  # */
-                    in_block_comment -= 1
-                continue
-
-            # Equal sign
-            if c == 61 and v is None:  # =
-                v = ""
-                continue
-
-            # Line comment at start of line
-            if c == 35 and col_num == 1:  # #
-                in_eol_comment = True
-                continue
-
-            # End of line comment (//) or block comment (/*)
-            if c == 47 and self._is_space_char(last):  # /
-                peek = self._r_char()
-                if peek < 0:
-                    break
-                if peek == 47:  # //
-                    in_eol_comment = True
-                    continue
-                if peek == 42:  # /*
-                    in_block_comment += 1
-                    continue
-                self._pushback.append(peek)
-
-            # Escape or line continuation
-            if c == 92:  # \
-                peek = self._r_char()
-                if peek < 0:
-                    break
-                elif peek == 110:  # n
-                    c = 10
-                elif peek == 114:  # r
-                    c = 13
-                elif peek == 116:  # t
-                    c = 9
-                elif peek == 92:  # \
-                    c = 92
-                elif peek == 13 or peek == 10:
-                    # Line continuation
-                    line_num += 1
-                    if peek == 13:
-                        peek = self._r_char()
-                        if peek != 10:
-                            self._pushback.append(peek)
-                    # Skip leading whitespace on next line
-                    while True:
-                        peek = self._r_char()
-                        if peek == 32 or peek == 9:  # space or tab - keep skipping
-                            continue
-                        if peek >= 0:
-                            self._pushback.append(peek)
-                        break
-                    continue
-                elif peek == 117:  # u - unicode escape
-                    n3 = self._hex(self._r_char())
-                    n2 = self._hex(self._r_char())
-                    n1 = self._hex(self._r_char())
-                    n0 = self._hex(self._r_char())
-                    if n3 < 0 or n2 < 0 or n1 < 0 or n0 < 0:
-                        from .Err import IOErr
-                        raise IOErr.make(f"Invalid hex value for \\uxxxx [Line {line_num}]")
-                    c = (n3 << 12) | (n2 << 8) | (n1 << 4) | n0
-                else:
-                    from .Err import IOErr
-                    raise IOErr.make(f"Invalid escape sequence [Line {line_num}]")
-
-            # Normal character
-            if v is None:
-                name += chr(c)
-            else:
-                v += chr(c)
-
-        # Handle final line without newline
-        n = name.strip()
-        if v is not None:
-            props.add(n, v.strip())
-        elif len(n) > 0:
-            from .Err import IOErr
-            raise IOErr.make(f"Invalid name/value pair [Line {line_num}]")
-
-        return props
-
-    def _is_space_char(self, c):
-        """Check if character is whitespace"""
-        return c == 32 or c == 9 or c == 10 or c == 13
-
-    def _hex(self, c):
-        """Convert hex char to value, or -1 if invalid"""
-        if 48 <= c <= 57:    # 0-9
-            return c - 48
-        if 97 <= c <= 102:   # a-f
-            return c - 97 + 10
-        if 65 <= c <= 70:    # A-F
-            return c - 65 + 10
-        return -1
-
-    def close(self):
-        """Close the stream"""
-        return True
-
-    def r_char(self):
-        """Read character as int code point for Tokenizer compatibility.
-
-        Returns: int code point or None at end of stream
-        """
-        c = self.read_char()
-        return c if c is not None else None
-
-    def read_obj(self, options=None):
-        """Read a serialized object from this stream.
-
-        Args:
-            options: Optional decode options map
-
-        Returns:
-            Deserialized object
-        """
-        from fanx.ObjDecoder import ObjDecoder
-        return ObjDecoder(self, options).read_obj()
-
-    def typeof(self):
-        """Return Type for this InStream (or subclass)"""
-        from fan.sys.Type import Type
-        # Get the actual class name and map to Fantom type
-        cls = type(self)
-        module = cls.__module__
-        class_name = Type._py_type_to_fantom(cls.__name__)
-        # Extract pod name from module (e.g., 'fan.web.MultiPartInStream' -> 'web')
-        if module.startswith('fan.'):
-            parts = module.split('.')
-            if len(parts) >= 2:
-                pod_name = parts[1]  # 'web', 'sys', etc.
-                return Type.find(f"{pod_name}::{class_name}")
-        return Type.find(f"sys::{class_name}")
-
-
 class InStream(Obj):
     """Input stream for reading text/binary data"""
 
@@ -949,3 +546,407 @@ class InStream(Obj):
     # NOTE: InStream intentionally does NOT define typeof() so that
     # Type.of() uses the class-based fallback which correctly identifies
     # subclasses like web::MultiPartInStream from their module path.
+
+
+class StrInStream(InStream):
+    """InStream implementation for reading characters from a string.
+
+    Binary read operations (read, readBuf, unread) throw UnsupportedErr.
+    Character read operations work directly on the string.
+    """
+
+    def __init__(self, s):
+        super().__init__()
+        self._str = s
+        self._size = len(s)
+        self._pos = 0
+        self._pushback = []
+        self._charset = None  # Lazy init
+
+    def _get_charset(self):
+        """Lazily get charset, defaulting to UTF-8"""
+        if self._charset is None:
+            from fan.sys.Charset import Charset
+            self._charset = Charset.utf8()
+        return self._charset
+
+    def charset(self, val=None):
+        """Get or set charset (mainly for API compatibility)"""
+        if val is None:
+            return self._get_charset()
+        else:
+            self._charset = val
+            return self
+
+    def _r_char(self):
+        """Read char as int code point, or -1 at end"""
+        if self._pushback:
+            return self._pushback.pop()
+        if self._pos >= self._size:
+            return -1
+        c = ord(self._str[self._pos])
+        self._pos += 1
+        return c
+
+    def read(self):
+        """Binary read - not supported on string stream"""
+        from .Err import UnsupportedErr
+        raise UnsupportedErr.make("Binary read on Str.in")
+
+    def read_buf(self, buf, n):
+        """Binary read - not supported on string stream"""
+        from .Err import UnsupportedErr
+        raise UnsupportedErr.make("Binary read on Str.in")
+
+    def unread(self, b):
+        """Binary unread - not supported on string stream"""
+        from .Err import UnsupportedErr
+        raise UnsupportedErr.make("Binary read on Str.in")
+
+    def read_char(self):
+        """Read a single character as Int code point, or None at end"""
+        c = self._r_char()
+        return None if c < 0 else c
+
+    def unread_char(self, c):
+        """Push back a character to be read again"""
+        self._pushback.append(int(c))
+        return self
+
+    def peek_char(self):
+        """Peek at next character without consuming"""
+        c = self._r_char()
+        if c >= 0:
+            self._pushback.append(c)
+        return None if c < 0 else c
+
+    def read_chars(self, n):
+        """Read n characters as a string"""
+        if n < 0:
+            from .Err import ArgErr
+            raise ArgErr.make(f"readChars n < 0: {n}")
+        if n == 0:
+            return ""
+        chars = []
+        for _ in range(int(n)):
+            c = self._r_char()
+            if c < 0:
+                from .Err import IOErr
+                raise IOErr.make("Unexpected end of stream")
+            chars.append(chr(c))
+        return ''.join(chars)
+
+    def read_line(self, max_chars=None):
+        """Read a line of text"""
+        max_len = int(max_chars) if max_chars is not None else 2147483647
+        if max_len <= 0:
+            return ""
+
+        # Read first char
+        c = self._r_char()
+        if c < 0:
+            return None
+
+        chars = []
+        while True:
+            # Check for newlines
+            if c == 10:  # \n
+                break
+            if c == 13:  # \r
+                # Check for \r\n
+                next_c = self._r_char()
+                if next_c >= 0 and next_c != 10:
+                    self._pushback.append(next_c)
+                break
+
+            chars.append(chr(c))
+            if len(chars) >= max_len:
+                break
+
+            c = self._r_char()
+            if c < 0:
+                break
+
+        return ''.join(chars)
+
+    def read_all_str(self, normalizeNewlines=True):
+        """Read all remaining characters as a string"""
+        chars = []
+        last = -1
+        while True:
+            c = self._r_char()
+            if c < 0:
+                break
+            if normalizeNewlines:
+                if c == 13:  # \r -> \n
+                    chars.append(chr(10))
+                elif last == 13 and c == 10:
+                    pass  # skip \n after \r
+                else:
+                    chars.append(chr(c))
+                last = c
+            else:
+                chars.append(chr(c))
+        return ''.join(chars)
+
+    def read_all_lines(self):
+        """Read all lines"""
+        from .List import List
+        lines = []
+        while True:
+            line = self.read_line()
+            if line is None:
+                break
+            lines.append(line)
+        return List.from_literal(lines, "sys::Str")
+
+    def each_line(self, f):
+        """Iterate each line"""
+        while True:
+            line = self.read_line()
+            if line is None:
+                break
+            f.call(line)
+
+    def read_str_token(self, max_chars=None, func=None):
+        """Read string token until whitespace or func returns true"""
+        from .Int import Int
+
+        max_len = int(max_chars) if max_chars is not None else 2147483647
+        if max_len <= 0:
+            return ""
+
+        c = self._r_char()
+        if c < 0:
+            return None
+
+        chars = []
+        while True:
+            if func is None:
+                terminate = Int.is_space(c)
+            else:
+                terminate = func.call(c)
+
+            if terminate:
+                self._pushback.append(c)
+                break
+
+            chars.append(chr(c))
+            if len(chars) >= max_len:
+                break
+
+            c = self._r_char()
+            if c < 0:
+                break
+
+        return ''.join(chars)
+
+    def read_null_terminated_str(self, max_chars=None):
+        """Read until null byte or max chars"""
+        max_len = int(max_chars) if max_chars is not None else 2147483647
+        if max_len <= 0:
+            return ""
+
+        c = self._r_char()
+        if c < 0:
+            return None
+
+        chars = []
+        while True:
+            if c == 0:
+                break
+            chars.append(chr(c))
+            if len(chars) >= max_len:
+                break
+            c = self._r_char()
+            if c < 0:
+                break
+
+        return ''.join(chars)
+
+    def read_props(self):
+        """Read properties file format and return as Map[Str:Str]"""
+        from .Map import Map
+        from .Type import Type, MapType
+
+        # Create properly typed [Str:Str] map
+        strType = Type.find("sys::Str")
+        props = Map.make_with_type(strType, strType)
+        name = ""
+        v = None
+        in_block_comment = 0
+        in_eol_comment = False
+        c = 32
+        last = 32
+        line_num = 1
+        col_num = 0
+
+        while True:
+            last = c
+            c = self._r_char()
+            col_num += 1
+            if c < 0:
+                break
+
+            # End of line
+            if c == 10 or c == 13:
+                col_num = 0
+                in_eol_comment = False
+                if last == 13 and c == 10:
+                    continue
+                n = name.strip()
+                if v is not None:
+                    props.add(n, v.strip())
+                    name = ""
+                    v = None
+                elif len(n) > 0:
+                    from .Err import IOErr
+                    raise IOErr.make(f"Invalid name/value pair [Line {line_num}]")
+                line_num += 1
+                continue
+
+            # If in comment
+            if in_eol_comment:
+                continue
+
+            # Block comment
+            if in_block_comment > 0:
+                if last == 47 and c == 42:  # /*
+                    in_block_comment += 1
+                if last == 42 and c == 47:  # */
+                    in_block_comment -= 1
+                continue
+
+            # Equal sign
+            if c == 61 and v is None:  # =
+                v = ""
+                continue
+
+            # Line comment at start of line
+            if c == 35 and col_num == 1:  # #
+                in_eol_comment = True
+                continue
+
+            # End of line comment (//) or block comment (/*)
+            if c == 47 and self._is_space_char(last):  # /
+                peek = self._r_char()
+                if peek < 0:
+                    break
+                if peek == 47:  # //
+                    in_eol_comment = True
+                    continue
+                if peek == 42:  # /*
+                    in_block_comment += 1
+                    continue
+                self._pushback.append(peek)
+
+            # Escape or line continuation
+            if c == 92:  # \
+                peek = self._r_char()
+                if peek < 0:
+                    break
+                elif peek == 110:  # n
+                    c = 10
+                elif peek == 114:  # r
+                    c = 13
+                elif peek == 116:  # t
+                    c = 9
+                elif peek == 92:  # \
+                    c = 92
+                elif peek == 13 or peek == 10:
+                    # Line continuation
+                    line_num += 1
+                    if peek == 13:
+                        peek = self._r_char()
+                        if peek != 10:
+                            self._pushback.append(peek)
+                    # Skip leading whitespace on next line
+                    while True:
+                        peek = self._r_char()
+                        if peek == 32 or peek == 9:  # space or tab - keep skipping
+                            continue
+                        if peek >= 0:
+                            self._pushback.append(peek)
+                        break
+                    continue
+                elif peek == 117:  # u - unicode escape
+                    n3 = self._hex(self._r_char())
+                    n2 = self._hex(self._r_char())
+                    n1 = self._hex(self._r_char())
+                    n0 = self._hex(self._r_char())
+                    if n3 < 0 or n2 < 0 or n1 < 0 or n0 < 0:
+                        from .Err import IOErr
+                        raise IOErr.make(f"Invalid hex value for \\uxxxx [Line {line_num}]")
+                    c = (n3 << 12) | (n2 << 8) | (n1 << 4) | n0
+                else:
+                    from .Err import IOErr
+                    raise IOErr.make(f"Invalid escape sequence [Line {line_num}]")
+
+            # Normal character
+            if v is None:
+                name += chr(c)
+            else:
+                v += chr(c)
+
+        # Handle final line without newline
+        n = name.strip()
+        if v is not None:
+            props.add(n, v.strip())
+        elif len(n) > 0:
+            from .Err import IOErr
+            raise IOErr.make(f"Invalid name/value pair [Line {line_num}]")
+
+        return props
+
+    def _is_space_char(self, c):
+        """Check if character is whitespace"""
+        return c == 32 or c == 9 or c == 10 or c == 13
+
+    def _hex(self, c):
+        """Convert hex char to value, or -1 if invalid"""
+        if 48 <= c <= 57:    # 0-9
+            return c - 48
+        if 97 <= c <= 102:   # a-f
+            return c - 97 + 10
+        if 65 <= c <= 70:    # A-F
+            return c - 65 + 10
+        return -1
+
+    def close(self):
+        """Close the stream"""
+        return True
+
+    def r_char(self):
+        """Read character as int code point for Tokenizer compatibility.
+
+        Returns: int code point or None at end of stream
+        """
+        c = self.read_char()
+        return c if c is not None else None
+
+    def read_obj(self, options=None):
+        """Read a serialized object from this stream.
+
+        Args:
+            options: Optional decode options map
+
+        Returns:
+            Deserialized object
+        """
+        from fanx.ObjDecoder import ObjDecoder
+        return ObjDecoder(self, options).read_obj()
+
+    def typeof(self):
+        """Return Type for this InStream (or subclass)"""
+        from fan.sys.Type import Type
+        # Get the actual class name and map to Fantom type
+        cls = type(self)
+        module = cls.__module__
+        class_name = Type._py_type_to_fantom(cls.__name__)
+        # Extract pod name from module (e.g., 'fan.web.MultiPartInStream' -> 'web')
+        if module.startswith('fan.'):
+            parts = module.split('.')
+            if len(parts) >= 2:
+                pod_name = parts[1]  # 'web', 'sys', etc.
+                return Type.find(f"{pod_name}::{class_name}")
+        return Type.find(f"sys::{class_name}")

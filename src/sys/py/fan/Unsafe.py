@@ -4,7 +4,10 @@
 #
 
 
-class Unsafe:
+from .Obj import Obj
+
+
+class Unsafe(Obj):
     """Wrapper for reassignable local variables captured by closures.
 
     Python closures capture variables by value, so reassignments after

@@ -4,6 +4,7 @@
 #
 
 from .Obj import Obj
+from .OutStream import OutStream
 
 
 class StrBuf(Obj):
@@ -278,22 +279,16 @@ class StrBuf(Obj):
         return Type.find("sys::StrBuf")
 
 
-class StrBufOutStream:
-    """OutStream implementation that writes to a StrBuf."""
+class StrBufOutStream(OutStream):
+    """OutStream implementation that writes to a StrBuf.
+
+    Extends OutStream (matching JS: StrBufOutStream extends OutStream)
+    so it inherits writeProps, writeXml, writeObj etc.
+    """
 
     def __init__(self, buf):
+        super().__init__()
         self._buf = buf
-        self._charset_obj = None  # Lazy init
-
-    def charset(self, val=None):
-        """Get or set charset (always UTF-8 for StrBuf, set is ignored)."""
-        if val is None:
-            if self._charset_obj is None:
-                from .Charset import Charset
-                self._charset_obj = Charset.utf8()
-            return self._charset_obj
-        # Setting charset is ignored for StrBuf - it's always UTF-8
-        return self
 
     def write_char(self, ch):
         """Write single character."""
