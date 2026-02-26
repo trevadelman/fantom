@@ -274,18 +274,6 @@ class PyExprPrinter : PyPrinter
   {
     varName := e.var.name
 
-    // Check if we're in a closure and this variable has a wrapper
-    // If so, use the wrapper name instead of the original variable name
-    if (m.inWrappedClosure)
-    {
-      wrapperName := m.getWrapper(varName)
-      if (wrapperName != null)
-      {
-        w(escapeName(wrapperName))
-        return
-      }
-    }
-
     w(escapeName(varName))
   }
 
@@ -338,27 +326,6 @@ class PyExprPrinter : PyPrinter
       expr(e.target)
       w("))")
       return
-    }
-
-    // Check if this is a cvar wrapper call (closure-captured variable)
-    // Pattern: self.make(value) with no target -> ObjUtil.cvar(value)
-    // The Fantom compiler generates synthetic Wrap$* classes for closure-captured variables
-    // that need to be hoisted to the heap (non-final variables used in closures)
-    if (e.target == null && !e.method.isStatic && e.method.name == "make" && e.args.size == 1)
-    {
-      arg := e.args.first
-      parentType := e.method.parent
-      // Treat as cvar if parent type is a synthetic wrapper class (Wrap$*)
-      // Any value can be wrapped, including closures (which may be reassigned)
-      if (parentType.isSynthetic && parentType.name.startsWith("Wrap\$"))
-      {
-        // This is a cvar wrapper - use ObjUtil.cvar() instead of self.make()
-        w("ObjUtil.cvar(")
-        expr(arg)
-        w(")")
-        return
-      }
-      // Otherwise fall through to handle as normal constructor/method call
     }
 
     // Check if this is a dynamic call (-> operator)
@@ -815,9 +782,43 @@ class PyExprPrinter : PyPrinter
     w(")")
   }
 
+  ** Check if a field expression is accessing .val on a Wrap$ wrapper variable
+  ** If so, return the original variable name; null otherwise
+  ** Works for both outer scope (wrapper name -> original name via map) and
+  ** inner closure scope (variable already has original name from capture)
+  private Str? isWrapValAccess(FieldExpr e)
+  {
+    // Must be accessing field named "val" on a synthetic Wrap$ type
+    if (e.field.name != "val") return null
+    parentType := e.field.parent
+    if (!parentType.isSynthetic || !parentType.name.startsWith("Wrap\$")) return null
+
+    // Target must be a local variable
+    if (e.target == null || e.target.id != ExprId.localVar) return null
+    localTarget := e.target as LocalVarExpr
+    varName := localTarget.var.name
+
+    // Check if this is a known wrapper variable (outer scope: wrapper_name -> original_name)
+    origName := m.getNonlocalOriginal(varName)
+    if (origName != null) return origName
+
+    // Inside closures, the variable already has the original name (from captured field)
+    // If the field parent is Wrap$ and field is val, strip the field access regardless
+    return varName
+  }
+
   private Void field(FieldExpr e)
   {
     fieldName := e.field.name
+
+    // Intercept Wrap$.val field access -- output the original variable name
+    // instead of wrapper._val (we use nonlocal instead of cvar wrappers)
+    origName := isWrapValAccess(e)
+    if (origName != null)
+    {
+      w(escapeName(origName))
+      return
+    }
 
     // Handle safe navigation operator (?.): short-circuit to null if target is null
     // Pattern: ((lambda _safe_: None if _safe_ is None else _safe_.field)(<target>))
@@ -943,6 +944,29 @@ class PyExprPrinter : PyPrinter
     if (e.lhs.id == ExprId.field)
     {
       fieldExpr := e.lhs as FieldExpr
+
+      // Intercept Wrap$.val assignment -- assign to the original variable
+      // instead of wrapper._val (we use nonlocal instead of cvar wrappers)
+      origName := isWrapValAccess(fieldExpr)
+      if (origName != null)
+      {
+        if (e.leave)
+        {
+          // Assignment used as expression: (var := value)
+          w("(")
+          w(escapeName(origName))
+          w(" := ")
+          expr(e.rhs)
+          w(")")
+        }
+        else
+        {
+          w(escapeName(origName))
+          w(" = ")
+          expr(e.rhs)
+        }
+        return
+      }
 
       // When leave=true, the assignment result is used as an expression value.
       // Python doesn't support `=` in expression context, so we use a helper.
@@ -1303,22 +1327,35 @@ class PyExprPrinter : PyPrinter
       }
       else if (target.id == ExprId.field)
       {
-        // Field assignment - more complex, use direct assignment
         fieldExpr := target as FieldExpr
-        escapedName := escapeName(fieldExpr.field.name)
-        if (fieldExpr.target != null)
+
+        // Check for Wrap$.val compound assignment -- treat as local variable
+        origName := isWrapValAccess(fieldExpr)
+        if (origName != null)
         {
-          expr(fieldExpr.target)
-          w(".")
+          varName := escapeName(origName)
+          w("(").w(varName).w(" := (").w(varName).w(" ").w(op).w(" ")
+          expr(e.args.first)
+          w("))")
         }
-        w("_").w(escapedName).w(" = ")
-        if (fieldExpr.target != null)
+        else
         {
-          expr(fieldExpr.target)
-          w(".")
+          // Normal field compound assignment - use direct assignment
+          escapedName := escapeName(fieldExpr.field.name)
+          if (fieldExpr.target != null)
+          {
+            expr(fieldExpr.target)
+            w(".")
+          }
+          w("_").w(escapedName).w(" = ")
+          if (fieldExpr.target != null)
+          {
+            expr(fieldExpr.target)
+            w(".")
+          }
+          w("_").w(escapedName).w(" ").w(op).w(" ")
+          expr(e.args.first)
         }
-        w("_").w(escapedName).w(" ").w(op).w(" ")
-        expr(e.args.first)
       }
       else if (target.id == ExprId.shortcut)
       {
@@ -1556,8 +1593,27 @@ class PyExprPrinter : PyPrinter
 
     if (target.id == ExprId.field)
     {
-      // Field access - use ObjUtil helper
       fieldExpr := target as FieldExpr
+
+      // Check for Wrap$.val increment -- treat as local variable increment
+      origName := isWrapValAccess(fieldExpr)
+      if (origName != null)
+      {
+        varName := escapeName(origName)
+        if (isPost)
+        {
+          w("((_old_").w(varName).w(" := ").w(varName).w(", ")
+          w(varName).w(" := ").w(varName).w(" + 1, ")
+          w("_old_").w(varName).w(")[2])")
+        }
+        else
+        {
+          w("(").w(varName).w(" := ").w(varName).w(" + 1)")
+        }
+        return
+      }
+
+      // Normal field access - use ObjUtil helper
       method := isPost ? "inc_field_post" : "inc_field"
       w("ObjUtil.").w(method).w("(")
       if (fieldExpr.target != null)
@@ -1622,8 +1678,27 @@ class PyExprPrinter : PyPrinter
 
     if (target.id == ExprId.field)
     {
-      // Field access - use ObjUtil helper
       fieldExpr := target as FieldExpr
+
+      // Check for Wrap$.val decrement -- treat as local variable decrement
+      origName := isWrapValAccess(fieldExpr)
+      if (origName != null)
+      {
+        varName := escapeName(origName)
+        if (isPost)
+        {
+          w("((_old_").w(varName).w(" := ").w(varName).w(", ")
+          w(varName).w(" := ").w(varName).w(" - 1, ")
+          w("_old_").w(varName).w(")[2])")
+        }
+        else
+        {
+          w("(").w(varName).w(" := ").w(varName).w(" - 1)")
+        }
+        return
+      }
+
+      // Normal field access - use ObjUtil helper
       method := isPost ? "dec_field_post" : "dec_field"
       w("ObjUtil.").w(method).w("(")
       if (fieldExpr.target != null)

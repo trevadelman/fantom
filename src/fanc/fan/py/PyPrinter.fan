@@ -191,26 +191,33 @@ class PyPrinterState : CodePrinterState
   Int nextSwitchVarId() { switchVarCount++ }
 
   //////////////////////////////////////////////////////////////////////////
-  // Cvar Wrapper Tracking
+  // Nonlocal Variable Tracking (for closure-captured mutable variables)
   //////////////////////////////////////////////////////////////////////////
 
-  ** Maps parameter/local variable names to their wrapper variable names
-  ** Example: "x" -> "x_Wrapper" when x is captured and modified in a closure
-  Str:Str paramWrappers := [:]
+  ** Maps Wrap$ wrapper variable names to their original variable names
+  ** Example: "x_Wrapper" -> "x" when x is captured and modified in a closure
+  ** The Fantom compiler generates Wrap$* classes for these variables;
+  ** we use Python's nonlocal keyword instead of ObjUtil.cvar() wrappers
+  Str:Str nonlocalVars := [:]
 
-  ** Are we currently inside a closure that uses wrapped variables?
-  Bool inWrappedClosure := false
-
-  ** Record a parameter->wrapper mapping
-  Void recordWrapper(Str paramName, Str wrapperName)
+  ** Record a wrapper->original variable mapping
+  ** Called when we detect a Wrap$.make() definition in a localDef
+  Void recordNonlocal(Str wrapperVarName, Str originalVarName)
   {
-    paramWrappers[paramName] = wrapperName
+    nonlocalVars[wrapperVarName] = originalVarName
   }
 
-  ** Get wrapper name for a variable, or null if not wrapped
-  Str? getWrapper(Str varName)
+  ** Get the original variable name for a Wrap$ wrapper variable
+  ** Returns null if this variable is not a known wrapper
+  Str? getNonlocalOriginal(Str wrapperVarName)
   {
-    return paramWrappers.get(varName)
+    return nonlocalVars.get(wrapperVarName)
+  }
+
+  ** Get all original variable names that need nonlocal declarations in closures
+  Str[] getNonlocalNames()
+  {
+    return nonlocalVars.vals
   }
 
   ** Clear closure state (call between methods)
@@ -221,8 +228,7 @@ class PyPrinterState : CodePrinterState
     closureFirstUse.clear
     stmtIndex = 0
     closureDepth = 0  // Reset nesting depth
-    paramWrappers.clear  // Clear wrapper mappings for new method
-    inWrappedClosure = false
+    nonlocalVars.clear  // Clear nonlocal mappings for new method
   }
 
   //////////////////////////////////////////////////////////////////////////

@@ -54,13 +54,113 @@ class PyStmtPrinter : PyPrinter
 //////////////////////////////////////////////////////////////////////////
 
   ** Scan entire method body for multi-statement closures
+  ** Also pre-scans for Wrap$ definitions so nonlocal names are known before closures emit
   Void scanMethodForClosures(Block b)
   {
+    // Pre-scan: find ALL Wrap$ definitions in the method body (recursively)
+    // This must happen first so that when closures are emitted, getNonlocalNames()
+    // returns all nonlocal variables -- including ones defined after the closure
+    scanBlockForNonlocals(b)
+
     // Use index to track statement location
     b.stmts.each |s, idx|
     {
       m.stmtIndex = idx
       scanStmt(s)
+    }
+  }
+
+  ** Recursively scan a block for Wrap$ wrapper definitions
+  ** Records all nonlocal variable mappings before any closures are emitted
+  private Void scanBlockForNonlocals(Block b)
+  {
+    b.stmts.each |s| { scanStmtForNonlocals(s) }
+  }
+
+  ** Scan a statement for Wrap$ definitions (and recurse into nested blocks)
+  private Void scanStmtForNonlocals(Stmt s)
+  {
+    switch (s.id)
+    {
+      case StmtId.localDef:
+        localDef := s as LocalDefStmt
+        prescanNonlocal(localDef)
+      case StmtId.ifStmt:
+        ifStmt := s as IfStmt
+        scanBlockForNonlocals(ifStmt.trueBlock)
+        if (ifStmt.falseBlock != null)
+          scanBlockForNonlocals(ifStmt.falseBlock)
+      case StmtId.whileStmt:
+        whileStmt := s as WhileStmt
+        scanBlockForNonlocals(whileStmt.block)
+      case StmtId.forStmt:
+        forStmt := s as ForStmt
+        if (forStmt.init != null) scanStmtForNonlocals(forStmt.init)
+        if (forStmt.block != null)
+          scanBlockForNonlocals(forStmt.block)
+      case StmtId.tryStmt:
+        tryStmt := s as TryStmt
+        scanBlockForNonlocals(tryStmt.block)
+        tryStmt.catches.each |c| { scanBlockForNonlocals(c.block) }
+        if (tryStmt.finallyBlock != null)
+          scanBlockForNonlocals(tryStmt.finallyBlock)
+      case StmtId.switchStmt:
+        switchStmt := s as SwitchStmt
+        switchStmt.cases.each |c| { scanBlockForNonlocals(c.block) }
+        if (switchStmt.defaultBlock != null)
+          scanBlockForNonlocals(switchStmt.defaultBlock)
+    }
+  }
+
+  ** Pre-scan a localDef statement for Wrap$.make() pattern (same logic as detectAndRecordNonlocal)
+  private Void prescanNonlocal(LocalDefStmt s)
+  {
+    if (s.init == null) return
+
+    // Unwrap coerces and assignments
+    initExpr := s.init
+    while (initExpr.id == ExprId.coerce)
+    {
+      tc := initExpr as TypeCheckExpr
+      initExpr = tc.target
+    }
+    if (initExpr.id == ExprId.assign)
+    {
+      assign := initExpr as BinaryExpr
+      initExpr = assign.rhs
+      while (initExpr.id == ExprId.coerce)
+      {
+        tc := initExpr as TypeCheckExpr
+        initExpr = tc.target
+      }
+    }
+
+    if (initExpr.id != ExprId.call) return
+
+    call := initExpr as CallExpr
+    if (call.method.name == "make" && call.target == null && !call.method.isStatic && call.args.size == 1)
+    {
+      parentType := call.method.parent
+      if (parentType.isSynthetic && parentType.name.startsWith("Wrap\$"))
+      {
+        arg := call.args.first
+        while (arg.id == ExprId.coerce)
+        {
+          tc := arg as TypeCheckExpr
+          arg = tc.target
+        }
+
+        wrapperVarName := s.name
+        if (arg.id == ExprId.localVar)
+        {
+          localArg := arg as LocalVarExpr
+          m.recordNonlocal(wrapperVarName, localArg.var.name)
+        }
+        else
+        {
+          m.recordNonlocal(wrapperVarName, wrapperVarName)
+        }
+      }
     }
   }
 
@@ -727,10 +827,19 @@ class PyStmtPrinter : PyPrinter
     // Ensure the flag is false so $this references output _self
     m.inClosureWithOuter = false
 
-    // Set wrapped closure flag - closures can use wrapper variables from outer scope
-    // This tells localVar() to use wrapper names when resolving variables
-    wasInWrappedClosure := m.inWrappedClosure
-    m.inWrappedClosure = !m.paramWrappers.isEmpty
+    // Emit nonlocal declarations for closure-captured mutable variables
+    // Python requires nonlocal to assign to variables from enclosing scope
+    nonlocalNames := m.getNonlocalNames
+    if (!nonlocalNames.isEmpty)
+    {
+      w("nonlocal ")
+      nonlocalNames.each |name, i|
+      {
+        if (i > 0) w(", ")
+        w(escapeName(name))
+      }
+      eos
+    }
 
     // Save method-level closure state - nested closures have their own scope
     savedPending := m.pendingClosures.dup
@@ -773,9 +882,6 @@ class PyStmtPrinter : PyPrinter
     {
       pass
     }
-
-    // Restore wrapped closure flag
-    m.inWrappedClosure = wasInWrappedClosure
 
     unindent
     nl
@@ -936,9 +1042,9 @@ class PyStmtPrinter : PyPrinter
     // Python captures variables automatically from enclosing scope
     if (isCapturedVarLocalDef(s)) return
 
-    // Check if this is a cvar wrapper definition: varName_Wrapper = ObjUtil.cvar(paramName)
-    // Record the mapping for closure variable resolution
-    detectAndRecordWrapper(s)
+    // Check if this is a Wrap$ wrapper definition (closure-captured mutable variable)
+    // If so, skip the line entirely -- we use nonlocal instead of cvar wrappers
+    if (detectAndRecordNonlocal(s)) return
 
     w(escapeName(s.name))
     if (s.init != null)
@@ -962,11 +1068,12 @@ class PyStmtPrinter : PyPrinter
     eos
   }
 
-  ** Detect if this is a cvar wrapper definition and record the mapping
-  ** Pattern: x_Wrapper = ObjUtil.cvar(x) or xWrapper = ObjUtil.cvar(x)
-  private Void detectAndRecordWrapper(LocalDefStmt s)
+  ** Detect if this is a Wrap$ wrapper definition and record for nonlocal handling
+  ** Pattern: wrapperVar := Wrap$Type.make(originalVar)
+  ** Returns true if this line should be skipped (it's a wrapper we handle via nonlocal)
+  private Bool detectAndRecordNonlocal(LocalDefStmt s)
   {
-    if (s.init == null) return
+    if (s.init == null) return false
 
     // Unwrap coerces and assignments to get the actual call
     initExpr := s.init
@@ -986,36 +1093,51 @@ class PyStmtPrinter : PyPrinter
       }
     }
 
-    // Check if it's a call expression (for self.make pattern)
-    if (initExpr.id != ExprId.call) return
+    // Check if it's a call expression (for Wrap$.make pattern)
+    if (initExpr.id != ExprId.call) return false
 
     call := initExpr as CallExpr
 
-    // Pattern: self.make(x) - this is the cvar wrapper constructor
-    // The transpiler converts this to ObjUtil.cvar(x)
+    // Pattern: Wrap$Type.make(arg) -- synthetic wrapper constructor
     if (call.method.name == "make" && call.target == null && !call.method.isStatic && call.args.size == 1)
     {
-      // This is a cvar wrapper - extract the wrapped variable name
-      arg := call.args.first
-
-      // Unwrap coerces on the argument
-      while (arg.id == ExprId.coerce)
+      parentType := call.method.parent
+      if (parentType.isSynthetic && parentType.name.startsWith("Wrap\$"))
       {
-        tc := arg as TypeCheckExpr
-        arg = tc.target
-      }
+        // Extract the argument (the value being wrapped)
+        arg := call.args.first
+        while (arg.id == ExprId.coerce)
+        {
+          tc := arg as TypeCheckExpr
+          arg = tc.target
+        }
 
-      // The argument should be a local variable reference
-      if (arg.id == ExprId.localVar)
-      {
-        localArg := arg as LocalVarExpr
-        paramName := localArg.var.name
-        wrapperName := s.name  // The name of the wrapper variable being defined
+        wrapperVarName := s.name
 
-        // Record the mapping: paramName -> wrapperName
-        m.recordWrapper(paramName, wrapperName)
+        if (arg.id == ExprId.localVar)
+        {
+          // Case 1: Wrap$.make(existingVar) - the original variable already exists
+          // Skip this line entirely; the original variable is already defined
+          localArg := arg as LocalVarExpr
+          originalVarName := localArg.var.name
+          m.recordNonlocal(wrapperVarName, originalVarName)
+          return true  // Skip this line
+        }
+        else
+        {
+          // Case 2: Wrap$.make(literal/expr) - no separate original variable
+          // e.g., params = Wrap$Str.make(null), buf = Wrap$Buf.make(self.make(...))
+          // Rewrite as: varName = <arg expression> and record for nonlocal
+          m.recordNonlocal(wrapperVarName, wrapperVarName)
+          w(escapeName(wrapperVarName))
+          w(" = ")
+          expr(call.args.first)  // Use original arg (with coerces) for proper output
+          eos
+          return true  // We emitted the rewritten line
+        }
       }
     }
+    return false
   }
 
   ** Check if this localDef is a captured variable initialization
