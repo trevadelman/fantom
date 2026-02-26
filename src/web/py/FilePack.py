@@ -65,14 +65,15 @@ class FilePack(Weblet):
   def make_files(files, mime_type=None):
     if mime_type is None:
       mime_type = None
-    total_size = ObjUtil.cvar(0)
+    total_size = 0
     def _closure_0(f=None):
-      total_size._val = total_size._val + ObjUtil.coerce(((lambda _v: _v if _v is not None else ObjUtil.coerce(0, "sys::Int?"))(f.size())), "sys::Int")
+      nonlocal total_size
+      total_size = total_size + ObjUtil.coerce(((lambda _v: _v if _v is not None else ObjUtil.coerce(0, "sys::Int?"))(f.size())), "sys::Int")
       return
 
     _closure_0 = sys.Func.make_closure({"returns": "sys::Void", "immutable": "never", "params": [{"name": "f", "type": "sys::File"}]}, _closure_0)
     files.each(_closure_0)
-    buf = sys.Buf.make(ObjUtil.div(total_size._val, 4))
+    buf = sys.Buf.make(ObjUtil.div(total_size, 4))
     if mime_type is None:
       mime_type = ((lambda _v: _v if _v is not None else ObjUtil.throw_(sys.Err.make(sys.Str.plus("Ext to mimeType: ", files.first()))))(files[0].mime_type()))
     out = sys.Zip.gzip_out_stream(buf.out())
@@ -86,14 +87,15 @@ class FilePack(Weblet):
   def _make_files_body(self, files, mime_type=None):
     if mime_type is None:
       mime_type = None
-    total_size = ObjUtil.cvar(0)
+    total_size = 0
     def _closure_1(f=None):
-      total_size._val = total_size._val + ObjUtil.coerce(((lambda _v: _v if _v is not None else ObjUtil.coerce(0, "sys::Int?"))(f.size())), "sys::Int")
+      nonlocal total_size
+      total_size = total_size + ObjUtil.coerce(((lambda _v: _v if _v is not None else ObjUtil.coerce(0, "sys::Int?"))(f.size())), "sys::Int")
       return
 
     _closure_1 = sys.Func.make_closure({"returns": "sys::Void", "immutable": "never", "params": [{"name": "f", "type": "sys::File"}]}, _closure_1)
     files.each(_closure_1)
-    buf = sys.Buf.make(ObjUtil.div(total_size._val, 4))
+    buf = sys.Buf.make(ObjUtil.div(total_size, 4))
     if mime_type is None:
       mime_type = ((lambda _v: _v if _v is not None else ObjUtil.throw_(sys.Err.make(sys.Str.plus("Ext to mimeType: ", files.first()))))(files[0].mime_type()))
     out = sys.Zip.gzip_out_stream(buf.out())
