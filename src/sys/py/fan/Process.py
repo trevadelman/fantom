@@ -7,15 +7,13 @@ import subprocess
 import os
 import threading
 from .Obj import Obj
+from .ObjUtil import _UNSET
 
 
 class Process(Obj):
     """
     Process represents an external OS process.
     """
-
-    # Sentinel value to distinguish "no argument" from "argument is None"
-    _UNSET = object()
 
     def __init__(self, command=None):
         self._command = command if command is not None else []
@@ -47,7 +45,7 @@ class Process(Obj):
 
     def dir_(self, val=_UNSET):
         """Get or set the working directory."""
-        if val is Process._UNSET:
+        if val is _UNSET:
             return self._dir
         self._check_not_started()
         self._dir = val
@@ -72,7 +70,7 @@ class Process(Obj):
 
     def out(self, val=_UNSET):
         """Get or set stdout OutStream."""
-        if val is Process._UNSET:
+        if val is _UNSET:
             if self._out is None and not self._out_explicit:
                 from .Env import Env
                 return Env.cur().out()
@@ -84,7 +82,7 @@ class Process(Obj):
 
     def err(self, val=_UNSET):
         """Get or set stderr OutStream."""
-        if val is Process._UNSET:
+        if val is _UNSET:
             if self._err is None and not self._err_explicit:
                 from .Env import Env
                 return Env.cur().err()
@@ -96,7 +94,7 @@ class Process(Obj):
 
     def in_(self, val=_UNSET):
         """Get or set stdin InStream."""
-        if val is Process._UNSET:
+        if val is _UNSET:
             return self._in
         self._check_not_started()
         self._in = val

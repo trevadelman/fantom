@@ -4,6 +4,11 @@
 #
 
 
+# Sentinel for distinguishing "no argument" from "argument is None" in
+# combined getter/setter field accessors.  Must be a single global object
+# shared across all modules so cross-pod field inheritance works safely.
+_UNSET = object()
+
 class ObjUtil:
     """Utility methods for object operations"""
 

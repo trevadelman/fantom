@@ -5,7 +5,7 @@
 
 import threading
 from fan.sys.Obj import Obj
-from fan.sys.ObjUtil import ObjUtil
+from fan.sys.ObjUtil import ObjUtil, _UNSET
 
 
 class AtomicRef(Obj):
@@ -14,9 +14,6 @@ class AtomicRef(Obj):
     Values must be immutable. Attempting to store a mutable object
     will throw NotImmutableErr.
     """
-
-    # Sentinel to distinguish getter call from setter call with null value
-    _UNSET = object()
 
     def __init__(self, val=None):
         super().__init__()
@@ -45,7 +42,7 @@ class AtomicRef(Obj):
 
         Uses sentinel _UNSET to distinguish getter call from setter with null.
         """
-        if new_val is AtomicRef._UNSET:
+        if new_val is _UNSET:
             # Getter
             with self._lock:
                 return self.__val
