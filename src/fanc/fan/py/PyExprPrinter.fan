@@ -81,8 +81,9 @@ class PyExprPrinter : PyPrinter
       case ExprId.slotLiteral:     slotLiteral(e)
       case ExprId.itExpr:          itExpr(e)
       case ExprId.throwExpr:       throwExpr(e)
+      case ExprId.unknownVar:      unknownVar(e)
       default:
-        w("None")  // Placeholder for unimplemented expr: ${e.id}
+        throw UnsupportedErr("Unhandled expr type: $e.id")
     }
   }
 
@@ -104,28 +105,8 @@ class PyExprPrinter : PyPrinter
 
   private Void listLiteral(ListLiteralExpr e)
   {
-    // Generate type-aware list: List.from_literal([items], elementType)
-    // Extract element type from ListType
-    listType := e.ctype
-    CType? elemType := null
-
-    // Try to get the element type from the parameterized list type
-    if (!listType.isGeneric)
-    {
-      try
-      {
-        elemType = listType->v  // ListType has v() method returning element type
-      }
-      catch (Err err)
-      {
-        // Fallback to Obj?
-        elemType = listType.pod.resolveType("Obj", true)?.toNullable
-      }
-    }
-
-    // Use Obj? as fallback if we couldn't determine type
-    elemSig := elemType?.signature ?: "sys::Obj?"
-
+    // Cast to ListType to get element type directly (no try/catch, no dynamic dispatch)
+    lt := (ListType)((CType)(e.explicitType ?: e.ctype)).deref
     sysPrefix()
     w("List.from_literal([")
     e.vals.each |val, i|
@@ -134,70 +115,31 @@ class PyExprPrinter : PyPrinter
       expr(val)
     }
     w("], ")
-    str(elemSig)
+    str(lt.v.signature)
     w(")")
   }
 
   private Void mapLiteral(MapLiteralExpr e)
   {
-    // Generate type-aware map: Map.from_literal([keys], [vals], keyType, valType)
-    // Extract key/value types (explicit or inferred from compiler)
-    mapType := e.ctype
-
-    // Get the MapType's K and V types
-    // ctype should be a MapType with k and v methods
-    CType? keyType := null
-    CType? valType := null
-
-    // Try to get key/value types via the k and v methods
-    if (mapType.isGeneric)
-    {
-      // For generic maps, use Obj:Obj? as default
-      keyType = mapType.pod.resolveType("Obj", false)
-      valType = mapType.pod.resolveType("Obj", true)?.toNullable
-    }
-    else
-    {
-      // Try to access the parametrized types
-      // MapType has k() and v() methods that return CType
-      try
-      {
-        keyType = mapType->k
-        valType = mapType->v
-      }
-      catch (Err err)
-      {
-        // Fallback to Obj:Obj?
-        keyType = mapType.pod.resolveType("Obj", false)
-        valType = mapType.pod.resolveType("Obj", true)?.toNullable
-      }
-    }
-
-    // Use Obj:Obj? as fallback if we couldn't determine types
-    keySig := keyType?.signature ?: "sys::Obj"
-    valSig := valType?.signature ?: "sys::Obj?"
-
+    // Cast to MapType to get key/value types directly (no try/catch, no dynamic dispatch)
+    mt := (MapType)(e.explicitType ?: e.ctype)
     sysPrefix()
     w("Map.from_literal([")
-    // Keys array
     e.keys.each |key, i|
     {
       if (i > 0) w(", ")
       expr(key)
     }
     w("], [")
-    // Values array
     e.vals.each |val, i|
     {
       if (i > 0) w(", ")
       expr(val)
     }
     w("], ")
-    // Key type
-    str(keySig)
+    str(mt.k.signature)
     w(", ")
-    // Value type
-    str(valSig)
+    str(mt.v.signature)
     w(")")
   }
 
@@ -262,6 +204,14 @@ class PyExprPrinter : PyPrinter
     w("it")
   }
 
+  ** Unresolved variable reference -- output target.name if target present (matches ES compiler)
+  private Void unknownVar(Expr e)
+  {
+    uv := e as UnknownVarExpr
+    if (uv.target != null) { expr(uv.target); w(".") }
+    w(escapeName(uv.name))
+  }
+
   private Void throwExpr(Expr e)
   {
     // throw as an expression (used in elvis, ternary, etc.)
@@ -279,16 +229,19 @@ class PyExprPrinter : PyPrinter
 
   private Void call(CallExpr e)
   {
-    // Skip compiler-injected const protection calls (checkInCtor, enterCtor, exitCtor)
     methodName := e.method.name
-    if (methodName == "checkInCtor" || methodName == "enterCtor" || methodName == "exitCtor")
-    { w("None"); return }
 
     // Dispatch priority chain (see class doc)
     if (e.isSafe && e.target != null)                                                     { callSafe(e); return }
     if (e.isDynamic)                                                                      { callDynamic(e); return }
-    if (e.method.parent.qname == "sys::Func" && (methodName == "call" || methodName == "callList"))
-                                                                                          { callFunc(e); return }
+    // All sys::Func methods handled here: call/callList -> direct invocation,
+    // enterCtor/exitCtor/checkInCtor -> no-op (compiler-injected const protection)
+    if (e.method.parent.qname == "sys::Func")
+    {
+      if (methodName == "call" || methodName == "callList")                               { callFunc(e); return }
+      if (methodName == "enterCtor" || methodName == "exitCtor" || methodName == "checkInCtor")
+                                                                                          { w("None"); return }
+    }
     if (e.target != null && isObjUtilMethod(e.method))                                    { objUtilCall(e); return }
     if (e.target != null && isPrimitiveType(e.target.ctype) && e.target.id != ExprId.staticTarget)
                                                                                           { primitiveCall(e); return }
@@ -396,11 +349,10 @@ class PyExprPrinter : PyPrinter
   ** These are Obj/Num methods that may be called on primitives coerced to Obj or Num
   private Bool isObjUtilMethod(CMethod m)
   {
-    parentQname := m.parent.qname
     name := m.name
 
     // Obj methods (including _-suffixed versions used when name conflicts with Python builtins)
-    if (parentQname == "sys::Obj")
+    if (m.parent.isObj)
     {
       return name == "isImmutable" ||
              name == "toImmutable" ||
@@ -414,21 +366,22 @@ class PyExprPrinter : PyPrinter
 
     // Obj methods on Map - route through ObjUtil for proper dispatch
     // The Fantom compiler may resolve hash/equals/etc to Map parent
+    // Note: isMap() uses fits() so we use qname check for exact match
     // Note: List methods go through primitiveCall which handles them properly
-    if (parentQname == "sys::Map")
+    if (m.parent.qname == "sys::Map")
     {
       if (name == "hash" || name == "hash_" || name == "equals" || name == "compare" || name == "toStr")
         return true
     }
 
     // Num methods - toFloat/toInt/toDecimal/toLocale may be called on Num-typed values
-    if (parentQname == "sys::Num")
+    if (m.parent.isNum)
     {
       return name == "toFloat" || name == "toInt" || name == "toDecimal" || name == "toLocale"
     }
 
     // Decimal methods - toLocale may be called on Decimal-typed values
-    if (parentQname == "sys::Decimal")
+    if (m.parent.isDecimal)
     {
       return name == "toLocale"
     }
@@ -1107,7 +1060,7 @@ class PyExprPrinter : PyPrinter
       case ShortcutOp.mult:      doShortcutBinaryOp(e, "*")
       case ShortcutOp.div:       divOp(e)  // Use ObjUtil.div for Fantom semantics (truncated)
       case ShortcutOp.mod:       modOp(e)  // Use ObjUtil.mod for Fantom semantics (truncated)
-      default:                   w("# TODO: shortcut ${op}")
+      default:                   throw UnsupportedErr("Unhandled shortcut operator: $op")
     }
   }
 
@@ -1205,12 +1158,9 @@ class PyExprPrinter : PyPrinter
   ** Also handles nullable strings (Str?) which might be null at runtime
   private Bool isStringPlusNonString(ShortcutExpr e)
   {
-    targetSig := e.target?.ctype?.toNonNullable?.signature ?: ""
-    argSig := e.args.first?.ctype?.toNonNullable?.signature ?: ""
-
     // If neither is a string, no special handling needed
-    targetIsStr := targetSig == "sys::Str"
-    argIsStr := argSig == "sys::Str"
+    targetIsStr := e.target?.ctype?.toNonNullable?.isStr ?: false
+    argIsStr := e.args.first?.ctype?.toNonNullable?.isStr ?: false
 
     if (!targetIsStr && !argIsStr) return false
 
@@ -1236,8 +1186,7 @@ class PyExprPrinter : PyPrinter
     if (e.args.first?.id != ExprId.nullLiteral) return false
 
     // Check if target is string type
-    targetSig := e.target?.ctype?.toNonNullable?.signature ?: ""
-    return targetSig == "sys::Str"
+    return e.target?.ctype?.toNonNullable?.isStr ?: false
   }
 
   ** Handle string + non-string concatenation using sys.Str.plus()
@@ -1281,7 +1230,7 @@ class PyExprPrinter : PyPrinter
   private Void divOp(ShortcutExpr e)
   {
     // Float division uses Python / directly (no truncation issue)
-    if (e.target?.ctype?.toNonNullable?.signature == "sys::Float")
+    if (e.target?.ctype?.toNonNullable?.isFloat ?: false)
     {
       doShortcutBinaryOp(e, "/")
       return
@@ -1436,14 +1385,14 @@ class PyExprPrinter : PyPrinter
   private Void indexGet(ShortcutExpr e)
   {
     // Check target type for special handling
-    targetSig := e.target?.ctype?.toNonNullable?.signature ?: ""
+    targetType := e.target?.ctype?.toNonNullable
     arg := e.args.first
-    argSig := arg.ctype?.toNonNullable?.signature ?: ""
+    argType := arg.ctype?.toNonNullable
 
     // String indexing: str[i] returns Int codepoint, str[range] returns substring
-    if (targetSig == "sys::Str")
+    if (targetType?.isStr ?: false)
     {
-      if (argSig == "sys::Range")
+      if (argType?.isRange ?: false)
       {
         // str[range] -> sys.Str.get_range(str, range)
         sysPrefix()
@@ -1467,7 +1416,7 @@ class PyExprPrinter : PyPrinter
     }
 
     // Check if index is a Range - need to use sys.List.get_range() instead
-    if (argSig == "sys::Range")
+    if (argType?.isRange ?: false)
     {
       // list[range] -> sys.List.get_range(list, range)
       sysPrefix()

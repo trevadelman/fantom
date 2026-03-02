@@ -319,6 +319,18 @@ class Func(Obj):
     def to_str(self):
         return self.signature()
 
+    # Compiler-injected const field protection -- no-op in Python runtime.
+    # These are MockMethods on sys::Func in CNamespace, injected by ConstChecks
+    # into constructors. The ES compiler has equivalent commented-out stubs.
+    @staticmethod
+    def enter_ctor(obj): pass
+
+    @staticmethod
+    def exit_ctor(): pass
+
+    @staticmethod
+    def check_in_ctor(obj): pass
+
     def signature(self):
         """Return the function signature like |sys::Int,sys::Str->sys::Bool|
         Note: Fantom signatures include only types, not parameter names
