@@ -349,42 +349,20 @@ class PyExprPrinter : PyPrinter
   ** These are Obj/Num methods that may be called on primitives coerced to Obj or Num
   private Bool isObjUtilMethod(CMethod m)
   {
+    // All sys::Obj methods route through ObjUtil (matches ES compiler)
+    if (m.parent.isObj) return true
+
+    // Force equals/compare through ObjUtil for NaN-aware semantics
+    // even when resolved to a specific type (matches ES compiler)
     name := m.name
+    if (name == "equals" || name == "compare") return true
 
-    // Obj methods (including _-suffixed versions used when name conflicts with Python builtins)
-    if (m.parent.isObj)
-    {
-      return name == "isImmutable" ||
-             name == "toImmutable" ||
-             name == "typeof" ||
-             name == "compare" ||
-             name == "equals" ||
-             name == "hash" ||
-             name == "hash_" ||
-             name == "toStr"
-    }
-
-    // Obj methods on Map - route through ObjUtil for proper dispatch
-    // The Fantom compiler may resolve hash/equals/etc to Map parent
-    // Note: isMap() uses fits() so we use qname check for exact match
-    // Note: List methods go through primitiveCall which handles them properly
-    if (m.parent.qname == "sys::Map")
-    {
-      if (name == "hash" || name == "hash_" || name == "equals" || name == "compare" || name == "toStr")
-        return true
-    }
-
-    // Num methods - toFloat/toInt/toDecimal/toLocale may be called on Num-typed values
+    // Num methods on Num-typed values (Python has no Num.py for static dispatch)
     if (m.parent.isNum)
-    {
       return name == "toFloat" || name == "toInt" || name == "toDecimal" || name == "toLocale"
-    }
 
-    // Decimal methods - toLocale may be called on Decimal-typed values
-    if (m.parent.isDecimal)
-    {
-      return name == "toLocale"
-    }
+    // Decimal.toLocale on Decimal-typed values
+    if (m.parent.isDecimal) return name == "toLocale"
 
     return false
   }
@@ -627,18 +605,16 @@ class PyExprPrinter : PyPrinter
       return
     }
 
-    // Check for List/Map primitive field access (size, isEmpty, etc.)
-    // Convert target.size to List.size(target) for proper Python dispatch
+    // Primitive field access uses static dispatch, same as method calls
+    // e.g., str.size -> sys.Str.size(str) because Python str has no .size property
     if (e.target != null && isPrimitiveType(e.target.ctype))
     {
-      if (fieldName == "size" || fieldName == "isEmpty" || fieldName == "capacity")
-      {
-        className := primitiveClassName(e.target.ctype)
-        w(className).w(".").w(fieldName).w("(")
-        expr(e.target)
-        w(")")
-        return
-      }
+      className := primitiveClassName(e.target.ctype)
+      sysPrefix()
+      w(className).w(".").w(escapeName(fieldName)).w("(")
+      expr(e.target)
+      w(")")
+      return
     }
 
     // Check for $this field (outer this capture in closures)

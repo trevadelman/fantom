@@ -585,6 +585,16 @@ class ObjUtil:
         raise NotImmutableErr.make(f"Cannot make {type(obj).__name__} immutable")
 
     @staticmethod
+    def with_(obj, f):
+        """Obj.with() - call function with obj as argument, return obj.
+        Matches ES compiler ObjUtil.with() pattern."""
+        if hasattr(obj, 'with_') and callable(getattr(obj, 'with_', None)):
+            return obj.with_(f)
+        else:
+            f(obj)
+            return obj
+
+    @staticmethod
     def to_float(obj):
         """Convert to Float - dispatch to appropriate type"""
         if obj is None:
